@@ -22,8 +22,7 @@ use app_state::AppState;
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -46,7 +45,9 @@ fn main() {
     let engine = Arc::new(AudioEngine::spawn(
         audio_settings,
         Box::new(move |result| {
-            let Some(controller) = audio_cell.get() else { return };
+            let Some(controller) = audio_cell.get() else {
+                return;
+            };
             match result {
                 AudioResult::Finalized(f) => controller.event(Event::AudioFinalized {
                     session: f.session,
@@ -78,7 +79,9 @@ fn main() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
-                    let Some(state) = app.try_state::<AppState>() else { return };
+                    let Some(state) = app.try_state::<AppState>() else {
+                        return;
+                    };
                     match event.state() {
                         tauri_plugin_global_shortcut::ShortcutState::Pressed => {
                             state.controller.command(Command::HotkeyDown);

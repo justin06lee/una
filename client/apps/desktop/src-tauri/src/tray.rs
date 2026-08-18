@@ -62,15 +62,15 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn on_menu_event(app: &AppHandle, id: &str) {
-    let Some(state) = app.try_state::<AppState>() else { return };
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
     match id {
         ID_TOGGLE => state.controller.command(Command::Toggle),
-        ID_RETRY => {
-            match una_core::spool::latest() {
-                Ok(Some(_)) => state.controller.command(Command::RetryLast),
-                _ => tracing::info!("retry requested but the spool is empty"),
-            }
-        }
+        ID_RETRY => match una_core::spool::latest() {
+            Ok(Some(_)) => state.controller.command(Command::RetryLast),
+            _ => tracing::info!("retry requested but the spool is empty"),
+        },
         ID_SETTINGS => windows::show_settings(app),
         ID_HISTORY => {
             let url = state.config_snapshot().server.url;
@@ -88,7 +88,11 @@ fn on_menu_event(app: &AppHandle, id: &str) {
             let autolaunch = app.autolaunch();
             let currently = autolaunch.is_enabled().unwrap_or(false);
             let desired = !currently;
-            let result = if desired { autolaunch.enable() } else { autolaunch.disable() };
+            let result = if desired {
+                autolaunch.enable()
+            } else {
+                autolaunch.disable()
+            };
             match result {
                 Ok(()) => {
                     let mut cfg = state.config.write().unwrap();
@@ -109,9 +113,15 @@ fn on_menu_event(app: &AppHandle, id: &str) {
 
 /// Relabel the Start/Stop item to match the current state.
 pub fn set_recording(app: &AppHandle, recording: bool) {
-    let Some(state) = app.try_state::<AppState>() else { return };
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
     let guard = state.tray_toggle.lock().unwrap();
     if let Some(item) = guard.as_ref() {
-        let _ = item.set_text(if recording { "Stop Dictation" } else { "Start Dictation" });
+        let _ = item.set_text(if recording {
+            "Stop Dictation"
+        } else {
+            "Start Dictation"
+        });
     }
 }

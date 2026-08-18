@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-label="una desktop client">
+  <!-- background: hard-edged rectangle -->
+  <rect x="0" y="0" width="960" height="360" fill="#141419"/>
+
+  <!-- voice: level bars, center-weighted -->
+  <g fill="#6E56CF">
+    <rect x="72"  y="164" width="14" height="32"  rx="7"/>
+    <rect x="100" y="140" width="14" height="80"  rx="7"/>
+    <rect x="128" y="108" width="14" height="144" rx="7"/>
+    <rect x="156" y="76"  width="14" height="208" rx="7"/>
+    <rect x="184" y="120" width="14" height="120" rx="7"/>
+    <rect x="212" y="92"  width="14" height="176" rx="7"/>
+    <rect x="240" y="148" width="14" height="64"  rx="7"/>
+    <rect x="268" y="128" width="14" height="104" rx="7"/>
+    <rect x="296" y="168" width="14" height="24"  rx="7"/>
+  </g>
+
+  <!-- transformation: three dots stepping toward text -->
+  <g fill="#4a4a55">
+    <circle cx="352" cy="180" r="5"/>
+    <circle cx="378" cy="180" r="5"/>
+    <circle cx="404" cy="180" r="5"/>
+  </g>
+
+  <!-- text: clean transcript lines -->
+  <g fill="#e8e8ee">
+    <rect x="448" y="102" width="204" height="16" rx="8"/>
+    <rect x="448" y="142" width="152" height="16" rx="8"/>
+    <rect x="448" y="182" width="184" height="16" rx="8"/>
+    <rect x="448" y="222" width="112" height="16" rx="8"/>
+  </g>
+  <!-- caret at the end of the last line -->
+  <rect x="572" y="216" width="4" height="28" fill="#6E56CF">
+    <animate attributeName="opacity" values="1;1;0;0;1" dur="1.6s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- wordmark -->
+  <g>
+    <text x="732" y="196" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="88" font-weight="700" fill="#ffffff" letter-spacing="-2">una</text>
+    <text x="734" y="238" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="21" font-weight="500" fill="#8a8a96" letter-spacing="2">DESKTOP</text>
+  </g>
+</svg>

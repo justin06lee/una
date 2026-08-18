@@ -43,7 +43,10 @@ pub struct ServerConfig {
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { url: String::new(), autodiscover: true }
+        Self {
+            url: String::new(),
+            autodiscover: true,
+        }
     }
 }
 
@@ -57,7 +60,10 @@ pub struct HotkeyConfig {
 
 impl Default for HotkeyConfig {
     fn default() -> Self {
-        Self { binding: "Ctrl+Alt+Space".into(), mode: "hybrid".into() }
+        Self {
+            binding: "Ctrl+Alt+Space".into(),
+            mode: "hybrid".into(),
+        }
     }
 }
 
@@ -71,7 +77,10 @@ pub struct AudioConfig {
 
 impl Default for AudioConfig {
     fn default() -> Self {
-        Self { input_device: "auto".into(), prefer_builtin: true }
+        Self {
+            input_device: "auto".into(),
+            prefer_builtin: true,
+        }
     }
 }
 
@@ -90,7 +99,11 @@ impl Default for InsertConfig {
         for term in ["kitty", "alacritty", "foot", "gnome-terminal", "konsole"] {
             paste_overrides.insert(term.to_string(), "ctrl+shift+v".to_string());
         }
-        Self { restore_clipboard: true, restore_delay_ms: 300, paste_overrides }
+        Self {
+            restore_clipboard: true,
+            restore_delay_ms: 300,
+            paste_overrides,
+        }
     }
 }
 
@@ -114,7 +127,9 @@ pub struct GeneralConfig {
 
 impl Default for GeneralConfig {
     fn default() -> Self {
-        Self { launch_at_login: false }
+        Self {
+            launch_at_login: false,
+        }
     }
 }
 
@@ -183,7 +198,10 @@ mod tests {
         let loaded = load_or_create_at(&path).unwrap();
         assert_eq!(loaded, created);
         assert_eq!(loaded.hotkey.binding, "Ctrl+Alt+Space");
-        assert_eq!(loaded.insert.paste_overrides.get("kitty").unwrap(), "ctrl+shift+v");
+        assert_eq!(
+            loaded.insert.paste_overrides.get("kitty").unwrap(),
+            "ctrl+shift+v"
+        );
     }
 
     #[test]

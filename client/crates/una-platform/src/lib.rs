@@ -55,7 +55,11 @@ pub struct InjectOptions {
 
 impl Default for InjectOptions {
     fn default() -> Self {
-        Self { restore_clipboard: true, restore_delay: Duration::from_millis(300), paste_combo: None }
+        Self {
+            restore_clipboard: true,
+            restore_delay: Duration::from_millis(300),
+            paste_combo: None,
+        }
     }
 }
 

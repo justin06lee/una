@@ -64,46 +64,110 @@ pub enum ErrKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Idle,
-    Recording { session: u64, latched: bool, started_at: Instant, pressed_at: Instant },
+    Recording {
+        session: u64,
+        latched: bool,
+        started_at: Instant,
+        pressed_at: Instant,
+    },
     /// Waiting for the finalized audio and/or the server response.
-    Transcribing { session: u64 },
-    Inserting { session: u64 },
-    Done { at: Instant },
-    Error { kind: ErrKind, message: String, retryable: bool, at: Instant },
+    Transcribing {
+        session: u64,
+    },
+    Inserting {
+        session: u64,
+    },
+    Done {
+        at: Instant,
+    },
+    Error {
+        kind: ErrKind,
+        message: String,
+        retryable: bool,
+        at: Instant,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    HotkeyDown { at: Instant },
-    HotkeyUp { at: Instant },
+    HotkeyDown {
+        at: Instant,
+    },
+    HotkeyUp {
+        at: Instant,
+    },
     /// Start/stop from the tray, CLI, or IPC socket.
-    Toggle { at: Instant },
+    Toggle {
+        at: Instant,
+    },
     Cancel,
     /// The audio engine finished encoding the utterance.
-    AudioFinalized { session: u64, wav: Vec<u8>, duration: Duration },
-    AudioFailed { session: u64, message: String, at: Instant },
-    UploadOk { session: u64, text: String },
-    UploadErr { session: u64, kind: ErrKind, message: String, retryable: bool, at: Instant },
-    InsertOk { session: u64, at: Instant },
-    InsertErr { session: u64, message: String, at: Instant },
+    AudioFinalized {
+        session: u64,
+        wav: Vec<u8>,
+        duration: Duration,
+    },
+    AudioFailed {
+        session: u64,
+        message: String,
+        at: Instant,
+    },
+    UploadOk {
+        session: u64,
+        text: String,
+    },
+    UploadErr {
+        session: u64,
+        kind: ErrKind,
+        message: String,
+        retryable: bool,
+        at: Instant,
+    },
+    InsertOk {
+        session: u64,
+        at: Instant,
+    },
+    InsertErr {
+        session: u64,
+        message: String,
+        at: Instant,
+    },
     /// Re-upload a previously spooled utterance.
-    RetryUpload { wav: Vec<u8>, duration: Duration },
+    RetryUpload {
+        wav: Vec<u8>,
+        duration: Duration,
+    },
     /// Periodic timer used for auto-finalize and auto-dismiss.
-    Tick { at: Instant },
+    Tick {
+        at: Instant,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     ShowHud,
     HideHud,
-    StartRecording { session: u64 },
+    StartRecording {
+        session: u64,
+    },
     /// Finalize the recording; the audio engine answers with
     /// [`Event::AudioFinalized`].
-    StopRecording { session: u64 },
+    StopRecording {
+        session: u64,
+    },
     /// Discard the recording silently.
-    CancelRecording { session: u64 },
-    Upload { session: u64, wav: Vec<u8>, duration: Duration },
-    Inject { session: u64, text: String },
+    CancelRecording {
+        session: u64,
+    },
+    Upload {
+        session: u64,
+        wav: Vec<u8>,
+        duration: Duration,
+    },
+    Inject {
+        session: u64,
+        text: String,
+    },
 }
 
 /// The full, pure state of the FSM: mode, session counter, current state.
@@ -116,7 +180,11 @@ pub struct Machine {
 
 impl Machine {
     pub fn new(mode: HotkeyMode) -> Self {
-        Self { mode, next_session: 1, state: State::Idle }
+        Self {
+            mode,
+            next_session: 1,
+            state: State::Idle,
+        }
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -126,7 +194,12 @@ impl Machine {
             State::Transcribing { .. } => Snapshot::Transcribing,
             State::Inserting { .. } => Snapshot::Inserting,
             State::Done { .. } => Snapshot::Done,
-            State::Error { kind, message, retryable, .. } => Snapshot::Error {
+            State::Error {
+                kind,
+                message,
+                retryable,
+                ..
+            } => Snapshot::Error {
                 kind: *kind,
                 message: message.clone(),
                 retryable: *retryable,
@@ -140,18 +213,28 @@ impl Machine {
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum Snapshot {
     Idle,
-    Recording { latched: bool },
+    Recording {
+        latched: bool,
+    },
     Transcribing,
     Inserting,
     Done,
-    Error { kind: ErrKind, message: String, retryable: bool },
+    Error {
+        kind: ErrKind,
+        message: String,
+        retryable: bool,
+    },
 }
 
 /// The pure transition function. Returns the next machine and the effects to
 /// run. Unknown/stale events are ignored (no-op transitions return no
 /// effects).
 pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
-    let Machine { mode, mut next_session, state } = m;
+    let Machine {
+        mode,
+        mut next_session,
+        state,
+    } = m;
 
     // Helper closures cannot borrow `next_session` mutably and return it, so
     // this is written as straight-line matches.
@@ -160,14 +243,19 @@ pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
         (State::Idle, Event::HotkeyDown { at }) => {
             start_recording(&mut next_session, mode, at, /* forced_toggle */ false)
         }
-        (State::Idle, Event::Toggle { at }) => {
-            start_recording(&mut next_session, mode, at, true)
-        }
+        (State::Idle, Event::Toggle { at }) => start_recording(&mut next_session, mode, at, true),
         (State::Idle, Event::RetryUpload { wav, duration }) => {
             let session = alloc_session(&mut next_session);
             (
                 State::Transcribing { session },
-                vec![Effect::ShowHud, Effect::Upload { session, wav, duration }],
+                vec![
+                    Effect::ShowHud,
+                    Effect::Upload {
+                        session,
+                        wav,
+                        duration,
+                    },
+                ],
             )
         }
 
@@ -198,102 +286,259 @@ pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
             let session = alloc_session(&mut next_session);
             (
                 State::Transcribing { session },
-                vec![Effect::ShowHud, Effect::Upload { session, wav, duration }],
+                vec![
+                    Effect::ShowHud,
+                    Effect::Upload {
+                        session,
+                        wav,
+                        duration,
+                    },
+                ],
             )
         }
-        (State::Error { kind, message, retryable, at }, Event::Tick { at: now }) => {
+        (
+            State::Error {
+                kind,
+                message,
+                retryable,
+                at,
+            },
+            Event::Tick { at: now },
+        ) => {
             if now.duration_since(at) >= ERROR_DISMISS {
                 (State::Idle, vec![Effect::HideHud])
             } else {
-                (State::Error { kind, message, retryable, at }, vec![])
+                (
+                    State::Error {
+                        kind,
+                        message,
+                        retryable,
+                        at,
+                    },
+                    vec![],
+                )
             }
         }
         (State::Error { .. }, Event::Cancel) => (State::Idle, vec![Effect::HideHud]),
 
         // -------------------------------------------------------- Recording
-        (State::Recording { session, latched, started_at, pressed_at }, Event::HotkeyUp { at }) => {
+        (
+            State::Recording {
+                session,
+                latched,
+                started_at,
+                pressed_at,
+            },
+            Event::HotkeyUp { at },
+        ) => {
             match mode {
                 HotkeyMode::Hold => finalize(session),
-                HotkeyMode::Toggle => {
-                    (State::Recording { session, latched, started_at, pressed_at }, vec![])
-                }
+                HotkeyMode::Toggle => (
+                    State::Recording {
+                        session,
+                        latched,
+                        started_at,
+                        pressed_at,
+                    },
+                    vec![],
+                ),
                 HotkeyMode::Hybrid => {
                     if latched {
                         // Release of the second (finalizing) press arrives
                         // after we've already left Recording, or a stray
                         // release: ignore.
-                        (State::Recording { session, latched, started_at, pressed_at }, vec![])
+                        (
+                            State::Recording {
+                                session,
+                                latched,
+                                started_at,
+                                pressed_at,
+                            },
+                            vec![],
+                        )
                     } else if at.duration_since(pressed_at) < HYBRID_LATCH_WINDOW {
                         // Quick tap: latch into toggle mode.
-                        (State::Recording { session, latched: true, started_at, pressed_at }, vec![])
+                        (
+                            State::Recording {
+                                session,
+                                latched: true,
+                                started_at,
+                                pressed_at,
+                            },
+                            vec![],
+                        )
                     } else {
                         finalize(session)
                     }
                 }
             }
         }
-        (State::Recording { session, latched, started_at, pressed_at }, Event::HotkeyDown { .. }) => {
+        (
+            State::Recording {
+                session,
+                latched,
+                started_at,
+                pressed_at,
+            },
+            Event::HotkeyDown { .. },
+        ) => {
             if latched || mode == HotkeyMode::Toggle {
                 // Toggle-style finalize on the second press.
                 finalize(session)
             } else {
                 // Key-repeat while holding: ignore.
-                (State::Recording { session, latched, started_at, pressed_at }, vec![])
+                (
+                    State::Recording {
+                        session,
+                        latched,
+                        started_at,
+                        pressed_at,
+                    },
+                    vec![],
+                )
             }
         }
         (State::Recording { session, .. }, Event::Toggle { .. }) => finalize(session),
-        (State::Recording { session, .. }, Event::Cancel) => {
-            (State::Idle, vec![Effect::CancelRecording { session }, Effect::HideHud])
-        }
-        (State::Recording { session, latched, started_at, pressed_at }, Event::Tick { at }) => {
+        (State::Recording { session, .. }, Event::Cancel) => (
+            State::Idle,
+            vec![Effect::CancelRecording { session }, Effect::HideHud],
+        ),
+        (
+            State::Recording {
+                session,
+                latched,
+                started_at,
+                pressed_at,
+            },
+            Event::Tick { at },
+        ) => {
             if at.duration_since(started_at) >= MAX_UTTERANCE {
                 finalize(session)
             } else {
-                (State::Recording { session, latched, started_at, pressed_at }, vec![])
+                (
+                    State::Recording {
+                        session,
+                        latched,
+                        started_at,
+                        pressed_at,
+                    },
+                    vec![],
+                )
             }
         }
-        (State::Recording { session, latched, started_at, pressed_at }, Event::AudioFailed { session: s, message, at }) => {
+        (
+            State::Recording {
+                session,
+                latched,
+                started_at,
+                pressed_at,
+            },
+            Event::AudioFailed {
+                session: s,
+                message,
+                at,
+            },
+        ) => {
             if s == session {
                 (
-                    State::Error { kind: ErrKind::Audio, message, retryable: false, at },
+                    State::Error {
+                        kind: ErrKind::Audio,
+                        message,
+                        retryable: false,
+                        at,
+                    },
                     vec![Effect::CancelRecording { session }],
                 )
             } else {
-                (State::Recording { session, latched, started_at, pressed_at }, vec![])
+                (
+                    State::Recording {
+                        session,
+                        latched,
+                        started_at,
+                        pressed_at,
+                    },
+                    vec![],
+                )
             }
         }
 
         // ------------------------------------------------------ Transcribing
-        (State::Transcribing { session }, Event::AudioFinalized { session: s, wav, duration }) => {
+        (
+            State::Transcribing { session },
+            Event::AudioFinalized {
+                session: s,
+                wav,
+                duration,
+            },
+        ) => {
             if s != session {
                 (State::Transcribing { session }, vec![])
             } else if duration < MIN_UTTERANCE {
                 // Too short: discard silently.
                 (State::Idle, vec![Effect::HideHud])
             } else {
-                (State::Transcribing { session }, vec![Effect::Upload { session, wav, duration }])
+                (
+                    State::Transcribing { session },
+                    vec![Effect::Upload {
+                        session,
+                        wav,
+                        duration,
+                    }],
+                )
             }
         }
-        (State::Transcribing { session }, Event::AudioFailed { session: s, message, at }) => {
+        (
+            State::Transcribing { session },
+            Event::AudioFailed {
+                session: s,
+                message,
+                at,
+            },
+        ) => {
             if s == session {
-                (State::Error { kind: ErrKind::Audio, message, retryable: false, at }, vec![])
+                (
+                    State::Error {
+                        kind: ErrKind::Audio,
+                        message,
+                        retryable: false,
+                        at,
+                    },
+                    vec![],
+                )
             } else {
                 (State::Transcribing { session }, vec![])
             }
         }
         (State::Transcribing { session }, Event::UploadOk { session: s, text }) => {
             if s == session {
-                (State::Inserting { session }, vec![Effect::Inject { session, text }])
+                (
+                    State::Inserting { session },
+                    vec![Effect::Inject { session, text }],
+                )
             } else {
                 (State::Transcribing { session }, vec![])
             }
         }
         (
             State::Transcribing { session },
-            Event::UploadErr { session: s, kind, message, retryable, at },
+            Event::UploadErr {
+                session: s,
+                kind,
+                message,
+                retryable,
+                at,
+            },
         ) => {
             if s == session {
-                (State::Error { kind, message, retryable, at }, vec![])
+                (
+                    State::Error {
+                        kind,
+                        message,
+                        retryable,
+                        at,
+                    },
+                    vec![],
+                )
             } else {
                 (State::Transcribing { session }, vec![])
             }
@@ -308,9 +553,24 @@ pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
                 (State::Inserting { session }, vec![])
             }
         }
-        (State::Inserting { session }, Event::InsertErr { session: s, message, at }) => {
+        (
+            State::Inserting { session },
+            Event::InsertErr {
+                session: s,
+                message,
+                at,
+            },
+        ) => {
             if s == session {
-                (State::Error { kind: ErrKind::Inject, message, retryable: false, at }, vec![])
+                (
+                    State::Error {
+                        kind: ErrKind::Inject,
+                        message,
+                        retryable: false,
+                        at,
+                    },
+                    vec![],
+                )
             } else {
                 (State::Inserting { session }, vec![])
             }
@@ -321,7 +581,14 @@ pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
         (state, _) => (state, vec![]),
     };
 
-    (Machine { mode, next_session, state }, effects)
+    (
+        Machine {
+            mode,
+            next_session,
+            state,
+        },
+        effects,
+    )
 }
 
 fn alloc_session(next_session: &mut u64) -> u64 {
@@ -339,13 +606,21 @@ fn start_recording(
     let session = alloc_session(next_session);
     let latched = forced_toggle || mode == HotkeyMode::Toggle;
     (
-        State::Recording { session, latched, started_at: at, pressed_at: at },
+        State::Recording {
+            session,
+            latched,
+            started_at: at,
+            pressed_at: at,
+        },
         vec![Effect::StartRecording { session }, Effect::ShowHud],
     )
 }
 
 fn finalize(session: u64) -> (State, Vec<Effect>) {
-    (State::Transcribing { session }, vec![Effect::StopRecording { session }])
+    (
+        State::Transcribing { session },
+        vec![Effect::StopRecording { session }],
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -424,7 +699,10 @@ impl Controller {
     ) -> ControllerHandle {
         let (tx, mut rx) = mpsc::unbounded_channel::<Input>();
         let (snap_tx, _) = broadcast::channel(64);
-        let handle = ControllerHandle { tx, snapshots: snap_tx.clone() };
+        let handle = ControllerHandle {
+            tx,
+            snapshots: snap_tx.clone(),
+        };
 
         let mut machine = Machine::new(mode);
         tokio::spawn(async move {
@@ -456,9 +734,11 @@ impl Controller {
                         Effect::StartRecording { session } => runner.start_recording(session),
                         Effect::StopRecording { session } => runner.stop_recording(session),
                         Effect::CancelRecording { session } => runner.cancel_recording(session),
-                        Effect::Upload { session, wav, duration } => {
-                            runner.upload(session, wav, duration)
-                        }
+                        Effect::Upload {
+                            session,
+                            wav,
+                            duration,
+                        } => runner.upload(session, wav, duration),
                         Effect::Inject { session, text } => runner.inject(session, text),
                     }
                 }
@@ -548,7 +828,10 @@ mod tests {
         let (m, fx) = step(m, Event::HotkeyDown { at: base });
         let session = recording_session(&m);
         assert!(matches!(m.state, State::Recording { latched: false, .. }));
-        assert_eq!(fx, vec![Effect::StartRecording { session }, Effect::ShowHud]);
+        assert_eq!(
+            fx,
+            vec![Effect::StartRecording { session }, Effect::ShowHud]
+        );
 
         // Release after 1s: finalize.
         let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 1000) });
@@ -558,21 +841,47 @@ mod tests {
         // Audio arrives: upload.
         let (m, fx) = step(
             m,
-            Event::AudioFinalized { session, wav: wav(), duration: Duration::from_millis(1000) },
+            Event::AudioFinalized {
+                session,
+                wav: wav(),
+                duration: Duration::from_millis(1000),
+            },
         );
         assert!(matches!(m.state, State::Transcribing { .. }));
         assert_eq!(
             fx,
-            vec![Effect::Upload { session, wav: wav(), duration: Duration::from_millis(1000) }]
+            vec![Effect::Upload {
+                session,
+                wav: wav(),
+                duration: Duration::from_millis(1000)
+            }]
         );
 
         // Upload ok: inject.
-        let (m, fx) = step(m, Event::UploadOk { session, text: "hello world".into() });
+        let (m, fx) = step(
+            m,
+            Event::UploadOk {
+                session,
+                text: "hello world".into(),
+            },
+        );
         assert!(matches!(m.state, State::Inserting { .. }));
-        assert_eq!(fx, vec![Effect::Inject { session, text: "hello world".into() }]);
+        assert_eq!(
+            fx,
+            vec![Effect::Inject {
+                session,
+                text: "hello world".into()
+            }]
+        );
 
         // Insert ok: done.
-        let (m, fx) = step(m, Event::InsertOk { session, at: ms(base, 1500) });
+        let (m, fx) = step(
+            m,
+            Event::InsertOk {
+                session,
+                at: ms(base, 1500),
+            },
+        );
         assert!(matches!(m.state, State::Done { .. }));
         assert!(fx.is_empty());
 
@@ -658,7 +967,10 @@ mod tests {
         let session = recording_session(&m);
         let (m, fx) = step(m, Event::Cancel);
         assert_eq!(m.state, State::Idle);
-        assert_eq!(fx, vec![Effect::CancelRecording { session }, Effect::HideHud]);
+        assert_eq!(
+            fx,
+            vec![Effect::CancelRecording { session }, Effect::HideHud]
+        );
     }
 
     #[test]
@@ -673,7 +985,13 @@ mod tests {
         assert_eq!(fx, vec![Effect::HideHud]);
 
         // Late results for the cancelled session are dropped.
-        let (m, fx) = step(m, Event::UploadOk { session, text: "late".into() });
+        let (m, fx) = step(
+            m,
+            Event::UploadOk {
+                session,
+                text: "late".into(),
+            },
+        );
         assert_eq!(m.state, State::Idle);
         assert!(fx.is_empty());
     }
@@ -687,7 +1005,11 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyUp { at: ms(base, 200) });
         let (m, fx) = step(
             m,
-            Event::AudioFinalized { session, wav: wav(), duration: Duration::from_millis(200) },
+            Event::AudioFinalized {
+                session,
+                wav: wav(),
+                duration: Duration::from_millis(200),
+            },
         );
         assert_eq!(m.state, State::Idle);
         assert_eq!(fx, vec![Effect::HideHud]);
@@ -700,11 +1022,21 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyDown { at: base });
         let session = recording_session(&m);
 
-        let (m, fx) = step(m, Event::Tick { at: base + Duration::from_secs(299) });
+        let (m, fx) = step(
+            m,
+            Event::Tick {
+                at: base + Duration::from_secs(299),
+            },
+        );
         assert!(matches!(m.state, State::Recording { .. }));
         assert!(fx.is_empty());
 
-        let (m, fx) = step(m, Event::Tick { at: base + Duration::from_secs(300) });
+        let (m, fx) = step(
+            m,
+            Event::Tick {
+                at: base + Duration::from_secs(300),
+            },
+        );
         assert_eq!(m.state, State::Transcribing { session });
         assert_eq!(fx, vec![Effect::StopRecording { session }]);
     }
@@ -718,7 +1050,11 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyUp { at: ms(base, 1000) });
         let (m, _) = step(
             m,
-            Event::AudioFinalized { session, wav: wav(), duration: Duration::from_millis(1000) },
+            Event::AudioFinalized {
+                session,
+                wav: wav(),
+                duration: Duration::from_millis(1000),
+            },
         );
         let (m, fx) = step(
             m,
@@ -731,7 +1067,14 @@ mod tests {
             },
         );
         assert!(
-            matches!(m.state, State::Error { kind: ErrKind::Connect, retryable: true, .. }),
+            matches!(
+                m.state,
+                State::Error {
+                    kind: ErrKind::Connect,
+                    retryable: true,
+                    ..
+                }
+            ),
             "state = {:?}",
             m.state
         );
@@ -757,16 +1100,34 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyUp { at: ms(base, 1000) });
         let (m, _) = step(
             m,
-            Event::AudioFinalized { session, wav: wav(), duration: Duration::from_secs(1) },
+            Event::AudioFinalized {
+                session,
+                wav: wav(),
+                duration: Duration::from_secs(1),
+            },
         );
-        let (m, _) = step(m, Event::UploadOk { session, text: "x".into() });
+        let (m, _) = step(
+            m,
+            Event::UploadOk {
+                session,
+                text: "x".into(),
+            },
+        );
         let (m, fx) = step(
             m,
-            Event::InsertErr { session, message: "paste failed".into(), at: ms(base, 2000) },
+            Event::InsertErr {
+                session,
+                message: "paste failed".into(),
+                at: ms(base, 2000),
+            },
         );
         assert!(matches!(
             m.state,
-            State::Error { kind: ErrKind::Inject, retryable: false, .. }
+            State::Error {
+                kind: ErrKind::Inject,
+                retryable: false,
+                ..
+            }
         ));
         assert!(fx.is_empty());
     }
@@ -784,14 +1145,24 @@ mod tests {
                 at: base,
             },
         };
-        let (m, fx) = step(m, Event::RetryUpload { wav: wav(), duration: Duration::from_secs(2) });
+        let (m, fx) = step(
+            m,
+            Event::RetryUpload {
+                wav: wav(),
+                duration: Duration::from_secs(2),
+            },
+        );
         assert_eq!(m.state, State::Transcribing { session: 7 });
         assert_eq!(m.next_session, 8);
         assert_eq!(
             fx,
             vec![
                 Effect::ShowHud,
-                Effect::Upload { session: 7, wav: wav(), duration: Duration::from_secs(2) }
+                Effect::Upload {
+                    session: 7,
+                    wav: wav(),
+                    duration: Duration::from_secs(2)
+                }
             ]
         );
     }
@@ -817,7 +1188,13 @@ mod tests {
         assert!(fx.is_empty());
 
         // Same for UploadOk / UploadErr / InsertOk with wrong sessions.
-        let (m, fx) = step(m, Event::UploadOk { session: session + 1, text: "no".into() });
+        let (m, fx) = step(
+            m,
+            Event::UploadOk {
+                session: session + 1,
+                text: "no".into(),
+            },
+        );
         assert_eq!(m.state, State::Transcribing { session });
         assert!(fx.is_empty());
     }
@@ -825,19 +1202,34 @@ mod tests {
     #[test]
     fn new_dictation_can_start_from_done_and_error() {
         let base = t0();
-        let m = Machine { mode: HotkeyMode::Hold, next_session: 3, state: State::Done { at: base } };
+        let m = Machine {
+            mode: HotkeyMode::Hold,
+            next_session: 3,
+            state: State::Done { at: base },
+        };
         let (m, fx) = step(m, Event::HotkeyDown { at: ms(base, 100) });
         assert!(matches!(m.state, State::Recording { session: 3, .. }));
-        assert_eq!(fx, vec![Effect::StartRecording { session: 3 }, Effect::ShowHud]);
+        assert_eq!(
+            fx,
+            vec![Effect::StartRecording { session: 3 }, Effect::ShowHud]
+        );
 
         let m = Machine {
             mode: HotkeyMode::Hold,
             next_session: 9,
-            state: State::Error { kind: ErrKind::Server, message: "e".into(), retryable: false, at: base },
+            state: State::Error {
+                kind: ErrKind::Server,
+                message: "e".into(),
+                retryable: false,
+                at: base,
+            },
         };
         let (m, fx) = step(m, Event::HotkeyDown { at: ms(base, 100) });
         assert!(matches!(m.state, State::Recording { session: 9, .. }));
-        assert_eq!(fx, vec![Effect::StartRecording { session: 9 }, Effect::ShowHud]);
+        assert_eq!(
+            fx,
+            vec![Effect::StartRecording { session: 9 }, Effect::ShowHud]
+        );
     }
 
     #[test]
@@ -860,9 +1252,19 @@ mod tests {
         let session = recording_session(&m);
         let (m, fx) = step(
             m,
-            Event::AudioFailed { session, message: "device lost".into(), at: ms(base, 100) },
+            Event::AudioFailed {
+                session,
+                message: "device lost".into(),
+                at: ms(base, 100),
+            },
         );
-        assert!(matches!(m.state, State::Error { kind: ErrKind::Audio, .. }));
+        assert!(matches!(
+            m.state,
+            State::Error {
+                kind: ErrKind::Audio,
+                ..
+            }
+        ));
         assert_eq!(fx, vec![Effect::CancelRecording { session }]);
     }
 
@@ -886,7 +1288,10 @@ mod tests {
         let session = recording_session(&m);
         // CLI/tray toggle behaves latched even in hybrid mode.
         assert!(matches!(m.state, State::Recording { latched: true, .. }));
-        assert_eq!(fx, vec![Effect::StartRecording { session }, Effect::ShowHud]);
+        assert_eq!(
+            fx,
+            vec![Effect::StartRecording { session }, Effect::ShowHud]
+        );
 
         let (m, fx) = step(m, Event::Toggle { at: ms(base, 2000) });
         assert_eq!(m.state, State::Transcribing { session });

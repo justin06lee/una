@@ -152,7 +152,9 @@ fn write_text(pb: &NSPasteboard, text: &str) -> Result<(), InjectError> {
     let ns_text = NSString::from_str(text);
     let pb_type_string = unsafe { NSPasteboardTypeString };
     if !pb.setString_forType(&ns_text, pb_type_string) {
-        return Err(InjectError::Clipboard("could not write text to pasteboard".into()));
+        return Err(InjectError::Clipboard(
+            "could not write text to pasteboard".into(),
+        ));
     }
     // Mark as transient so clipboard managers ignore it.
     let transient = NSString::from_str(TRANSIENT_TYPE);
@@ -216,7 +218,11 @@ impl TextInjector for MacInjector {
         } else {
             "Ready: clipboard + Cmd+V via CGEvent.".to_string()
         };
-        InjectProbe { backend: "cgevent".into(), can_paste, detail }
+        InjectProbe {
+            backend: "cgevent".into(),
+            can_paste,
+            detail,
+        }
     }
 
     fn inject(&self, text: &str, opts: &InjectOptions) -> Result<InjectOutcome, InjectError> {
@@ -229,7 +235,11 @@ impl TextInjector for MacInjector {
             return Ok(InjectOutcome::ClipboardOnly);
         }
 
-        let saved = if opts.restore_clipboard { save_pasteboard(&pb) } else { None };
+        let saved = if opts.restore_clipboard {
+            save_pasteboard(&pb)
+        } else {
+            None
+        };
 
         write_text(&pb, text)?;
         // Give the pasteboard change a moment to propagate before pasting.

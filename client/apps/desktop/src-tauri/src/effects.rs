@@ -8,7 +8,7 @@ use tauri::{AppHandle, Manager};
 use una_core::audio::AudioEngine;
 use una_core::config::Config;
 use una_core::net::{ApiClient, DictationRequest};
-use una_core::state::{ControllerHandle, ErrKind, EffectRunner, Event};
+use una_core::state::{ControllerHandle, EffectRunner, ErrKind, Event};
 
 use crate::app_state::AppState;
 use crate::windows;
@@ -27,11 +27,18 @@ impl TauriEffects {
         api: ApiClient,
         config: Arc<RwLock<Config>>,
     ) -> Self {
-        Self { app, engine, api, config }
+        Self {
+            app,
+            engine,
+            api,
+            config,
+        }
     }
 
     fn controller(&self) -> Option<ControllerHandle> {
-        self.app.try_state::<AppState>().map(|s| s.controller.clone())
+        self.app
+            .try_state::<AppState>()
+            .map(|s| s.controller.clone())
     }
 }
 
@@ -57,7 +64,9 @@ impl EffectRunner for TauriEffects {
     }
 
     fn upload(&mut self, session: u64, wav: Vec<u8>, _duration: Duration) {
-        let Some(controller) = self.controller() else { return };
+        let Some(controller) = self.controller() else {
+            return;
+        };
         let api = self.api.clone();
         let config = self.config.clone();
         tauri::async_runtime::spawn(async move {
@@ -93,17 +102,19 @@ impl EffectRunner for TauriEffects {
                 return;
             };
 
-            let app_name = tauri::async_runtime::spawn_blocking(|| {
-                una_platform::frontmost().current()
-            })
-            .await
-            .ok()
-            .flatten();
+            let app_name =
+                tauri::async_runtime::spawn_blocking(|| una_platform::frontmost().current())
+                    .await
+                    .ok()
+                    .flatten();
 
             let request = DictationRequest::new(wav, app_name);
             match api.dictate(&base, &request).await {
                 Ok(resp) => {
-                    controller.event(Event::UploadOk { session, text: resp.text });
+                    controller.event(Event::UploadOk {
+                        session,
+                        text: resp.text,
+                    });
                 }
                 Err(err) => {
                     tracing::warn!("dictation upload failed: {err}");
@@ -123,7 +134,9 @@ impl EffectRunner for TauriEffects {
     }
 
     fn inject(&mut self, session: u64, text: String) {
-        let Some(controller) = self.controller() else { return };
+        let Some(controller) = self.controller() else {
+            return;
+        };
         let config = self.config.clone();
         tauri::async_runtime::spawn_blocking(move || {
             let (restore_clipboard, restore_delay_ms, overrides) = {
@@ -149,7 +162,10 @@ impl EffectRunner for TauriEffects {
             };
             match injector().inject(&text, &opts) {
                 Ok(_outcome) => {
-                    controller.event(Event::InsertOk { session, at: Instant::now() });
+                    controller.event(Event::InsertOk {
+                        session,
+                        at: Instant::now(),
+                    });
                 }
                 Err(e) => {
                     controller.event(Event::InsertErr {

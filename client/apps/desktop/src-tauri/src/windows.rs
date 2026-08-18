@@ -35,16 +35,13 @@ pub fn create_hud(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    let window = WebviewWindowBuilder::new(
-        app,
-        SETTINGS_LABEL,
-        WebviewUrl::App("settings.html".into()),
-    )
-    .title("Una Settings")
-    .inner_size(760.0, 520.0)
-    .min_inner_size(640.0, 420.0)
-    .visible(false)
-    .build()?;
+    let window =
+        WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("settings.html".into()))
+            .title("Una Settings")
+            .inner_size(760.0, 520.0)
+            .min_inner_size(640.0, 420.0)
+            .visible(false)
+            .build()?;
 
     // Hide instead of destroy on close, so the window can be reopened
     // instantly from the tray.
@@ -61,7 +58,9 @@ pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 /// Position the HUD bottom-center on the monitor containing the cursor, then
 /// show it (without stealing focus).
 pub fn show_hud(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(HUD_LABEL) else { return };
+    let Some(window) = app.get_webview_window(HUD_LABEL) else {
+        return;
+    };
     position_hud(app, &window);
     let _ = window.show();
 }
@@ -95,7 +94,10 @@ fn position_hud(app: &AppHandle, window: &WebviewWindow) {
     let h = HUD_HEIGHT * scale;
     let x = mpos.x as f64 + (msize.width as f64 - w) / 2.0;
     let y = mpos.y as f64 + msize.height as f64 - h - HUD_BOTTOM_MARGIN * scale;
-    let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+    let _ = window.set_position(tauri::PhysicalPosition::new(
+        x.round() as i32,
+        y.round() as i32,
+    ));
 }
 
 pub fn show_settings(app: &AppHandle) {

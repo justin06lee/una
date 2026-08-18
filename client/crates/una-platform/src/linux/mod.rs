@@ -57,7 +57,9 @@ pub struct LinuxInjector {
 
 impl LinuxInjector {
     pub fn new() -> Self {
-        Self { session: detect::session_kind() }
+        Self {
+            session: detect::session_kind(),
+        }
     }
 }
 
@@ -116,7 +118,11 @@ impl TextInjector for LinuxInjector {
         let chord = PasteChord::parse(opts.paste_combo.as_deref());
         // arboard restores text-only content; non-text clipboard data is not
         // preserved on Linux.
-        let saved = if opts.restore_clipboard { get_clipboard() } else { None };
+        let saved = if opts.restore_clipboard {
+            get_clipboard()
+        } else {
+            None
+        };
         set_clipboard(text)?;
         std::thread::sleep(Duration::from_millis(50));
 

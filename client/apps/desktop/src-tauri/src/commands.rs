@@ -72,11 +72,9 @@ pub fn set_config(
 
 #[tauri::command]
 pub async fn discover_servers() -> Vec<DiscoveredServer> {
-    tauri::async_runtime::spawn_blocking(|| {
-        una_core::discovery::discover(Duration::from_secs(2))
-    })
-    .await
-    .unwrap_or_default()
+    tauri::async_runtime::spawn_blocking(|| una_core::discovery::discover(Duration::from_secs(2)))
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -184,5 +182,9 @@ pub async fn test_record(state: State<'_, AppState>) -> Result<TestRecordResult,
     }
     engine.cancel(TEST_SESSION);
 
-    Ok(TestRecordResult { ok: max_peak > 0.02, max_rms, max_peak })
+    Ok(TestRecordResult {
+        ok: max_peak > 0.02,
+        max_rms,
+        max_peak,
+    })
 }

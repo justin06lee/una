@@ -77,7 +77,11 @@ pub enum NetError {
     #[error("the request timed out")]
     Timeout(#[source] reqwest::Error),
     #[error("server error {status}: {message}")]
-    Api { status: u16, code: String, message: String },
+    Api {
+        status: u16,
+        code: String,
+        message: String,
+    },
     #[error("could not decode the server response: {0}")]
     Decode(String),
     #[error("request failed: {0}")]
@@ -97,7 +101,10 @@ impl NetError {
 
     /// Whether "Retry Last Dictation" is likely to help.
     pub fn retryable(&self) -> bool {
-        matches!(self, NetError::Connect(_) | NetError::Timeout(_) | NetError::Other(_))
+        matches!(
+            self,
+            NetError::Connect(_) | NetError::Timeout(_) | NetError::Other(_)
+        )
     }
 }
 
@@ -113,7 +120,12 @@ pub struct DictationRequest {
 
 impl DictationRequest {
     pub fn new(wav: Vec<u8>, app_name: Option<String>) -> Self {
-        Self { wav, utterance_id: uuid::Uuid::new_v4().to_string(), app_name, clean: true }
+        Self {
+            wav,
+            utterance_id: uuid::Uuid::new_v4().to_string(),
+            app_name,
+            clean: true,
+        }
     }
 }
 
@@ -183,7 +195,13 @@ impl ApiClient {
             form = form.text("app_name", app.clone());
         }
 
-        let resp = self.http.post(&url).multipart(form).send().await.map_err(classify)?;
+        let resp = self
+            .http
+            .post(&url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(classify)?;
         let status = resp.status();
         let body = resp.bytes().await.map_err(classify)?;
         if status.is_success() {
@@ -219,7 +237,10 @@ fn api_error(status: u16, body: &[u8]) -> NetError {
         Ok(env) => NetError::Api {
             status,
             code: env.error.code.unwrap_or_else(|| "unknown".into()),
-            message: env.error.message.unwrap_or_else(|| "unknown server error".into()),
+            message: env
+                .error
+                .message
+                .unwrap_or_else(|| "unknown server error".into()),
         },
         Err(_) => NetError::Api {
             status,
@@ -268,14 +289,21 @@ mod tests {
         assert!(s.starts_with("una-desktop/"), "{s}");
         assert!(s.contains(' '), "{s}");
         #[cfg(target_os = "macos")]
-        assert!(s.ends_with(&format!("macos-{}", std::env::consts::ARCH)), "{s}");
+        assert!(
+            s.ends_with(&format!("macos-{}", std::env::consts::ARCH)),
+            "{s}"
+        );
     }
 
     #[test]
     fn api_error_parses_contract_envelope() {
         let body = br#"{"error":{"code":"asr_failed","message":"model not loaded"}}"#;
         match api_error(503, body) {
-            NetError::Api { status, code, message } => {
+            NetError::Api {
+                status,
+                code,
+                message,
+            } => {
                 assert_eq!(status, 503);
                 assert_eq!(code, "asr_failed");
                 assert_eq!(message, "model not loaded");

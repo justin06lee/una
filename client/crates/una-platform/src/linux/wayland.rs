@@ -43,7 +43,9 @@ pub fn wtype_available() -> bool {
 }
 
 fn which(bin: &str) -> bool {
-    let Ok(path) = std::env::var("PATH") else { return false };
+    let Ok(path) = std::env::var("PATH") else {
+        return false;
+    };
     std::env::split_paths(&path).any(|dir| dir.join(bin).is_file())
 }
 
@@ -75,7 +77,9 @@ pub fn paste_ydotool(chord: PasteChord) -> Result<(), InjectError> {
     if status.success() {
         Ok(())
     } else {
-        Err(InjectError::Keystroke(format!("ydotool exited with {status}")))
+        Err(InjectError::Keystroke(format!(
+            "ydotool exited with {status}"
+        )))
     }
 }
 
@@ -99,6 +103,8 @@ pub fn paste_wtype(chord: PasteChord) -> Result<(), InjectError> {
     if status.success() {
         Ok(())
     } else {
-        Err(InjectError::Keystroke(format!("wtype exited with {status}")))
+        Err(InjectError::Keystroke(format!(
+            "wtype exited with {status}"
+        )))
     }
 }

@@ -64,8 +64,11 @@ pub fn discover(timeout: Duration) -> Vec<DiscoveredServer> {
 fn server_from_info(info: &mdns_sd::ResolvedService) -> Option<DiscoveredServer> {
     let port = info.get_port();
     // Prefer IPv4 for a simpler URL; fall back to any address.
-    let addrs: Vec<std::net::IpAddr> =
-        info.get_addresses().iter().map(|a| a.to_ip_addr()).collect();
+    let addrs: Vec<std::net::IpAddr> = info
+        .get_addresses()
+        .iter()
+        .map(|a| a.to_ip_addr())
+        .collect();
     let addr = addrs
         .iter()
         .find(|a| a.is_ipv4())
@@ -82,7 +85,13 @@ fn server_from_info(info: &mdns_sd::ResolvedService) -> Option<DiscoveredServer>
     Some(DiscoveredServer {
         name,
         url: format!("http://{host}:{port}"),
-        version: info.txt_properties.get_property_val_str("version").map(|s| s.to_string()),
-        api: info.txt_properties.get_property_val_str("api").map(|s| s.to_string()),
+        version: info
+            .txt_properties
+            .get_property_val_str("version")
+            .map(|s| s.to_string()),
+        api: info
+            .txt_properties
+            .get_property_val_str("api")
+            .map(|s| s.to_string()),
     })
 }

@@ -27,8 +27,7 @@ struct Request {
 }
 
 fn parse_command(line: &str) -> Result<Command, String> {
-    let req: Request =
-        serde_json::from_str(line).map_err(|e| format!("invalid request: {e}"))?;
+    let req: Request = serde_json::from_str(line).map_err(|e| format!("invalid request: {e}"))?;
     match req.cmd.as_str() {
         "toggle" => Ok(Command::Toggle),
         "start" => Ok(Command::Start),
@@ -100,10 +99,16 @@ mod tests {
 
     #[test]
     fn parses_commands() {
-        assert_eq!(parse_command(r#"{"cmd":"toggle"}"#).unwrap(), Command::Toggle);
+        assert_eq!(
+            parse_command(r#"{"cmd":"toggle"}"#).unwrap(),
+            Command::Toggle
+        );
         assert_eq!(parse_command(r#"{"cmd":"start"}"#).unwrap(), Command::Start);
         assert_eq!(parse_command(r#"{"cmd":"stop"}"#).unwrap(), Command::Stop);
-        assert_eq!(parse_command(r#"{"cmd":"cancel"}"#).unwrap(), Command::Cancel);
+        assert_eq!(
+            parse_command(r#"{"cmd":"cancel"}"#).unwrap(),
+            Command::Cancel
+        );
         assert!(parse_command(r#"{"cmd":"nope"}"#).is_err());
         assert!(parse_command("garbage").is_err());
     }

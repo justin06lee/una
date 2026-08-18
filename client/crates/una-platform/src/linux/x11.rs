@@ -18,28 +18,24 @@ const XK_V_LOWER: u32 = 0x0076;
 const XK_CONTROL_L: u32 = 0xffe3;
 const XK_SHIFT_L: u32 = 0xffe1;
 
-fn keycode_for_keysym(
-    conn: &impl Connection,
-    keysym: u32,
-) -> Result<u8, InjectError> {
+fn keycode_for_keysym(conn: &impl Connection, keysym: u32) -> Result<u8, InjectError> {
     let setup = conn.setup();
     let min = setup.min_keycode;
     let max = setup.max_keycode;
-    let mapping = x11rb::protocol::xproto::ConnectionExt::get_keyboard_mapping(
-        conn,
-        min,
-        max - min + 1,
-    )
-    .map_err(|e| InjectError::Keystroke(format!("get_keyboard_mapping: {e}")))?
-    .reply()
-    .map_err(|e| InjectError::Keystroke(format!("get_keyboard_mapping reply: {e}")))?;
+    let mapping =
+        x11rb::protocol::xproto::ConnectionExt::get_keyboard_mapping(conn, min, max - min + 1)
+            .map_err(|e| InjectError::Keystroke(format!("get_keyboard_mapping: {e}")))?
+            .reply()
+            .map_err(|e| InjectError::Keystroke(format!("get_keyboard_mapping reply: {e}")))?;
     let per = mapping.keysyms_per_keycode as usize;
     for (i, chunk) in mapping.keysyms.chunks(per).enumerate() {
         if chunk.contains(&keysym) {
             return Ok(min + i as u8);
         }
     }
-    Err(InjectError::Keystroke(format!("no keycode maps keysym {keysym:#x}")))
+    Err(InjectError::Keystroke(format!(
+        "no keycode maps keysym {keysym:#x}"
+    )))
 }
 
 fn fake_key(conn: &impl Connection, kind: u8, keycode: u8) -> Result<(), InjectError> {
@@ -55,7 +51,11 @@ pub fn paste(chord: PasteChord) -> Result<(), InjectError> {
 
     let ctrl = keycode_for_keysym(&conn, XK_CONTROL_L)?;
     let v = keycode_for_keysym(&conn, XK_V_LOWER)?;
-    let shift = if chord.shift { Some(keycode_for_keysym(&conn, XK_SHIFT_L)?) } else { None };
+    let shift = if chord.shift {
+        Some(keycode_for_keysym(&conn, XK_SHIFT_L)?)
+    } else {
+        None
+    };
 
     fake_key(&conn, KEY_PRESS, ctrl)?;
     if let Some(shift) = shift {

@@ -41,7 +41,10 @@ pub struct AudioSettings {
 
 impl Default for AudioSettings {
     fn default() -> Self {
-        Self { input_device: "auto".into(), prefer_builtin: true }
+        Self {
+            input_device: "auto".into(),
+            prefer_builtin: true,
+        }
     }
 }
 
@@ -63,9 +66,15 @@ pub enum AudioResult {
 pub type AudioCallback = Box<dyn Fn(AudioResult) + Send + 'static>;
 
 enum Cmd {
-    Start { session: u64 },
-    Stop { session: u64 },
-    Cancel { session: u64 },
+    Start {
+        session: u64,
+    },
+    Stop {
+        session: u64,
+    },
+    Cancel {
+        session: u64,
+    },
     SetSettings(AudioSettings),
     /// Sent from the cpal error callback: rebuild the stream.
     Rebuild,
@@ -87,7 +96,10 @@ impl AudioEngine {
             .name("una-audio".into())
             .spawn(move || worker(rx, worker_tx, settings, level_tx, on_result))
             .expect("spawn audio thread");
-        Self { tx, levels: level_rx }
+        Self {
+            tx,
+            levels: level_rx,
+        }
     }
 
     pub fn start(&self, session: u64) {
@@ -183,7 +195,10 @@ fn worker(
                     match build_stream(&settings, &level_tx, &self_tx) {
                         Ok(a) => active = Some(a),
                         Err(e) => {
-                            on_result(AudioResult::Failed { session, message: e });
+                            on_result(AudioResult::Failed {
+                                session,
+                                message: e,
+                            });
                             continue;
                         }
                     }
@@ -213,9 +228,11 @@ fn worker(
                 let samples: Vec<f32> = std::mem::take(&mut *a.shared.buffer.lock().unwrap());
                 let (sample_rate, channels) = (a.sample_rate, a.channels);
                 match finalize(samples, sample_rate, channels) {
-                    Ok((wav, duration)) => {
-                        on_result(AudioResult::Finalized(FinalizedAudio { session, wav, duration }))
-                    }
+                    Ok((wav, duration)) => on_result(AudioResult::Finalized(FinalizedAudio {
+                        session,
+                        wav,
+                        duration,
+                    })),
                     Err(message) => on_result(AudioResult::Failed { session, message }),
                 }
             }
@@ -302,7 +319,8 @@ fn pick_device(settings: &AudioSettings) -> Result<cpal::Device, String> {
             }
         }
     }
-    host.default_input_device().ok_or_else(|| "no input device available".to_string())
+    host.default_input_device()
+        .ok_or_else(|| "no input device available".to_string())
 }
 
 fn build_stream(
@@ -384,9 +402,16 @@ fn build_stream(
         cpal::SampleFormat::I32 => build!(i32, |s| s as f32 / 2_147_483_648.0),
         other => return Err(format!("unsupported sample format: {other:?}")),
     };
-    stream.play().map_err(|e| format!("could not start input stream: {e}"))?;
+    stream
+        .play()
+        .map_err(|e| format!("could not start input stream: {e}"))?;
 
-    Ok(Active { stream, shared, sample_rate, channels })
+    Ok(Active {
+        stream,
+        shared,
+        sample_rate,
+        channels,
+    })
 }
 
 /// Accumulates samples and publishes an RMS/peak frame ~30 times a second.
@@ -419,7 +444,10 @@ impl Meter {
         self.count += 1;
         if self.count >= self.window {
             let rms = (self.sum_sq / self.count as f64).sqrt() as f32;
-            let _ = self.tx.send(LevelFrame { rms, peak: self.peak });
+            let _ = self.tx.send(LevelFrame {
+                rms,
+                peak: self.peak,
+            });
             self.count = 0;
             self.sum_sq = 0.0;
             self.peak = 0.0;
@@ -431,10 +459,13 @@ impl Meter {
 // Finalization: downmix -> resample -> WAV encode
 // ---------------------------------------------------------------------------
 
-fn finalize(samples: Vec<f32>, sample_rate: u32, channels: u16) -> Result<(Vec<u8>, Duration), String> {
+fn finalize(
+    samples: Vec<f32>,
+    sample_rate: u32,
+    channels: u16,
+) -> Result<(Vec<u8>, Duration), String> {
     let mono = downmix(&samples, channels);
-    let duration =
-        Duration::from_secs_f64(mono.len() as f64 / sample_rate.max(1) as f64);
+    let duration = Duration::from_secs_f64(mono.len() as f64 / sample_rate.max(1) as f64);
     let resampled = if sample_rate == TARGET_SAMPLE_RATE {
         mono
     } else {
@@ -522,9 +553,13 @@ fn encode_wav(mono_16k: &[f32]) -> Result<Vec<u8>, String> {
             .map_err(|e| format!("wav encode failed: {e}"))?;
         for &s in mono_16k {
             let clamped = (s.clamp(-1.0, 1.0) * 32767.0).round() as i16;
-            writer.write_sample(clamped).map_err(|e| format!("wav encode failed: {e}"))?;
+            writer
+                .write_sample(clamped)
+                .map_err(|e| format!("wav encode failed: {e}"))?;
         }
-        writer.finalize().map_err(|e| format!("wav encode failed: {e}"))?;
+        writer
+            .finalize()
+            .map_err(|e| format!("wav encode failed: {e}"))?;
     }
     Ok(cursor.into_inner())
 }
@@ -535,7 +570,9 @@ pub fn wav_duration(wav: &[u8]) -> Option<Duration> {
     let reader = hound::WavReader::new(std::io::Cursor::new(wav)).ok()?;
     let spec = reader.spec();
     let frames = reader.duration(); // frames per channel
-    Some(Duration::from_secs_f64(frames as f64 / spec.sample_rate.max(1) as f64))
+    Some(Duration::from_secs_f64(
+        frames as f64 / spec.sample_rate.max(1) as f64,
+    ))
 }
 
 #[cfg(test)]
@@ -568,7 +605,9 @@ mod tests {
 
     #[test]
     fn wav_roundtrip_and_duration() {
-        let samples: Vec<f32> = (0..16_000).map(|i| ((i % 100) as f32 / 100.0) - 0.5).collect();
+        let samples: Vec<f32> = (0..16_000)
+            .map(|i| ((i % 100) as f32 / 100.0) - 0.5)
+            .collect();
         let wav = encode_wav(&samples).unwrap();
         assert_eq!(&wav[0..4], b"RIFF");
         assert_eq!(&wav[8..12], b"WAVE");

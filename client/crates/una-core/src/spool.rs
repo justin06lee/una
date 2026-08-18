@@ -29,7 +29,10 @@ pub fn save(wav: &[u8]) -> Result<PathBuf, SpoolError> {
 
 pub fn save_in(dir: &Path, wav: &[u8]) -> Result<PathBuf, SpoolError> {
     std::fs::create_dir_all(dir)?;
-    let ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     // A zero-padded counter suffix keeps names unique (and lexically ordered)
     // within one millisecond.
     let mut n = 0u32;

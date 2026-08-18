@@ -47,7 +47,10 @@ pub fn spawn_forwarders(app: AppHandle) {
             let frame = *levels.borrow_and_update();
             let _ = level_app.emit(
                 "audio-level",
-                LevelPayload { rms: frame.rms, peak: frame.peak },
+                LevelPayload {
+                    rms: frame.rms,
+                    peak: frame.peak,
+                },
             );
         }
     });
