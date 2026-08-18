@@ -1,0 +1,26 @@
+[package]
+name = "una-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cpal = "0.18.2"
+directories = "6.0.0"
+hound = "3.5.1"
+mdns-sd = "0.21.0"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "multipart", "json", "http2"] }
+rubato = "0.16"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "io-util", "net"] }
+toml = "1.1.4"
+tracing = "0.1.44"
+uuid = { version = "1.24.1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"
