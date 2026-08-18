@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "Capabilities for the una HUD and settings windows",
+  "windows": ["hud", "settings"],
+  "permissions": [
+    "core:default",
+    "global-shortcut:default",
+    "autostart:default",
+    "opener:default"
+  ]
+}

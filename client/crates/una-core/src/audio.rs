@@ -327,8 +327,18 @@ fn build_stream(
 
     let err_tx = self_tx.clone();
     let err_cb = move |e: cpal::Error| {
-        tracing::warn!("audio stream error: {e}");
-        let _ = err_tx.send(Cmd::Rebuild);
+        use cpal::ErrorKind;
+        match e.kind() {
+            // Transient buffer under/overruns: keep the stream.
+            ErrorKind::Xrun => {
+                tracing::debug!("audio xrun: {e}");
+            }
+            // The device went away or changed: rebuild.
+            _ => {
+                tracing::warn!("audio stream error: {e}");
+                let _ = err_tx.send(Cmd::Rebuild);
+            }
+        }
     };
 
     let meter = Meter::new(sample_rate, channels, level_tx.clone());
