@@ -1,11 +1,22 @@
 # una — golden paths
 
-.PHONY: help dmg server-dev server-test dashboard-dev dashboard-build client-check client-test ui-build client-dev docker
+.PHONY: all build install update dmg server-dev server-test dashboard-dev dashboard-build client-check client-test ui-build client-dev docker
 
-help:
-	@grep -E '^[a-z-]+:' Makefile | sed 's/:.*//' | column
+# ---- the golden path: build the client, reset stale TCC grants, install, launch ----
+all:
+	$(MAKE) -C client
 
-# ---- the one command: build the macOS app + dmg (drag it into /Applications) ----
+build:
+	$(MAKE) -C client build
+
+install:
+	$(MAKE) -C client install
+
+# full refresh of an installed client: stop -> remove -> build -> install -> relaunch
+update:
+	$(MAKE) -C client update
+
+# ---- macOS dmg bundle (drag it into /Applications yourself) ----
 DMG_DIR := client/target/release/bundle/dmg
 
 dmg:
@@ -22,12 +33,12 @@ server-test:
 
 # ---- dashboard ----
 dashboard-dev:
-	cd server/dashboard && pnpm dev
+	cd server/dashboard && bun run dev
 
 dashboard-build:
-	cd server/dashboard && pnpm install && pnpm build
+	cd server/dashboard && bun install && bun run build
 
-# ---- client ----
+# ---- client helpers ----
 client-check:
 	cd client && cargo check --workspace --all-targets
 
