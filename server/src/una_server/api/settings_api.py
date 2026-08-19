@@ -22,6 +22,7 @@ MUTABLE_KEYS = {
     "cleanup.timeout_s": float,
     "training.threshold_minutes": float,
     "training.auto": bool,
+    "training.auto_idle_minutes": float,
     "training.max_edit_distance": float,
 }
 

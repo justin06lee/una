@@ -141,6 +141,7 @@ export interface Settings {
   'cleanup.timeout_s': number;
   'training.threshold_minutes': number;
   'training.auto': boolean;
+  'training.auto_idle_minutes': number;
   'training.max_edit_distance': number;
 }
 
