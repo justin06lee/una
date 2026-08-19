@@ -24,6 +24,27 @@ class FakeTranscriber:
         return TranscribeResult(text=self.text, language=language or "en")
 
 
+class FakeProc:
+    """Stands in for a runner subprocess; exits 0 immediately."""
+
+    pid = 4242
+
+    def __init__(self):
+        self.returncode = None
+
+    async def wait(self):
+        self.returncode = 0
+        return 0
+
+
+@pytest.fixture
+def fake_runner(monkeypatch):
+    async def fake_exec(*args, **kwargs):
+        return FakeProc()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+
+
 @pytest.fixture
 def client(tmp_path):
     config = Config(server=ServerConfig(data_dir=tmp_path / "data"))

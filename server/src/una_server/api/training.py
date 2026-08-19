@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
 from ..errors import NotFound
-from ..schemas import Eligibility, TrainingRun
+from ..schemas import Eligibility, StartRunRequest, TrainingRun
 from ..services import runs
 from ..state import AppState
 from .deps import get_state
@@ -25,18 +25,22 @@ async def eligibility(state: State) -> Eligibility:
     async with state.db.execute(runs.STYLE_SQL) as cur:
         style = await cur.fetchone()
     threshold = state.config.training.threshold_minutes
+    style_threshold = state.config.training.style_threshold_pairs
     return Eligibility(
         eligible_pairs=pairs,
         eligible_minutes=round(minutes, 2),
         threshold_minutes=threshold,
         ready=minutes >= threshold,
         style_pairs=style["n"],
+        style_threshold_pairs=style_threshold,
+        style_ready=style["n"] >= style_threshold,
     )
 
 
 def _run(row) -> TrainingRun:
     return TrainingRun(
         id=row["id"],
+        kind=row["kind"],
         status=row["status"],
         started_at=row["started_at"],
         finished_at=row["finished_at"],
@@ -58,8 +62,9 @@ async def list_runs(state: State) -> list[TrainingRun]:
 
 
 @router.post("/runs", response_model=TrainingRun, status_code=201)
-async def start_run(state: State) -> TrainingRun:
-    return _run(await runs.launch_run(state))
+async def start_run(state: State, body: StartRunRequest | None = None) -> TrainingRun:
+    kind = body.kind if body is not None else "asr"
+    return _run(await runs.launch_run(state, kind))
 
 
 async def _fetch_run(state: AppState, run_id: str):

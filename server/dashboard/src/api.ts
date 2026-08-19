@@ -76,12 +76,17 @@ export interface Eligibility {
   eligible_minutes: number;
   threshold_minutes: number;
   ready: boolean;
-  /** Collected style pairs (polished-text corrections). Absent on older servers. */
-  style_pairs?: number;
+  /** Collected style pairs (polished-text corrections). */
+  style_pairs: number;
+  style_threshold_pairs: number;
+  style_ready: boolean;
 }
+
+export type RunKind = 'asr' | 'style';
 
 export interface TrainingRun {
   id: string;
+  kind: RunKind;
   status: string;
   started_at: string | null;
   finished_at: string | null;
@@ -258,8 +263,12 @@ export const api = {
   listTrainingRuns(): Promise<TrainingRun[]> {
     return request('/training/runs');
   },
-  startTrainingRun(): Promise<TrainingRun> {
-    return request('/training/runs', { method: 'POST' });
+  startTrainingRun(kind: RunKind = 'asr'): Promise<TrainingRun> {
+    return request('/training/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind }),
+    });
   },
   getTrainingRun(id: string): Promise<TrainingRun> {
     return request(`/training/runs/${id}`);

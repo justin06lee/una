@@ -36,5 +36,11 @@ pause_serving = false        # true on <16GB cards: unload ASR while training
 max_edit_distance = 0.30     # corrections further than this from raw are content rewrites -> excluded
 promotion_margin_wer = 0.5   # candidate must beat baseline WER by this many absolute points
 
+# Style model: fine-tune the cleanup LLM on your polished texts ("Final text" in Review).
+style_threshold_pairs = 50   # polished pairs collected before style training is offered
+# style_base_hf_model = "unsloth/Llama-3.2-3B-Instruct"  # HF weights to train (ungated Llama mirror)
+# style_ollama_base = "llama3.2:3b"                      # ollama model the adapter layers onto
+# style_promotion_margin = 0.02  # mean edit distance to your targets must improve by this
+
 [discovery]
 mdns = true                  # advertise _una._tcp for client auto-discovery

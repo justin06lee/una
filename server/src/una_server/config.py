@@ -65,6 +65,20 @@ class TrainingConfig(BaseModel):
     batch_size: int = 8
     grad_accum: int = 2
     keep_finetuned_models: int = 3
+    # Style model (cleanup LLM) fine-tuning on (raw -> polished) pairs.
+    style_threshold_pairs: int = 50
+    style_base_hf_model: str = "unsloth/Llama-3.2-3B-Instruct"  # ungated Llama mirror
+    style_ollama_base: str = "llama3.2:3b"  # FROM line of the generated Modelfile
+    style_lora_r: int = 16
+    style_lora_alpha: int = 32
+    style_lora_dropout: float = 0.05
+    style_learning_rate: float = 2e-4
+    style_epochs: float = 3.0
+    style_batch_size: int = 1
+    style_grad_accum: int = 8
+    style_max_seq_len: int = 512
+    style_promotion_margin: float = 0.02  # mean normalized edit distance must improve by this
+    style_min_eval_samples: int = 20
 
 
 class DiscoveryConfig(BaseModel):

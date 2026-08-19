@@ -97,6 +97,13 @@ latches, a hold behaves like push-to-talk).
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click
    rollback from the model registry, always.
 
+6. The same loop learns your **style**. The optional *Final text* field in Review collects
+   (raw transcript → how you actually wanted it written) pairs; once enough accumulate
+   (`training.style_threshold_pairs`, default 50), the Training page can QLoRA-fine-tune the
+   cleanup LLM on them. The adapter is layered onto the Ollama base model, both models are
+   evaluated through Ollama itself by mean edit distance to your polished targets, and the
+   candidate is promoted by switching `cleanup.model` — same gate, same one-click rollback.
+
 Quick wins arrive before any training: add names and jargon to the **Dictionary** and they are
 injected into Whisper's decoding prompt and the cleanup prompt immediately.
 
