@@ -4,9 +4,108 @@
 //! Linux).
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+
+// ---------------------------------------------------------------------------
+// Hotkey binding representation
+// ---------------------------------------------------------------------------
+
+/// A parsed hotkey binding. The TOML file stores this as a plain string in
+/// one of two forms:
+///
+/// - `"Ctrl+Alt+Space"` — a combo routed to the global-shortcut plugin.
+/// - `"native:<keycode>:<Name>"` — a single physical key (including bare
+///   modifiers like Fn or Right ⌘) captured by the native event-tap backend
+///   on macOS. `<keycode>` is the platform virtual keycode; `<Name>` is the
+///   human-readable label shown in the UI and may contain any characters
+///   except a leading digit-colon ambiguity (it is everything after the
+///   second colon).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Binding {
+    /// Modifier+key combo string understood by the global-shortcut plugin.
+    Combo(String),
+    /// Single physical key matched by keycode via the native event tap.
+    Native { keycode: u32, name: String },
+}
+
+impl Binding {
+    pub fn parse(s: &str) -> Result<Self, BindingParseError> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Err(BindingParseError::Empty);
+        }
+        if let Some(rest) = s.strip_prefix("native:") {
+            let mut parts = rest.splitn(2, ':');
+            let code = parts.next().unwrap_or_default();
+            let keycode: u32 = code
+                .parse()
+                .map_err(|_| BindingParseError::BadKeycode(code.to_string()))?;
+            let name = parts.next().unwrap_or_default().trim().to_string();
+            let name = if name.is_empty() {
+                format!("Key {keycode}")
+            } else {
+                name
+            };
+            Ok(Self::Native { keycode, name })
+        } else {
+            Ok(Self::Combo(s.to_string()))
+        }
+    }
+
+    pub fn is_native(&self) -> bool {
+        matches!(self, Self::Native { .. })
+    }
+
+    /// Human-facing label: the combo string itself, or the native key name.
+    pub fn label(&self) -> &str {
+        match self {
+            Self::Combo(c) => c,
+            Self::Native { name, .. } => name,
+        }
+    }
+}
+
+impl fmt::Display for Binding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Combo(c) => f.write_str(c),
+            Self::Native { keycode, name } => write!(f, "native:{keycode}:{name}"),
+        }
+    }
+}
+
+impl FromStr for Binding {
+    type Err = BindingParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
+    }
+}
+
+impl Serialize for Binding {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Binding {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum BindingParseError {
+    #[error("empty hotkey binding")]
+    Empty,
+    #[error("invalid native binding keycode {0:?} (expected native:<keycode>:<Name>)")]
+    BadKeycode(String),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -111,11 +210,17 @@ impl Default for InsertConfig {
 #[serde(default)]
 pub struct UiConfig {
     pub sounds: bool,
+    /// "pill" (always-visible bottom pill, the default) or "flash"
+    /// (show the HUD only while a dictation is in flight).
+    pub hud_mode: String,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
-        Self { sounds: false }
+        Self {
+            sounds: false,
+            hud_mode: "pill".into(),
+        }
     }
 }
 
@@ -214,5 +319,123 @@ mod tests {
         assert!(cfg.server.autodiscover);
         assert_eq!(cfg.hotkey.mode, "hybrid");
         assert_eq!(cfg.insert.restore_delay_ms, 300);
+        assert_eq!(cfg.ui.hud_mode, "pill");
+    }
+
+    #[test]
+    fn binding_parses_combo() {
+        let b = Binding::parse("Ctrl+Alt+Space").unwrap();
+        assert_eq!(b, Binding::Combo("Ctrl+Alt+Space".into()));
+        assert!(!b.is_native());
+        assert_eq!(b.to_string(), "Ctrl+Alt+Space");
+        assert_eq!(b.label(), "Ctrl+Alt+Space");
+    }
+
+    #[test]
+    fn binding_parses_native() {
+        let b = Binding::parse("native:63:Fn").unwrap();
+        assert_eq!(
+            b,
+            Binding::Native {
+                keycode: 63,
+                name: "Fn".into()
+            }
+        );
+        assert!(b.is_native());
+        assert_eq!(b.label(), "Fn");
+    }
+
+    #[test]
+    fn binding_native_name_may_contain_colons_and_unicode() {
+        let b = Binding::parse("native:54:Right ⌘").unwrap();
+        assert_eq!(
+            b,
+            Binding::Native {
+                keycode: 54,
+                name: "Right ⌘".into()
+            }
+        );
+        let b = Binding::parse("native:41:a:b").unwrap();
+        assert_eq!(
+            b,
+            Binding::Native {
+                keycode: 41,
+                name: "a:b".into()
+            }
+        );
+    }
+
+    #[test]
+    fn binding_native_missing_name_gets_placeholder() {
+        let b = Binding::parse("native:96:").unwrap();
+        assert_eq!(
+            b,
+            Binding::Native {
+                keycode: 96,
+                name: "Key 96".into()
+            }
+        );
+        let b = Binding::parse("native:96").unwrap();
+        assert_eq!(b.label(), "Key 96");
+    }
+
+    #[test]
+    fn binding_display_roundtrips() {
+        for s in ["Ctrl+Alt+Space", "F12", "native:63:Fn", "native:54:Right ⌘"] {
+            let b = Binding::parse(s).unwrap();
+            assert_eq!(Binding::parse(&b.to_string()).unwrap(), b);
+        }
+    }
+
+    #[test]
+    fn binding_rejects_garbage() {
+        assert_eq!(Binding::parse(""), Err(BindingParseError::Empty));
+        assert_eq!(Binding::parse("   "), Err(BindingParseError::Empty));
+        assert!(matches!(
+            Binding::parse("native:abc:X"),
+            Err(BindingParseError::BadKeycode(_))
+        ));
+        assert!(matches!(
+            Binding::parse("native:"),
+            Err(BindingParseError::BadKeycode(_))
+        ));
+    }
+
+    #[test]
+    fn binding_serde_roundtrips() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Holder {
+            binding: Binding,
+        }
+        for s in ["Ctrl+Alt+Space", "native:61:Right ⌥"] {
+            let h = Holder {
+                binding: Binding::parse(s).unwrap(),
+            };
+            let toml_str = toml::to_string(&h).unwrap();
+            let back: Holder = toml::from_str(&toml_str).unwrap();
+            assert_eq!(back, h);
+        }
+        // Deserializing a malformed native string is an error, not a panic.
+        assert!(toml::from_str::<Holder>("binding = \"native:zz:Fn\"").is_err());
+    }
+
+    #[test]
+    fn config_with_native_binding_roundtrips_as_string() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut cfg = Config::default();
+        cfg.hotkey.binding = "native:63:Fn".into();
+        save_at(&cfg, &path).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("binding = \"native:63:Fn\""));
+        let loaded = load_or_create_at(&path).unwrap();
+        assert_eq!(loaded.hotkey.binding, "native:63:Fn");
+        assert_eq!(
+            Binding::parse(&loaded.hotkey.binding).unwrap(),
+            Binding::Native {
+                keycode: 63,
+                name: "Fn".into()
+            }
+        );
     }
 }

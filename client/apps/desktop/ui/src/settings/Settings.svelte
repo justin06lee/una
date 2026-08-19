@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import type {
+    CapturedHotkey,
     Config,
     DiscoveredServer,
     LevelFrame,
@@ -24,7 +25,10 @@
   let discovered = $state<DiscoveredServer[]>([]);
 
   // Hotkey tab
-  let recordingHotkey = $state(false);
+  let recordingHotkey = $state(false); // legacy JS recorder (non-macOS)
+  let captureSupported = $state(false); // native event-tap capture available
+  let capturing = $state(false);
+  let captureError = $state("");
 
   // Audio tab
   let devices = $state<string[]>([]);
@@ -88,6 +92,68 @@
     scheduleSave();
     checkHealth();
   }
+
+  // ---- Native capture (macOS event tap) ------------------------------
+
+  const MOD_GLYPHS: Record<string, string> = {
+    Ctrl: "⌃",
+    Control: "⌃",
+    Alt: "⌥",
+    Option: "⌥",
+    Shift: "⇧",
+    Super: "⌘",
+    Cmd: "⌘",
+    Command: "⌘",
+    Meta: "⌘",
+    CmdOrCtrl: "⌘",
+  };
+  const MODIFIER_KEYCODES = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63];
+
+  function parseNative(b: string): { keycode: number; name: string } | null {
+    if (!b.startsWith("native:")) return null;
+    const rest = b.slice("native:".length);
+    const i = rest.indexOf(":");
+    const code = Number(i >= 0 ? rest.slice(0, i) : rest);
+    const name = i >= 0 ? rest.slice(i + 1) : "";
+    return { keycode: code, name: name || `Key ${code}` };
+  }
+
+  /** Keycap chips for the current binding ("⌃ ⌥ Space" or a single "Fn"). */
+  const chips = $derived.by(() => {
+    if (!config) return [] as string[];
+    const native = parseNative(config.hotkey.binding);
+    if (native) return [native.name];
+    return config.hotkey.binding.split("+").map((t) => MOD_GLYPHS[t] ?? t);
+  });
+
+  const bindingNative = $derived(config ? parseNative(config.hotkey.binding) : null);
+  /** Native non-modifier keys are consumed system-wide — warn about it. */
+  const swallowWarning = $derived(
+    bindingNative !== null && !MODIFIER_KEYCODES.includes(bindingNative.keycode),
+  );
+
+  async function startCapture() {
+    if (capturing || !config) return;
+    capturing = true;
+    captureError = "";
+    try {
+      const cap = await invoke<CapturedHotkey>("capture_hotkey");
+      config.hotkey.binding = cap.binding;
+      scheduleSave();
+    } catch (e) {
+      const msg = String(e);
+      // A cancelled capture (Esc or the Cancel button) is not an error.
+      if (!msg.toLowerCase().includes("cancel")) captureError = msg;
+    } finally {
+      capturing = false;
+    }
+  }
+
+  function cancelCapture() {
+    invoke("cancel_hotkey_capture").catch(() => {});
+  }
+
+  // ---- Legacy JS combo recorder (used where native capture is missing) --
 
   function hotkeyFromEvent(e: KeyboardEvent): string | null {
     const parts: string[] = [];
@@ -163,6 +229,9 @@
     invoke<string[]>("audio_devices")
       .then((d) => (devices = d))
       .catch(() => {});
+    invoke<boolean>("hotkey_capture_supported")
+      .then((s) => (captureSupported = s))
+      .catch(() => {});
     refreshPerms();
 
     const healthInterval = setInterval(checkHealth, 5000);
@@ -206,22 +275,88 @@
         <span>Sounds</span>
         <input type="checkbox" bind:checked={config.ui.sounds} onchange={scheduleSave} />
       </label>
+      <fieldset class="mode">
+        <legend>Status pill</legend>
+        {#each [["pill", "Always visible", "A tiny pill rests at the bottom of the screen and grows while you dictate."], ["flash", "Only while dictating", "The pill appears when a dictation starts and hides when it ends."]] as [value, name, desc]}
+          <label class="radio">
+            <input
+              type="radio"
+              name="hud_mode"
+              {value}
+              bind:group={config.ui.hud_mode}
+              onchange={scheduleSave}
+            />
+            <span><strong>{name}</strong> — {desc}</span>
+          </label>
+        {/each}
+      </fieldset>
       <p class="hint">
         una lives in the menu bar. Hold the hotkey anywhere, speak, release —
         the transcribed text is typed into the focused app.
       </p>
     {:else if tab === "Hotkey"}
       <h2>Hotkey</h2>
-      <div class="row">
-        <span>Dictation hotkey</span>
-        <button
-          class="hotkey-input"
-          class:recording={recordingHotkey}
-          onclick={() => (recordingHotkey = !recordingHotkey)}
-        >
-          {recordingHotkey ? "Press a key combo… (Esc to cancel)" : config.hotkey.binding}
-        </button>
+
+      <div class="binding-panel">
+        <div class="chips" aria-label="Current hotkey">
+          {#each chips as chip}
+            <span class="keycap">{chip}</span>
+          {/each}
+        </div>
+
+        {#if captureSupported}
+          <button
+            class="capture-btn"
+            class:capturing
+            onclick={() => (capturing ? cancelCapture() : startCapture())}
+          >
+            {#if capturing}
+              <span class="pulse-dot"></span> Press any key… <em>(Esc cancels)</em>
+            {:else}
+              Click to record a new hotkey
+            {/if}
+          </button>
+          <p class="hint">
+            Press any single key — Fn, Right ⌘, F5, even a plain letter — and it
+            becomes the hotkey, including as a hold-to-talk key. Hold modifiers
+            and press a key to record a combo instead.
+          </p>
+        {:else}
+          <button
+            class="capture-btn"
+            class:capturing={recordingHotkey}
+            onclick={() => (recordingHotkey = !recordingHotkey)}
+          >
+            {#if recordingHotkey}
+              <span class="pulse-dot"></span> Press a key combo… <em>(Esc cancels)</em>
+            {:else}
+              Click to record a new hotkey
+            {/if}
+          </button>
+          <p class="hint">
+            This platform records modifier+key combos. Single bare keys (Fn,
+            Right ⌘, …) are a macOS feature.
+          </p>
+          {#if bindingNative}
+            <p class="warn-note">
+              The saved binding “{bindingNative.name}” is a macOS native key and
+              is disabled on this platform — record a combo above, or use a
+              compositor keybind (below).
+            </p>
+          {/if}
+        {/if}
+
+        {#if swallowWarning && captureSupported}
+          <p class="warn-note">
+            While una is running, “{bindingNative?.name}” is captured
+            system-wide — other apps won’t receive this key.
+          </p>
+        {/if}
+        {#if captureError}
+          <p class="error">{captureError}</p>
+        {/if}
       </div>
+
       <fieldset class="mode">
         <legend>Mode</legend>
         {#each [["hold", "Hold", "Hold to talk; release to insert."], ["toggle", "Toggle", "Press to start, press again to finish."], ["hybrid", "Hybrid", "Hold to talk — or tap to latch, tap again to finish."]] as [value, name, desc]}
@@ -237,6 +372,20 @@
           </label>
         {/each}
       </fieldset>
+
+      {#if !captureSupported}
+        <h3>Wayland / compositor keybinds</h3>
+        <p class="hint">
+          On Wayland, global hotkeys can be restricted by the compositor. The
+          most reliable setup is a compositor keybind running the
+          <code>una</code> CLI: e.g. Hyprland
+          <code>bind = , F12, exec, una toggle</code> (or
+          <code>bind</code>/<code>bindr</code> with <code>una start</code> and
+          <code>una stop</code> for hold-to-talk), Sway
+          <code>bindsym F12 exec una toggle</code>, or a GNOME/KDE custom
+          shortcut running <code>una toggle</code>.
+        </p>
+      {/if}
     {:else if tab === "Server"}
       <h2>Server</h2>
       <div class="row">
@@ -527,21 +676,111 @@
     margin-left: 8px;
   }
 
-  .hotkey-input {
-    background: var(--panel);
+  .binding-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
     border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 7px;
-    padding: 6px 14px;
-    font-size: 13px;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    cursor: pointer;
-    min-width: 220px;
+    border-radius: 10px;
+    background: var(--panel);
+    margin-bottom: 14px;
   }
 
-  .hotkey-input.recording {
-    border-color: var(--accent);
-    color: var(--muted);
+  .chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+  }
+
+  .keycap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2.5px;
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .capture-btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .capture-btn em {
+    font-style: normal;
+    font-weight: 400;
+    opacity: 0.75;
+  }
+
+  .capture-btn.capturing {
+    background: color-mix(in srgb, var(--accent) 82%, #000);
+    animation: capture-pulse 1.2s ease-in-out infinite;
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    animation: dot-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes capture-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent);
+    }
+  }
+
+  @keyframes dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.72);
+    }
+  }
+
+  .warn-note {
+    color: var(--warn);
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    border-radius: 4px;
+    padding: 1px 5px;
   }
 
   .mode {

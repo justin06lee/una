@@ -22,8 +22,16 @@ export interface Config {
     restore_delay_ms: number;
     paste_overrides: Record<string, string>;
   };
-  ui: { sounds: boolean };
+  ui: { sounds: boolean; hud_mode: "pill" | "flash" };
   general: { launch_at_login: boolean };
+}
+
+export interface CapturedHotkey {
+  binding: string;
+  name: string;
+  keycode: number | null;
+  is_modifier: boolean;
+  is_native: boolean;
 }
 
 export interface DiscoveredServer {

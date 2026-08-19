@@ -10,7 +10,7 @@ use una_core::discovery::DiscoveredServer;
 use una_core::state::{Command, HotkeyMode, Snapshot};
 
 use crate::app_state::AppState;
-use crate::hotkey;
+use crate::{hotkey, windows};
 
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> Config {
@@ -24,9 +24,12 @@ pub fn set_config(
     config: Config,
 ) -> Result<(), String> {
     // Validate before persisting.
-    hotkey::parse_binding(&config.hotkey.binding)?;
+    hotkey::validate_binding(&config.hotkey.binding)?;
     if !matches!(config.hotkey.mode.as_str(), "hold" | "toggle" | "hybrid") {
         return Err(format!("invalid hotkey mode {:?}", config.hotkey.mode));
+    }
+    if !matches!(config.ui.hud_mode.as_str(), "pill" | "flash") {
+        return Err(format!("invalid hud mode {:?}", config.ui.hud_mode));
     }
     let url = config.server.url.trim();
     if !url.is_empty() && !(url.starts_with("http://") || url.starts_with("https://")) {
@@ -42,7 +45,10 @@ pub fn set_config(
 
     // Apply live changes.
     if previous.hotkey.binding != config.hotkey.binding {
-        hotkey::register(&app, &config.hotkey.binding)?;
+        hotkey::apply(&app, &config.hotkey.binding)?;
+    }
+    if previous.ui.hud_mode != config.ui.hud_mode {
+        windows::apply_hud_mode(&app, config.ui.hud_mode != "flash");
     }
     if previous.hotkey.mode != config.hotkey.mode {
         state
@@ -146,6 +152,88 @@ pub async fn audio_devices() -> Vec<String> {
     tauri::async_runtime::spawn_blocking(AudioEngine::input_devices)
         .await
         .unwrap_or_default()
+}
+
+#[derive(Serialize)]
+pub struct CapturedHotkey {
+    /// Binding string to store: "native:<keycode>:<Name>" or a combo.
+    pub binding: String,
+    /// Human-readable key name ("Fn", "Right ⌘", "F5", "A", …).
+    pub name: String,
+    pub keycode: Option<u32>,
+    pub is_modifier: bool,
+    /// True when the binding uses the native event-tap backend (single key,
+    /// consumed system-wide); false for combo bindings.
+    pub is_native: bool,
+}
+
+/// Whether native single-key capture (the event-tap backend) exists here.
+#[tauri::command]
+pub fn hotkey_capture_supported() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Arm the event tap in one-shot mode and wait (up to 20s) for the next key
+/// press. Bare modifiers resolve on release; a non-modifier key pressed with
+/// modifiers held resolves to the combo form when it is expressible.
+#[tauri::command]
+pub async fn capture_hotkey(app: AppHandle) -> Result<CapturedHotkey, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt as _;
+
+        let tap = hotkey::ensure_tap(&app)?;
+        // Suspend combo shortcuts so pressing the current hotkey mid-capture
+        // records it instead of starting a dictation.
+        let _ = app.global_shortcut().unregister_all();
+
+        let result =
+            tauri::async_runtime::spawn_blocking(move || tap.capture_next(Duration::from_secs(20)))
+                .await
+                .map_err(|e| e.to_string())?;
+
+        // Restore the currently-configured binding; if the user adopts the
+        // captured one, the subsequent set_config re-applies again.
+        {
+            use tauri::Manager as _;
+            let current = app.state::<AppState>().config_snapshot().hotkey.binding;
+            if let Err(e) = hotkey::apply(&app, &current) {
+                tracing::warn!("could not re-apply hotkey after capture: {e}");
+            }
+        }
+
+        let captured = result.map_err(|e| e.to_string())?;
+        // Prefer the combo form when modifiers were held and the plugin can
+        // express it; otherwise fall back to the native single-key form.
+        let binding = match captured.combo.as_deref() {
+            Some(combo) if hotkey::parse_combo(combo).is_ok() => combo.to_string(),
+            _ => format!("native:{}:{}", captured.keycode, captured.name),
+        };
+        let is_native = binding.starts_with("native:");
+        Ok(CapturedHotkey {
+            binding,
+            name: captured.name,
+            keycode: Some(captured.keycode as u32),
+            is_modifier: captured.is_modifier,
+            is_native,
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err(
+            "Native key capture is only available on macOS. Type a key combo instead, or \
+             bind a compositor shortcut to run `una toggle`."
+                .into(),
+        )
+    }
+}
+
+/// Abort a pending capture_hotkey (it returns a \"cancelled\" error).
+#[tauri::command]
+pub fn cancel_hotkey_capture() {
+    #[cfg(target_os = "macos")]
+    hotkey::cancel_capture();
 }
 
 #[derive(Serialize)]

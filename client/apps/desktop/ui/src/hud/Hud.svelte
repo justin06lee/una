@@ -4,39 +4,53 @@
   import { invoke } from "@tauri-apps/api/core";
   import type { LevelFrame, Snapshot } from "../lib/types";
 
-  const BAR_COUNT = 24;
+  const BAR_COUNT = 28;
 
   let snapshot = $state<Snapshot>({ state: "idle" });
   let canvas = $state<HTMLCanvasElement | null>(null);
+  let elapsed = $state("0:00");
 
-  // 30Hz data, interpolated at 60fps.
+  // 30Hz level data, interpolated at 60fps in the rAF loop below.
   let targetLevel = 0;
-  let bars = new Array(BAR_COUNT).fill(0.05);
-  let phases = Array.from({ length: BAR_COUNT }, () => Math.random() * Math.PI * 2);
+  const bars = new Float32Array(BAR_COUNT).fill(0.06);
+  const phases = new Float32Array(BAR_COUNT);
+  for (let i = 0; i < BAR_COUNT; i++) phases[i] = Math.random() * Math.PI * 2;
   let raf = 0;
-  let shimmerT = 0;
+  let recStart = 0;
 
-  const isRecording = $derived(snapshot.state === "recording");
-  const isBusy = $derived(
-    snapshot.state === "transcribing" || snapshot.state === "inserting",
-  );
-  const isDone = $derived(snapshot.state === "done");
-  const isError = $derived(snapshot.state === "error");
-
-  const label = $derived.by(() => {
+  const phase = $derived.by(() => {
     switch (snapshot.state) {
       case "recording":
-        return snapshot.latched ? "Listening — press again to finish" : "Listening…";
+        return "recording";
       case "transcribing":
-        return "Transcribing…";
       case "inserting":
-        return "Inserting…";
+        return "busy";
       case "done":
-        return "Inserted";
+        return "done";
       case "error":
-        return snapshot.message || "Something went wrong";
+        return "error";
       default:
-        return "";
+        return "idle";
+    }
+  });
+
+  const errorText = $derived.by(() => {
+    if (snapshot.state !== "error") return "";
+    switch (snapshot.kind) {
+      case "connect":
+        return "Can’t reach server";
+      case "timeout":
+        return "Server timed out";
+      case "server":
+        return "Server error";
+      case "decode":
+        return "Bad server response";
+      case "audio":
+        return "Microphone error";
+      case "inject":
+        return "Couldn’t insert text";
+      default:
+        return snapshot.message || "Something went wrong";
     }
   });
 
@@ -57,59 +71,44 @@
 
     const gap = 3;
     const barW = (w - gap * (BAR_COUNT - 1)) / BAR_COUNT;
-    const now = performance.now() / 1000;
+    const now = performance.now();
+    const t = now / 1000;
 
-    if (isRecording) {
-      for (let i = 0; i < BAR_COUNT; i++) {
-        // Center-weighted target with per-bar noise, exponentially smoothed.
-        const centerBias = 1 - Math.abs(i - (BAR_COUNT - 1) / 2) / (BAR_COUNT / 2);
-        const noise = 0.10 * Math.sin(now * (5 + (i % 5)) + phases[i]);
-        const target = Math.max(
-          0.06,
-          Math.min(1, targetLevel * (0.55 + 0.65 * centerBias) + noise * targetLevel),
-        );
-        bars[i] += (target - bars[i]) * 0.25;
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      for (let i = 0; i < BAR_COUNT; i++) {
-        const bh = Math.max(2, bars[i] * h);
-        const x = i * (barW + gap);
-        const y = (h - bh) / 2;
-        roundRect(ctx, x, y, barW, bh, barW / 2);
-      }
-    } else if (isBusy) {
-      // Indeterminate shimmer pill.
-      shimmerT = (shimmerT + 0.012) % 1.4;
-      const grad = ctx.createLinearGradient(
-        (shimmerT - 0.4) * w,
-        0,
-        shimmerT * w,
-        0,
+    // mm:ss timer (state writes are cheap; the string changes once/second).
+    const secs = Math.max(0, Math.floor((now - recStart) / 1000));
+    const next = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    if (next !== elapsed) elapsed = next;
+
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    for (let i = 0; i < BAR_COUNT; i++) {
+      // Center-weighted target with per-bar noise; fast attack, slow decay.
+      const centerBias = 1 - Math.abs(i - (BAR_COUNT - 1) / 2) / (BAR_COUNT / 2);
+      const noise = 0.12 * Math.sin(t * (5 + (i % 5)) + phases[i]);
+      const target = Math.max(
+        0.06,
+        Math.min(1, targetLevel * (0.5 + 0.7 * centerBias) + noise * targetLevel),
       );
-      grad.addColorStop(0, "rgba(255,255,255,0.10)");
-      grad.addColorStop(0.5, "rgba(255,255,255,0.55)");
-      grad.addColorStop(1, "rgba(255,255,255,0.10)");
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
-      roundRect(ctx, 0, h / 2 - 3, w, 6, 3);
-      ctx.fillStyle = grad;
-      roundRect(ctx, 0, h / 2 - 3, w, 6, 3);
-      // decay bars for next recording
-      for (let i = 0; i < BAR_COUNT; i++) bars[i] *= 0.9;
+      const k = target > bars[i] ? 0.5 : 0.12;
+      bars[i] += (target - bars[i]) * k;
+      const bh = Math.max(2.5, bars[i] * h);
+      const x = i * (barW + gap);
+      const y = (h - bh) / 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, bh, barW / 2);
+      ctx.fill();
     }
   }
 
-  function roundRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-  ) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-    ctx.fill();
-  }
+  // Only run the rAF loop while the waveform is on screen.
+  $effect(() => {
+    if (phase === "recording") {
+      recStart = performance.now();
+      elapsed = "0:00";
+      bars.fill(0.06);
+      raf = requestAnimationFrame(draw);
+      return () => cancelAnimationFrame(raf);
+    }
+  });
 
   function retry() {
     invoke("retry_last").catch(() => {});
@@ -123,7 +122,6 @@
       // Perceptual-ish scaling: mic RMS rarely exceeds ~0.3.
       targetLevel = Math.min(1, Math.pow(e.payload.rms * 3.2, 0.8));
     });
-    raf = requestAnimationFrame(draw);
     return () => {
       unlistenState.then((f) => f());
       unlistenLevel.then((f) => f());
@@ -132,99 +130,262 @@
   });
 </script>
 
-<div class="capsule" class:error={isError} class:done={isDone}>
-  {#if isRecording || isBusy}
-    <canvas bind:this={canvas} class="bars"></canvas>
-  {:else if isDone}
-    <svg class="check" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M4 12.5l5 5L20 6.5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="3"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-  {:else if isError}
-    <svg class="warn" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 3L2 21h20L12 3zm0 6v6m0 3v.5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-  {/if}
-
-  {#if label}
-    <span class="label" title={label}>{label}</span>
-  {/if}
-
-  {#if isError && snapshot.state === "error" && snapshot.retryable}
-    <button class="retry" onclick={retry}>Retry</button>
-  {/if}
+<div class="wrap">
+  <div
+    class="pill {phase}"
+    title={snapshot.state === "error" ? snapshot.message : undefined}
+  >
+    {#if phase === "recording"}
+      <canvas bind:this={canvas} class="bars"></canvas>
+      <span class="timer">{elapsed}</span>
+    {:else if phase === "busy"}
+      <div class="shimmer"></div>
+    {:else if phase === "done"}
+      <svg class="check" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4 12.5l5 5L20 6.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    {:else if phase === "error"}
+      <svg class="warn" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 3L2 21h20L12 3zm0 6v6m0 3v.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span class="msg">{errorText}</span>
+      {#if snapshot.state === "error" && snapshot.retryable}
+        <button class="retry" onclick={retry}>Retry</button>
+      {/if}
+    {:else}
+      <div class="mini"><i></i><i></i><i></i></div>
+    {/if}
+  </div>
 </div>
 
 <style>
-  .capsule {
+  .wrap {
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+  }
+
+  .pill {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 56px;
-    max-width: 320px;
-    min-width: 180px;
-    padding: 0 18px;
+    justify-content: center;
+    gap: 8px;
+    overflow: hidden;
     border-radius: 9999px;
-    background: rgba(18, 18, 22, 0.72);
+    background: rgba(16, 17, 22, 0.78);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
     box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.35),
-      inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+      0 4px 16px rgba(0, 0, 0, 0.35),
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.92);
+    /* Settle/shrink: quick, no overshoot. Grow states override with a
+       spring below. */
+    transition:
+      width 0.22s cubic-bezier(0.25, 1, 0.35, 1),
+      height 0.22s cubic-bezier(0.25, 1, 0.35, 1),
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      opacity 0.25s ease;
   }
 
-  .capsule.error {
-    animation: shake 0.35s ease;
-    border-color: rgba(255, 105, 97, 0.5);
+  /* Spring easing (perceptual ~250ms) for every growing transition. The
+     cubic-bezier declaration is the fallback for webviews without linear()
+     support (< Safari 17.2); the linear() spring wins where available. */
+  .pill.recording,
+  .pill.error {
+    transition:
+      width 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      height 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 0.2s ease,
+      border-color 0.2s ease;
+    transition:
+      width 450ms
+        linear(
+          0, 0.1605, 0.4497, 0.7063, 0.8805, 0.9768, 1.0183, 1.0284, 1.0242,
+          1.0161, 1.0087, 1.0036, 1.0008, 0.9995, 1
+        ),
+      height 450ms
+        linear(
+          0, 0.1605, 0.4497, 0.7063, 0.8805, 0.9768, 1.0183, 1.0284, 1.0242,
+          1.0161, 1.0087, 1.0036, 1.0008, 0.9995, 1
+        ),
+      background-color 0.2s ease,
+      border-color 0.2s ease;
   }
 
-  .capsule.done .check {
-    animation: pop 0.25s ease;
+  /* -------------------------------------------------------------- Idle */
+  .pill.idle {
+    width: 64px;
+    height: 14px;
+    opacity: 0.9;
+  }
+
+  .mini {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .mini i {
+    width: 2.5px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.42);
+  }
+
+  .mini i:nth-child(1) {
+    height: 4px;
+  }
+  .mini i:nth-child(2) {
+    height: 7px;
+  }
+  .mini i:nth-child(3) {
+    height: 4px;
+  }
+
+  /* --------------------------------------------------------- Recording */
+  .pill.recording {
+    width: 300px;
+    height: 40px;
+    padding: 0 14px;
   }
 
   .bars {
-    width: 130px;
-    height: 34px;
+    width: 216px;
+    height: 28px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .timer {
     flex: none;
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  /* -------------------------------------------- Transcribing/Inserting */
+  .pill.busy {
+    width: 240px;
+    height: 34px;
+    padding: 0 16px;
+  }
+
+  .shimmer {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background:
+      linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.55) 50%,
+          rgba(255, 255, 255, 0) 100%
+        )
+        no-repeat,
+      rgba(255, 255, 255, 0.14);
+    background-size: 45% 100%;
+    animation: sweep 1.1s ease-in-out infinite;
+  }
+
+  @keyframes sweep {
+    0% {
+      background-position:
+        -60% 0,
+        0 0;
+    }
+    100% {
+      background-position:
+        160% 0,
+        0 0;
+    }
+  }
+
+  /* -------------------------------------------------------------- Done */
+  .pill.done {
+    width: 84px;
+    height: 32px;
+    border-color: rgba(126, 231, 135, 0.45);
+    animation: pulse 0.7s ease-out;
   }
 
   .check {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     flex: none;
     color: #7ee787;
   }
 
+  .check path {
+    stroke-dasharray: 26;
+    stroke-dashoffset: 26;
+    animation: drawcheck 0.3s ease-out 0.08s forwards;
+  }
+
+  @keyframes drawcheck {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes pulse {
+    0% {
+      box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.35),
+        0 0 0 0 rgba(126, 231, 135, 0.45);
+    }
+    100% {
+      box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.35),
+        0 0 0 14px rgba(126, 231, 135, 0);
+    }
+  }
+
+  /* ------------------------------------------------------------- Error */
+  .pill.error {
+    width: 356px;
+    height: 44px;
+    padding: 0 10px 0 16px;
+    background: rgba(44, 18, 20, 0.82);
+    border-color: rgba(255, 105, 97, 0.5);
+    animation: shake 0.35s ease;
+  }
+
   .warn {
-    width: 20px;
-    height: 20px;
+    width: 17px;
+    height: 17px;
     flex: none;
     color: #ff6961;
   }
 
-  .label {
-    font-size: 13px;
+  .msg {
+    font-size: 12.5px;
     font-weight: 500;
     letter-spacing: 0.01em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    flex: 1;
   }
 
   .retry {
@@ -245,14 +406,34 @@
   }
 
   @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    50% { transform: translateX(4px); }
-    75% { transform: translateX(-2px); }
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    50% {
+      transform: translateX(4px);
+    }
+    75% {
+      transform: translateX(-2px);
+    }
   }
 
-  @keyframes pop {
-    0% { transform: scale(0.4); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .pill,
+    .pill.recording,
+    .pill.error {
+      transition: none;
+      animation: none;
+    }
+    .shimmer,
+    .check path {
+      animation: none;
+    }
+    .check path {
+      stroke-dashoffset: 0;
+    }
   }
 </style>

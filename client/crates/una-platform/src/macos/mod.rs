@@ -1,5 +1,9 @@
 //! macOS implementation: NSPasteboard clipboard save/restore, CGEvent Cmd+V
-//! paste chord, NSWorkspace frontmost app, TCC permission checks.
+//! paste chord, NSWorkspace frontmost app, TCC permission checks, and the
+//! CGEventTap hotkey backend (see [`eventtap`]).
+
+pub mod eventtap;
+pub mod keys;
 
 use std::ffi::c_void;
 use std::time::Duration;
@@ -31,25 +35,7 @@ const FALLBACK_V_KEYCODE: u16 = 9;
 
 #[link(name = "Carbon", kind = "framework")]
 extern "C" {
-    fn TISCopyCurrentKeyboardLayoutInputSource() -> *mut c_void;
-    fn TISGetInputSourceProperty(source: *mut c_void, property_key: *const c_void) -> *mut c_void;
-    static kTISPropertyUnicodeKeyLayoutData: *const c_void;
-    fn UCKeyTranslate(
-        key_layout_ptr: *const c_void,
-        virtual_key_code: u16,
-        key_action: u16,
-        modifier_key_state: u32,
-        keyboard_type: u32,
-        key_translate_options: u32,
-        dead_key_state: *mut u32,
-        max_string_length: usize,
-        actual_string_length: *mut usize,
-        unicode_string: *mut u16,
-    ) -> i32;
-    fn LMGetKbdType() -> u8;
     fn IsSecureEventInputEnabled() -> bool;
-    fn CFDataGetBytePtr(data: *const c_void) -> *const u8;
-    fn CFRelease(cf: *const c_void);
 }
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -59,48 +45,28 @@ extern "C" {
     static kAXTrustedCheckOptionPrompt: *const c_void;
 }
 
-const K_UC_KEY_ACTION_DISPLAY: u16 = 3;
-const K_UC_KEY_TRANSLATE_NO_DEAD_KEYS_MASK: u32 = 1;
-
 /// Resolve the virtual keycode producing 'v' on the current keyboard layout.
 fn keycode_for_v() -> u16 {
-    unsafe {
-        let source = TISCopyCurrentKeyboardLayoutInputSource();
-        if source.is_null() {
-            return FALLBACK_V_KEYCODE;
-        }
-        let layout_data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData);
-        if layout_data.is_null() {
-            CFRelease(source);
-            return FALLBACK_V_KEYCODE;
-        }
-        let layout = CFDataGetBytePtr(layout_data) as *const c_void;
-        let kbd_type = LMGetKbdType() as u32;
-        let mut result = FALLBACK_V_KEYCODE;
-        for keycode in 0u16..128 {
-            let mut dead_key_state: u32 = 0;
-            let mut chars = [0u16; 4];
-            let mut len: usize = 0;
-            let status = UCKeyTranslate(
-                layout,
-                keycode,
-                K_UC_KEY_ACTION_DISPLAY,
-                0,
-                kbd_type,
-                K_UC_KEY_TRANSLATE_NO_DEAD_KEYS_MASK,
-                &mut dead_key_state,
-                chars.len(),
-                &mut len,
-                chars.as_mut_ptr(),
-            );
-            if status == 0 && len == 1 && chars[0] == 'v' as u16 {
-                result = keycode;
-                break;
-            }
-        }
-        CFRelease(source);
-        result
+    keys::keycode_for_char('v').unwrap_or(FALLBACK_V_KEYCODE)
+}
+
+/// NSStatusWindowLevel: above the Dock (level 20), below screen savers. The
+/// pill HUD sits at the very bottom edge of the screen, so without this the
+/// Dock would cover it.
+const STATUS_WINDOW_LEVEL: isize = 25;
+
+/// Raise a window above the Dock so the bottom-edge pill stays visible.
+///
+/// # Safety
+/// `ns_window` must be a valid pointer to an `NSWindow` (e.g. from tauri's
+/// `WebviewWindow::ns_window`), and must be called on the main thread.
+pub unsafe fn raise_window_above_dock(ns_window: *mut c_void) {
+    use objc2::runtime::AnyObject;
+    let window = ns_window as *mut AnyObject;
+    if window.is_null() {
+        return;
     }
+    let _: () = objc2::msg_send![&*window, setLevel: STATUS_WINDOW_LEVEL];
 }
 
 fn post_cmd_v() -> Result<(), InjectError> {

@@ -103,6 +103,9 @@ fn main() {
             commands::retry_last,
             commands::test_record,
             commands::audio_devices,
+            commands::hotkey_capture_supported,
+            commands::capture_hotkey,
+            commands::cancel_hotkey_capture,
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -110,8 +113,10 @@ fn main() {
 
             let handle = app.handle().clone();
 
-            // Windows are created hidden up front.
-            windows::create_hud(&handle)?;
+            // The HUD pill is created (and, in pill mode, shown) up front;
+            // settings stays hidden until requested.
+            let pill = config.read().unwrap().ui.hud_mode != "flash";
+            windows::create_hud(&handle, pill)?;
             windows::create_settings(&handle)?;
 
             // Controller actor with the tauri effect runner.
@@ -149,7 +154,7 @@ fn main() {
             // Tray, hotkey, IPC socket, event forwarders.
             tray::setup(&handle)?;
             let binding = config.read().unwrap().hotkey.binding.clone();
-            if let Err(e) = hotkey::register(&handle, &binding) {
+            if let Err(e) = hotkey::apply(&handle, &binding) {
                 tracing::warn!("could not register hotkey {binding:?}: {e}");
             }
             events::spawn_forwarders(handle.clone());
