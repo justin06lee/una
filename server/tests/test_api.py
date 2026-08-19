@@ -143,3 +143,32 @@ def test_health(client):
     body = client.get("/v1/health").json()
     assert body["asr_model_loaded"] is True
     assert body["ollama"] == "unreachable" or body["ollama"] == "ok"
+
+
+async def test_sounds_like_feeds_cleanup_not_whisper(client):
+    state = client.app.state.una
+    client.post("/v1/dictionary", json={"phrase": "Tauri", "sounds_like": "towery"})
+    client.post("/v1/dictionary", json={"phrase": "soxr"})
+    from una_server.api.dictations import _active_phrases
+
+    phrases, hinted = await _active_phrases(state)
+    assert phrases == ["Tauri", "soxr"]
+    assert hinted == ['Tauri (often misheard as "towery")', "soxr"]
+
+
+async def test_client_field_is_stored(client):
+    resp = client.post(
+        "/v1/dictations",
+        files={"audio": ("u.wav", wav_bytes(), "audio/wav")},
+        data={"clean": "false", "client": "una-desktop/0.1.0 test"},
+    )
+    did = resp.json()["id"]
+    state = client.app.state.una
+    async with state.db.execute("SELECT client FROM dictations WHERE id = ?", (did,)) as cur:
+        row = await cur.fetchone()
+    assert row["client"] == "una-desktop/0.1.0 test"
+
+
+def test_settings_reject_bool_for_float(client):
+    resp = client.put("/v1/settings", json={"cleanup.timeout_s": True})
+    assert resp.status_code == 400

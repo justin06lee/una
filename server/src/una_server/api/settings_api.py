@@ -55,9 +55,12 @@ async def put_settings(state: State, body: dict) -> dict:
         if key not in MUTABLE_KEYS:
             raise BadRequest(f"unknown or immutable setting: {key}")
         expected = MUTABLE_KEYS[key]
-        if expected is float and isinstance(value, int):
+        # bool subclasses int in Python; only genuine numbers may coerce to float.
+        if expected is float and isinstance(value, int) and not isinstance(value, bool):
             value = float(value)
-        if not isinstance(value, expected):
+        if not isinstance(value, expected) or (
+            expected is not bool and isinstance(value, bool)
+        ):
             raise BadRequest(f"{key} must be {expected.__name__}")
         _apply(state, key, value)
         await state.db.execute(

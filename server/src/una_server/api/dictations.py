@@ -31,11 +31,26 @@ router = APIRouter(tags=["dictations"])
 State = Annotated[AppState, Depends(get_state)]
 
 
-async def _active_phrases(state: AppState) -> list[str]:
+async def _active_phrases(state: AppState) -> tuple[list[str], list[str]]:
+    """(bare phrases for Whisper biasing, phrases with sounds-like hints for the cleaner).
+
+    Sounds-like hints stay out of the Whisper initial_prompt — its hard character
+    budget is for vocabulary, and prompt terms can be hallucinated verbatim — but
+    they help the cleanup LLM fix predictable mishearings.
+    """
     async with state.db.execute(
-        "SELECT phrase FROM dictionary_entries WHERE active = 1 ORDER BY hit_count DESC, created_at ASC"
+        "SELECT phrase, sounds_like FROM dictionary_entries WHERE active = 1 "
+        "ORDER BY hit_count DESC, created_at ASC"
     ) as cur:
-        return [row["phrase"] async for row in cur]
+        rows = await cur.fetchall()
+    phrases = [row["phrase"] for row in rows]
+    hinted = [
+        f'{row["phrase"]} (often misheard as "{row["sounds_like"]}")'
+        if row["sounds_like"]
+        else row["phrase"]
+        for row in rows
+    ]
+    return phrases, hinted
 
 
 async def _bump_hit_counts(state: AppState, phrases: list[str], text: str) -> None:
@@ -96,7 +111,7 @@ async def create_dictation(
     samples = storage.decode_to_16k_mono(await audio.read())
     duration = storage.duration_ms(samples)
 
-    phrases = await _active_phrases(state)
+    phrases, hinted_phrases = await _active_phrases(state)
     from ..services.prompts import build_initial_prompt
 
     initial_prompt = build_initial_prompt(phrases, state.config.asr.initial_prompt_max_chars)
@@ -110,7 +125,7 @@ async def create_dictation(
 
     cleanup = None
     if clean and result.text.strip():
-        cleanup = await state.cleaner.clean(result.text, phrases, app_name)
+        cleanup = await state.cleaner.clean(result.text, hinted_phrases, app_name)
 
     dictation_id = str(ULID())
     audio_path = storage.save_wav(state.config.audio_dir, dictation_id, samples)
@@ -119,8 +134,8 @@ async def create_dictation(
         """INSERT INTO dictations
            (id, created_at, app_name, audio_path, duration_ms, sample_rate, language,
             raw_text, cleaned_text, cleanup_applied, cleanup_error, asr_model_id, llm_model,
-            transcribe_ms, cleanup_ms, utterance_id, eval_holdout)
-           VALUES (?, ?, ?, ?, ?, 16000, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            transcribe_ms, cleanup_ms, utterance_id, eval_holdout, client)
+           VALUES (?, ?, ?, ?, ?, 16000, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             dictation_id,
             utcnow(),
@@ -138,6 +153,7 @@ async def create_dictation(
             cleanup.elapsed_ms if cleanup else None,
             utterance_id,
             1 if is_eval_holdout(dictation_id) else 0,
+            client,
         ),
     )
     await state.db.commit()

@@ -7,6 +7,7 @@ mod commands;
 mod effects;
 mod events;
 mod hotkey;
+mod sounds;
 mod tray;
 mod windows;
 

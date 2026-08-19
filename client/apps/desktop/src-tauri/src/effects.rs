@@ -1,7 +1,7 @@
 //! The controller's effect runner: bridges FSM effects to the audio engine,
 //! HTTP uploads, text injection, and the HUD window.
 
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
@@ -75,17 +75,28 @@ impl EffectRunner for TauriEffects {
                 (cfg.server.url.trim().to_string(), cfg.server.autodiscover)
             };
 
-            // Resolve the server: manual URL always wins; otherwise mDNS.
+            // Resolve the server: manual URL always wins; otherwise the cached
+            // mDNS result, browsing only when the cache is empty (a 2s browse
+            // per dictation is real latency).
             let base = if !manual_url.is_empty() {
                 Some(manual_url)
             } else if autodiscover {
-                tauri::async_runtime::spawn_blocking(|| {
-                    una_core::discovery::discover(Duration::from_secs(2))
-                })
-                .await
-                .ok()
-                .and_then(|list| list.into_iter().next())
-                .map(|s| s.url)
+                match discovered_url() {
+                    Some(url) => Some(url),
+                    None => {
+                        let found = tauri::async_runtime::spawn_blocking(|| {
+                            una_core::discovery::discover(Duration::from_secs(2))
+                        })
+                        .await
+                        .ok()
+                        .and_then(|list| list.into_iter().next())
+                        .map(|s| s.url);
+                        if let Some(url) = &found {
+                            set_discovered_url(Some(url.clone()));
+                        }
+                        found
+                    }
+                }
             } else {
                 None
             };
@@ -111,6 +122,12 @@ impl EffectRunner for TauriEffects {
             let request = DictationRequest::new(wav, app_name);
             match api.dictate(&base, &request).await {
                 Ok(resp) => {
+                    // A retried dictation just landed; drop its spool entry.
+                    match una_core::spool::remove_latest_if_matches(&request.wav) {
+                        Ok(true) => tracing::debug!("removed spooled retry after success"),
+                        Ok(false) => {}
+                        Err(e) => tracing::warn!("spool cleanup failed: {e}"),
+                    }
                     controller.event(Event::UploadOk {
                         session,
                         text: resp.text,
@@ -118,6 +135,10 @@ impl EffectRunner for TauriEffects {
                 }
                 Err(err) => {
                     tracing::warn!("dictation upload failed: {err}");
+                    if matches!(err.kind(), ErrKind::Connect | ErrKind::Timeout) {
+                        // The cached server may have moved; re-browse next time.
+                        set_discovered_url(None);
+                    }
                     if let Err(e) = una_core::spool::save(&request.wav) {
                         tracing::warn!("could not spool failed dictation: {e}");
                     }
@@ -184,4 +205,18 @@ impl EffectRunner for TauriEffects {
 fn injector() -> &'static dyn una_platform::TextInjector {
     static INJECTOR: OnceLock<Box<dyn una_platform::TextInjector>> = OnceLock::new();
     INJECTOR.get_or_init(una_platform::injector).as_ref()
+}
+
+/// Last mDNS-discovered server URL, invalidated when a connection fails.
+fn discovery_cache() -> &'static Mutex<Option<String>> {
+    static CACHE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn discovered_url() -> Option<String> {
+    discovery_cache().lock().unwrap().clone()
+}
+
+fn set_discovered_url(url: Option<String>) {
+    *discovery_cache().lock().unwrap() = url;
 }
