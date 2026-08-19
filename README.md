@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/una.svg" alt="una" width="248" />
+<img src="assets/una.png" alt="una" width="248" />
 
 # una
 
