@@ -1,12 +1,11 @@
 # Stage 1: build the dashboard to static files
-FROM node:22-slim AS dashboard
-RUN corepack enable
+FROM oven/bun:1-slim AS dashboard
 WORKDIR /build/server/dashboard
-COPY dashboard/package.json dashboard/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY dashboard/package.json dashboard/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY dashboard/ ./
 # vite outDir is ../src/una_server/web relative to dashboard/
-RUN mkdir -p ../src/una_server/web && pnpm build
+RUN mkdir -p ../src/una_server/web && bun run build
 
 # Stage 2: CUDA runtime + uv-managed Python (serving AND training live in one image;
 # training runs as a subprocess of the server)

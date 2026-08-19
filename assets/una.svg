@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 600" width="700" height="600" role="img" aria-label="una">
+<rect x="0" y="0" width="700" height="600" fill="#141419"/>
+<g fill="#6E56CF">
+<rect x="-5.0" y="-9.0" width="10.0" height="18" rx="5.0" transform="translate(226.0 293.1) rotate(-110.0)"/>
+<rect x="-5.0" y="-17.0" width="10.0" height="34" rx="5.0" transform="translate(218.4 257.9) rotate(-94.3)"/>
+<rect x="-5.0" y="-29.0" width="10.0" height="58" rx="5.0" transform="translate(220.6 221.8) rotate(-78.6)"/>
+<rect x="-5.0" y="-41.0" width="10.0" height="82" rx="5.0" transform="translate(232.5 187.8) rotate(-62.9)"/>
+<rect x="-5.0" y="-22.0" width="10.0" height="44" rx="5.0" transform="translate(253.2 158.2) rotate(-47.1)"/>
+<rect x="-5.0" y="-34.0" width="10.0" height="68" rx="5.0" transform="translate(281.2 135.4) rotate(-31.4)"/>
+<rect x="-5.0" y="-48.0" width="10.0" height="96" rx="5.0" transform="translate(314.2 120.9) rotate(-15.7)"/>
+<rect x="-5.0" y="-26.0" width="10.0" height="52" rx="5.0" transform="translate(350.0 116.0) rotate(0.0)"/>
+<rect x="-5.0" y="-38.0" width="10.0" height="76" rx="5.0" transform="translate(385.8 120.9) rotate(15.7)"/>
+<rect x="-5.0" y="-20.0" width="10.0" height="40" rx="5.0" transform="translate(418.8 135.4) rotate(31.4)"/>
+<rect x="-5.0" y="-31.0" width="10.0" height="62" rx="5.0" transform="translate(446.8 158.2) rotate(47.1)"/>
+<rect x="-5.0" y="-44.0" width="10.0" height="88" rx="5.0" transform="translate(467.5 187.8) rotate(62.9)"/>
+<rect x="-5.0" y="-24.0" width="10.0" height="48" rx="5.0" transform="translate(479.4 221.8) rotate(78.6)"/>
+<rect x="-5.0" y="-15.0" width="10.0" height="30" rx="5.0" transform="translate(481.6 257.9) rotate(94.3)"/>
+<rect x="-5.0" y="-8.0" width="10.0" height="16" rx="5.0" transform="translate(474.0 293.1) rotate(110.0)"/>
+</g>
+<g fill="#e8e8ee">
+<rect x="-17.0" y="-5" width="34" height="10" rx="5" transform="translate(451.1 332.8) rotate(130.0)"/>
+<rect x="-11.0" y="-5" width="22" height="10" rx="5" transform="translate(422.5 358.3) rotate(146.7)"/>
+<rect x="-20.0" y="-5" width="40" height="10" rx="5" transform="translate(387.9 374.5) rotate(163.3)"/>
+<rect x="-14.0" y="-5" width="28" height="10" rx="5" transform="translate(350.0 380.0) rotate(180.0)"/>
+<rect x="-18.0" y="-5" width="36" height="10" rx="5" transform="translate(312.1 374.5) rotate(196.7)"/>
+<rect x="-10.0" y="-5" width="20" height="10" rx="5" transform="translate(277.5 358.3) rotate(213.3)"/>
+<rect x="-15.0" y="-5" width="30" height="10" rx="5" transform="translate(248.9 332.8) rotate(230.0)"/>
+</g>
+<path d="M -7 -9 L 9 0 L -7 9 Z" fill="#4a4a55" transform="translate(469.6 303.8) rotate(115.0)"/>
+<path d="M -7 -9 L 9 0 L -7 9 Z" fill="#4a4a55" transform="translate(230.4 303.8) rotate(245.0)"/>
+<text x="350.0" y="500" text-anchor="middle" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="700" fill="#ffffff" letter-spacing="-2">una</text>
+<text x="350.0" y="544" text-anchor="middle" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="500" fill="#8a8a96" letter-spacing="4">DICTATION THAT LEARNS</text>
+</svg>

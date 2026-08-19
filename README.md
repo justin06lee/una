@@ -1,8 +1,16 @@
+<div align="center">
+
+<img src="assets/una.svg" alt="una" width="330" />
+
 # una
 
-**A self-hosted Wispr Flow replacement that learns your voice.**
+**A self-hosted Wispr Flow replacement that learns your voice.**<br>
+*Hold a hotkey anywhere, speak, release — clean text lands in the focused app.*
 
-Hold a hotkey anywhere, speak, release — clean text lands in whatever app you're focused on.
+</div>
+
+---
+
 Everything runs on your own hardware: Whisper (via faster-whisper) for transcription and a local
 LLM (via Ollama) that strips filler words, punctuates, and adapts tone to the app you're dictating
 into. And the longer you use it, the better it gets: every dictation is recorded, your corrections
@@ -58,10 +66,12 @@ vars — see the example file for everything tunable).
 See [docs/macos-install.md](docs/macos-install.md) and [docs/linux.md](docs/linux.md).
 
 ```sh
-make dmg      # builds Una.app + a dmg, then reveals it in Finder — drag Una into /Applications
+make          # build → reset stale permission grants → install Una.app + una CLI → launch
+make dmg      # or: build a distributable dmg and reveal it in Finder
+make update   # refresh an installed client: stop → remove → build → install → relaunch
 ```
 
-First launch of the unsigned app: right-click → Open (or `xattr -cr /Applications/Una.app`).
+First launch of a dmg-installed (unsigned) app: right-click → Open (or `xattr -cr /Applications/Una.app`).
 Dev loop instead: `make ui-build && make client-dev` (needs `cargo install tauri-cli --version '^2'`).
 
 Point it at your server in Settings (or let mDNS discovery find it), grant microphone +
