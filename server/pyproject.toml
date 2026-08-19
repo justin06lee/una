@@ -33,6 +33,7 @@ training = [
     "datasets>=3.0",
     "accelerate>=1.0",
     "ctranslate2>=4.5",
+    "bitsandbytes>=0.44 ; sys_platform == 'linux'",  # QLoRA 4-bit for the style trainer
 ]
 
 [dependency-groups]

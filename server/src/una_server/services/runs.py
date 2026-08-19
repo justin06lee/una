@@ -43,31 +43,59 @@ async def fresh_pair_count(state: AppState) -> int:
     return row["n"]
 
 
-async def launch_run(state: AppState):
+RUNNER_MODULES = {
+    "asr": "una_server.training.runner",
+    "style": "una_server.training.style_runner",
+}
+
+
+def _hyperparams(state: AppState, kind: str) -> dict:
+    training = state.config.training
+    if kind == "style":
+        return {
+            "style_base_hf_model": training.style_base_hf_model,
+            "style_ollama_base": training.style_ollama_base,
+            "style_lora_r": training.style_lora_r,
+            "style_lora_alpha": training.style_lora_alpha,
+            "style_lora_dropout": training.style_lora_dropout,
+            "style_learning_rate": training.style_learning_rate,
+            "style_epochs": training.style_epochs,
+            "style_batch_size": training.style_batch_size,
+            "style_grad_accum": training.style_grad_accum,
+            "style_max_seq_len": training.style_max_seq_len,
+        }
+    return {
+        "base_hf_model": training.base_hf_model,
+        "lora_r": training.lora_r,
+        "lora_alpha": training.lora_alpha,
+        "lora_dropout": training.lora_dropout,
+        "learning_rate": training.learning_rate,
+        "epochs": training.epochs,
+        "batch_size": training.batch_size,
+        "grad_accum": training.grad_accum,
+    }
+
+
+async def launch_run(state: AppState, kind: str = "asr"):
     """Create a training_runs row, start the runner subprocess, pause serving if configured.
 
-    Returns the inserted row. Raises RunActive if a run is already going.
+    Returns the inserted row. Raises RunActive if a run is already going. The single
+    job slot is shared across kinds — one GPU, one run at a time.
     """
     run_id = str(ULID())
-    hyper = {
-        "base_hf_model": state.config.training.base_hf_model,
-        "lora_r": state.config.training.lora_r,
-        "lora_alpha": state.config.training.lora_alpha,
-        "lora_dropout": state.config.training.lora_dropout,
-        "learning_rate": state.config.training.learning_rate,
-        "epochs": state.config.training.epochs,
-        "batch_size": state.config.training.batch_size,
-        "grad_accum": state.config.training.grad_accum,
-    }
+    # base_model_id references the ASR models table; style runs resolve their
+    # baseline (cleanup.model) at execution time instead.
+    base_model_id = None if kind == "style" else state.models.active_model_id
     log_path = state.config.runs_dir / run_id / "train.log"
     await state.db.execute(
-        """INSERT INTO training_runs (id, status, base_model_id, hyperparams_json, log_path)
-           VALUES (?, 'queued', ?, ?, ?)""",
-        (run_id, state.models.active_model_id, json.dumps(hyper), str(log_path)),
+        """INSERT INTO training_runs (id, kind, status, base_model_id, hyperparams_json, log_path)
+           VALUES (?, ?, 'queued', ?, ?, ?)""",
+        (run_id, kind, base_model_id, json.dumps(_hyperparams(state, kind)), str(log_path)),
     )
     await state.db.commit()
     try:
-        await state.jobs.start(run_id)  # raises RunActive if one is already going
+        # raises RunActive if one is already going
+        await state.jobs.start(run_id, module=RUNNER_MODULES[kind])
     except Exception:
         await state.db.execute("DELETE FROM training_runs WHERE id = ?", (run_id,))
         await state.db.commit()

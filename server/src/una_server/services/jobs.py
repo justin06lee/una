@@ -40,7 +40,7 @@ class JobManager:
             row = await cur.fetchone()
         return row["n"] > 0
 
-    async def start(self, run_id: str) -> None:
+    async def start(self, run_id: str, module: str = "una_server.training.runner") -> None:
         # The caller inserts run_id as 'queued' before calling; exclude it or the
         # guard trips over the very row it is meant to start.
         if self.active or await self.has_active_run(exclude=run_id):
@@ -48,7 +48,7 @@ class JobManager:
         self.process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
-            "una_server.training.runner",
+            module,
             "--run-id",
             run_id,
             env={**os.environ},

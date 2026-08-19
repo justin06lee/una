@@ -8,6 +8,7 @@
     UnaError,
     type Eligibility,
     type ModelInfo,
+    type RunKind,
     type TrainingRun,
   } from '../api';
   import EmptyState from '../lib/EmptyState.svelte';
@@ -92,12 +93,12 @@
     if (el) el.scrollTop = el.scrollHeight;
   });
 
-  async function start(): Promise<void> {
+  async function start(kind: RunKind = 'asr'): Promise<void> {
     if (starting) return;
     starting = true;
     startError = null;
     try {
-      await api.startTrainingRun();
+      await api.startTrainingRun(kind);
       await refreshAll();
     } catch (e) {
       if (e instanceof UnaError && e.code === 'RUN_ACTIVE') {
@@ -187,20 +188,33 @@
             tone={elig.ready ? 'ok' : 'accent'}
           />
           <div class="mt-1.5 text-[11px] text-faint tabular-nums">
-            {elig.eligible_pairs} pairs{typeof elig.style_pairs === 'number'
-              ? ` · ${elig.style_pairs} style pairs collected`
-              : ''}{elig.ready ? ' · ready to train' : ''}
+            {elig.eligible_pairs} pairs · {elig.style_pairs} / {elig.style_threshold_pairs} style
+            pairs{elig.ready ? ' · ready to train' : ''}
           </div>
         </div>
         <div class="flex flex-col items-end gap-1.5">
-          <button
-            class="btn {elig.ready ? 'btn-primary' : ''}"
-            onclick={() => void start()}
-            disabled={starting || hasActive}
-            title={hasActive ? 'A run is already active' : undefined}
-          >
-            {starting ? 'Starting…' : 'Start training run'}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="btn {elig.style_ready ? 'btn-primary' : ''}"
+              onclick={() => void start('style')}
+              disabled={starting || hasActive || elig.style_pairs === 0}
+              title={hasActive
+                ? 'A run is already active'
+                : elig.style_pairs === 0
+                  ? 'Add Final text in Review to collect style pairs'
+                  : 'Fine-tune the cleanup LLM on your polished texts'}
+            >
+              Train style model
+            </button>
+            <button
+              class="btn {elig.ready ? 'btn-primary' : ''}"
+              onclick={() => void start()}
+              disabled={starting || hasActive}
+              title={hasActive ? 'A run is already active' : undefined}
+            >
+              {starting ? 'Starting…' : 'Start training run'}
+            </button>
+          </div>
           {#if startError}
             <span class="text-xs" style="color: var(--color-warn)">{startError}</span>
           {/if}
@@ -269,7 +283,7 @@
             <tr class="border-b border-border">
               <th class="th">Run</th>
               <th class="th">Status</th>
-              <th class="th">WER</th>
+              <th class="th">Metric</th>
               <th class="th !text-right">Train / eval</th>
               <th class="th">Finished</th>
             </tr>
@@ -279,6 +293,9 @@
               <tr class="transition-colors duration-150 hover:bg-hover/50">
                 <td class="px-3 py-2.5">
                   <span class="font-mono text-xs">{shortId(run.id)}</span>
+                  {#if run.kind === 'style'}
+                    <span class="chip chip-accent ml-1.5">style</span>
+                  {/if}
                   <span class="ml-2 text-xs text-faint">{fmtDate(run.started_at)}</span>
                 </td>
                 <td class="px-3 py-2.5">
@@ -295,17 +312,33 @@
                 </td>
                 <td class="px-3 py-2.5 tabular-nums">
                   {#if run.wer_baseline !== null && run.wer_candidate !== null}
-                    <span class="text-muted">{fmtWer(run.wer_baseline)}</span>
-                    <span class="text-faint">→</span>
-                    <span>{fmtWer(run.wer_candidate)}</span>
-                    <span
-                      class="ml-1 text-xs"
-                      style="color: var(--color-{run.wer_candidate <= run.wer_baseline
-                        ? 'ok'
-                        : 'danger'})"
-                    >
-                      {fmtWerDelta(run.wer_baseline, run.wer_candidate)}
-                    </span>
+                    {#if run.kind === 'style'}
+                      <!-- style metric: mean normalized edit distance to the polished target -->
+                      <span class="text-muted">{run.wer_baseline.toFixed(3)}</span>
+                      <span class="text-faint">→</span>
+                      <span>{run.wer_candidate.toFixed(3)}</span>
+                      <span
+                        class="ml-1 text-xs"
+                        style="color: var(--color-{run.wer_candidate <= run.wer_baseline
+                          ? 'ok'
+                          : 'danger'})"
+                        title="mean edit distance to polished targets (lower is better)"
+                      >
+                        dist
+                      </span>
+                    {:else}
+                      <span class="text-muted">{fmtWer(run.wer_baseline)}</span>
+                      <span class="text-faint">→</span>
+                      <span>{fmtWer(run.wer_candidate)}</span>
+                      <span
+                        class="ml-1 text-xs"
+                        style="color: var(--color-{run.wer_candidate <= run.wer_baseline
+                          ? 'ok'
+                          : 'danger'})"
+                      >
+                        {fmtWerDelta(run.wer_baseline, run.wer_candidate)}
+                      </span>
+                    {/if}
                   {:else}
                     <span class="text-faint">—</span>
                   {/if}

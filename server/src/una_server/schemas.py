@@ -98,10 +98,17 @@ class Eligibility(BaseModel):
     threshold_minutes: float
     ready: bool
     style_pairs: int = 0
+    style_threshold_pairs: int = 0
+    style_ready: bool = False
+
+
+class StartRunRequest(BaseModel):
+    kind: Literal["asr", "style"] = "asr"
 
 
 class TrainingRun(BaseModel):
     id: str
+    kind: str = "asr"
     status: str
     started_at: str | None
     finished_at: str | None

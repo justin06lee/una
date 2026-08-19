@@ -1,33 +1,9 @@
 """Run-launch API regression tests + auto-training trigger logic."""
 
-import asyncio
 import time
 
-import pytest
-
-from una_server.services import autotrain, runs
+from una_server.services import autotrain
 from conftest import wav_bytes
-
-
-class FakeProc:
-    """Stands in for the runner subprocess; exits 0 immediately."""
-
-    pid = 4242
-
-    def __init__(self):
-        self.returncode = None
-
-    async def wait(self):
-        self.returncode = 0
-        return 0
-
-
-@pytest.fixture
-def fake_runner(monkeypatch):
-    async def fake_exec(*args, **kwargs):
-        return FakeProc()
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
 
 
 def test_start_run_does_not_conflict_with_its_own_row(client, fake_runner):

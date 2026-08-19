@@ -58,7 +58,8 @@ async def stats(state: State) -> dict:
         backlog = (await cur.fetchone())["n"]
     async with state.db.execute(
         """SELECT id, finished_at, wer_baseline, wer_candidate, status
-           FROM training_runs WHERE wer_candidate IS NOT NULL ORDER BY id ASC"""
+           FROM training_runs WHERE wer_candidate IS NOT NULL AND kind = 'asr'
+           ORDER BY id ASC"""
     ) as cur:
         wer_series = [dict(r) for r in await cur.fetchall()]
     return {"per_day": per_day, "review_backlog": backlog, "wer_series": wer_series}
