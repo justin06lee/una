@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Generate una's app + tray icons as PNGs, stdlib only (zlib + struct).
 
-App icon: rounded indigo square with a white lowercase "u" glyph.
-Tray icon: the "u" glyph alone, black on transparent (macOS template image).
+App icon: rounded indigo square with a white star badge — a five-point star
+inside a ring, after the star pin Una holds in Kindergarten Wars ("a communion
+of minds"). Tray icon: the badge alone, black on transparent (macOS template
+image).
 
 Outputs into apps/desktop/src-tauri/icons/:
-  32x32.png  128x128.png  256x256.png  icon.png (512)  tray.png (44, template)
+  32x32.png  64x64.png  128x128.png  128x128@2x.png  256x256.png
+  icon.png (512)  tray.png (44, template)
 """
 
+import math
 import os
 import struct
 import zlib
@@ -52,38 +56,50 @@ def rounded_rect_coverage(x, y, size, radius):
     return 1.0 if (dx * dx + dy * dy) <= r * r else 0.0
 
 
-def u_glyph_coverage(x, y, size):
-    """Coverage of a chunky lowercase "u" centered in [0, size]^2.
+_STAR_CACHE = {}
 
-    Built from two vertical stems and a lower half-annulus (the bowl).
-    Geometry is in fractions of the icon size.
-    """
+
+def _star_vertices(size):
+    """10-vertex concave polygon of a points-up five-point star, cached per size."""
+    if size not in _STAR_CACHE:
+        cx = cy = 0.5 * size
+        r_out = 0.245 * size
+        r_in = r_out * 0.382  # classic {5/2} star ratio
+        verts = []
+        for i in range(10):
+            r = r_out if i % 2 == 0 else r_in
+            a = -math.pi / 2.0 + i * math.pi / 5.0
+            verts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        _STAR_CACHE[size] = verts
+    return _STAR_CACHE[size]
+
+
+def _point_in_poly(x, y, verts):
+    inside = False
+    j = len(verts) - 1
+    for i in range(len(verts)):
+        xi, yi = verts[i]
+        xj, yj = verts[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def badge_coverage(x, y, size):
+    """Coverage of the star badge (ring + five-point star) centered in [0, size]^2."""
     s = size
-    stroke = 0.16 * s  # stroke thickness
-    top = 0.30 * s  # top of the stems
-    center_y = 0.575 * s  # center of the bowl arc
-    half_gap = 0.145 * s  # half distance between stem centerlines
-    cx = 0.5 * s
+    cx = cy = 0.5 * s
+    dx, dy = x - cx, y - cy
+    d2 = dx * dx + dy * dy
 
-    left_cx = cx - half_gap
-    right_cx = cx + half_gap
-    r_outer = half_gap + stroke / 2.0
-    r_inner = half_gap - stroke / 2.0
+    ring_outer = 0.365 * s
+    ring_inner = ring_outer - 0.055 * s
+    if ring_inner * ring_inner <= d2 <= ring_outer * ring_outer:
+        return 1.0
 
-    # Stems: vertical bars from `top` down to `center_y`.
-    for stem_cx in (left_cx, right_cx):
-        if abs(x - stem_cx) <= stroke / 2.0 and top <= y <= center_y:
-            return 1.0
-
-    # Bowl: lower half annulus centered at (cx, center_y).
-    if y >= center_y:
-        dx, dy = x - cx, y - center_y
-        d2 = dx * dx + dy * dy
-        if r_inner * r_inner <= d2 <= r_outer * r_outer:
-            return 1.0
-
-    # Right stem descends slightly below the bowl top for the "u" tail.
-    if abs(x - right_cx) <= stroke / 2.0 and top <= y <= center_y + 0.02 * s:
+    # Cheap reject before the polygon test: the star fits inside its outer radius.
+    if d2 <= (0.25 * s) * (0.25 * s) and _point_in_poly(x, y, _star_vertices(s)):
         return 1.0
 
     return 0.0
@@ -107,7 +123,7 @@ def render(size, draw_bg=True, glyph_color=WHITE):
                     bg = rounded_rect_coverage(x, y, big, radius) if draw_bg else 0.0
                     if bg:
                         bg_hits += 1
-                    if u_glyph_coverage(x, y, big):
+                    if badge_coverage(x, y, big):
                         glyph_hits += 1
             n = SS * SS
             bg_a = bg_hits / n
@@ -130,7 +146,15 @@ def render(size, draw_bg=True, glyph_color=WHITE):
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    for size, name in [(32, "32x32.png"), (128, "128x128.png"), (256, "256x256.png"), (512, "icon.png")]:
+    sizes = [
+        (32, "32x32.png"),
+        (64, "64x64.png"),
+        (128, "128x128.png"),
+        (256, "128x128@2x.png"),
+        (256, "256x256.png"),
+        (512, "icon.png"),
+    ]
+    for size, name in sizes:
         path = os.path.join(OUT_DIR, name)
         write_png(path, size, render(size))
         print(f"wrote {path}")
