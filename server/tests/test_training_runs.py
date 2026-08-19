@@ -2,8 +2,9 @@
 
 import time
 
-from una_server.services import autotrain
 from conftest import wav_bytes
+
+from una_server.services import autotrain
 
 
 def test_start_run_does_not_conflict_with_its_own_row(client, fake_runner):

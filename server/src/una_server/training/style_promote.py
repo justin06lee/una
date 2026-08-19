@@ -48,7 +48,7 @@ def create_ollama_model(name: str, base: str, adapter_dir: Path, run_dir: Path) 
     modelfile.write_text(f"FROM {base}\nADAPTER {adapter_dir.resolve()}\n")
     result = subprocess.run(
         ["ollama", "create", name, "-f", str(modelfile)],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, text=True, timeout=600, check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(

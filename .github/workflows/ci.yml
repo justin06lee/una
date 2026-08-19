@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+
+  client-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      # tauri-build reads the UI dist dir at compile time
+      - run: bun install --frozen-lockfile && bun run build
+        working-directory: client/apps/desktop/ui
+      - run: cargo check --workspace --all-targets
+        working-directory: client
+      - run: cargo test -p una-core
+        working-directory: client
+
+  client-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev libasound2-dev
+      - run: bun install --frozen-lockfile && bun run build
+        working-directory: client/apps/desktop/ui
+      - run: cargo check --workspace --all-targets
+        working-directory: client
+      - run: cargo test -p una-core
+        working-directory: client
