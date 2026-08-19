@@ -44,6 +44,42 @@ fn fake_key(conn: &impl Connection, kind: u8, keycode: u8) -> Result<(), InjectE
     Ok(())
 }
 
+/// Name of the focused application via EWMH: _NET_ACTIVE_WINDOW -> WM_CLASS.
+/// Returns the class half of WM_CLASS ("Alacritty", "kitty", ...), which is
+/// what per-app paste overrides match against.
+pub fn frontmost_app() -> Option<String> {
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let (conn, screen) = x11rb::connect(None).ok()?;
+    let root = conn.setup().roots.get(screen)?.root;
+    let active_atom = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+    let active = conn
+        .get_property(false, root, active_atom, AtomEnum::WINDOW, 0, 1)
+        .ok()?
+        .reply()
+        .ok()?;
+    let window = active.value32()?.next()?;
+    if window == 0 {
+        return None;
+    }
+    let class = conn
+        .get_property(false, window, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, 256)
+        .ok()?
+        .reply()
+        .ok()?;
+    // WM_CLASS is "instance\0class\0"; the class is the application name.
+    let raw = class.value;
+    let mut parts = raw.split(|b| *b == 0).filter(|s| !s.is_empty());
+    let instance = parts.next();
+    let class_name = parts.next().or(instance)?;
+    String::from_utf8(class_name.to_vec()).ok()
+}
+
 /// Send Ctrl+V (or Ctrl+Shift+V) via XTest.
 pub fn paste(chord: PasteChord) -> Result<(), InjectError> {
     let (conn, _screen) = x11rb::connect(None)

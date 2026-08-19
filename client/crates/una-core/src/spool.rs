@@ -41,13 +41,23 @@ pub fn save_in(dir: &Path, wav: &[u8]) -> Result<PathBuf, SpoolError> {
         .unwrap_or_default()
         .as_millis();
     // A zero-padded counter suffix keeps names unique (and lexically ordered)
-    // within one millisecond.
-    let mut n = 0u32;
-    let mut path = dir.join(format!("utt-{ms:015}-{n:03}.wav"));
-    while path.exists() {
-        n += 1;
-        path = dir.join(format!("utt-{ms:015}-{n:03}.wav"));
-    }
+    // within one millisecond. It must be one past the highest existing counter,
+    // not the first free slot: pruning frees low slots, and reusing one would
+    // make a newer file sort as the oldest.
+    let prefix = format!("utt-{ms:015}-");
+    let n = list_in(dir)?
+        .iter()
+        .filter_map(|p| {
+            p.file_name()?
+                .to_str()?
+                .strip_prefix(&prefix)?
+                .strip_suffix(".wav")?
+                .parse::<u32>()
+                .ok()
+        })
+        .max()
+        .map_or(0, |highest| highest + 1);
+    let path = dir.join(format!("{prefix}{n:03}.wav"));
     std::fs::write(&path, wav)?;
     prune_in(dir, KEEP)?;
     Ok(path)
