@@ -18,6 +18,7 @@
   let cleanupTimeout = $state(3);
   let thresholdMinutes = $state(30);
   let trainingAuto = $state(false);
+  let autoIdleMinutes = $state(30);
   let maxEditDistance = $state(0.3);
 
   function fill(s: Settings): void {
@@ -27,6 +28,7 @@
     cleanupTimeout = s['cleanup.timeout_s'];
     thresholdMinutes = s['training.threshold_minutes'];
     trainingAuto = s['training.auto'];
+    autoIdleMinutes = s['training.auto_idle_minutes'];
     maxEditDistance = s['training.max_edit_distance'];
   }
 
@@ -47,6 +49,7 @@
         Number(cleanupTimeout) !== stored['cleanup.timeout_s'] ||
         Number(thresholdMinutes) !== stored['training.threshold_minutes'] ||
         trainingAuto !== stored['training.auto'] ||
+        Number(autoIdleMinutes) !== stored['training.auto_idle_minutes'] ||
         Number(maxEditDistance) !== stored['training.max_edit_distance']),
   );
 
@@ -61,6 +64,7 @@
         'cleanup.timeout_s': Number(cleanupTimeout),
         'training.threshold_minutes': Number(thresholdMinutes),
         'training.auto': trainingAuto,
+        'training.auto_idle_minutes': Number(autoIdleMinutes),
         'training.max_edit_distance': Number(maxEditDistance),
       });
       fill(res);
@@ -168,6 +172,22 @@
           </div>
         </div>
         <Toggle checked={trainingAuto} onchange={(v) => (trainingAuto = v)} label="Auto-train" />
+      </div>
+      <div class="flex items-center justify-between gap-4 px-5 py-3.5">
+        <div>
+          <div class="text-sm">Auto-train idle minutes</div>
+          <div class="mt-0.5 text-xs text-muted">
+            How long dictation must be quiet before an automatic run may start.
+          </div>
+        </div>
+        <input
+          class="input max-w-24 text-right tabular-nums"
+          type="number"
+          min="1"
+          step="5"
+          bind:value={autoIdleMinutes}
+          aria-label="Auto-train idle minutes"
+        />
       </div>
       <div class="flex items-center justify-between gap-4 px-5 py-3.5">
         <div>

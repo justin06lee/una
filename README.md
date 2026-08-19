@@ -88,8 +88,10 @@ latches, a hold behaves like push-to-talk).
 3. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
    are auto-excluded as content rewrites. Accepted-as-is reviews count as gold pairs for free.
 4. At 30+ minutes of eligible audio (configurable), the **Training** page lets you launch a
-   LoRA fine-tune of Whisper on your voice. ~10% of dictations are frozen into a held-out
-   eval split at insert time.
+   LoRA fine-tune of Whisper on your voice — or flip on **auto-train** in Settings and una
+   starts one itself once dictation has been idle for `training.auto_idle_minutes`, there is
+   new reviewed data since the last run, and no run is active. ~10% of dictations are frozen
+   into a held-out eval split at insert time.
 5. The candidate is converted to CTranslate2 and measured against the current production
    model on that held-out set. It is promoted **only if WER improves by ≥0.5 points**, after
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click

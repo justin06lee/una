@@ -31,6 +31,7 @@ terminal = "verbatim; do not alter punctuation inside commands"
 [training]
 threshold_minutes = 30.0     # eligible corrected audio needed before training is offered
 auto = false                 # true: start a run automatically once over threshold (when idle)
+auto_idle_minutes = 30.0     # dictation must be quiet this long before an auto run may start
 pause_serving = false        # true on <16GB cards: unload ASR while training
 max_edit_distance = 0.30     # corrections further than this from raw are content rewrites -> excluded
 promotion_margin_wer = 0.5   # candidate must beat baseline WER by this many absolute points

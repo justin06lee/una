@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from .api import router as v1_router
 from .api.settings_api import apply_stored_settings
 from .config import Config, load_config
 from .errors import install_handlers
+from .services import autotrain
 from .services.cleaner import Cleaner
 from .services.discovery import Discovery
 from .services.jobs import JobManager
@@ -54,6 +56,9 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
 
         state.jobs.on_finished = reload_after_training
         await apply_stored_settings(state)
+        # Boot counts as activity so a restart gets a full idle grace period
+        # before auto-training may pause serving.
+        state.last_dictation_at = time.monotonic()
         app.state.una = state
 
         if load_model:
@@ -61,6 +66,9 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
         warm_task = None
         if load_model and cfg.cleanup.enabled:
             warm_task = asyncio.create_task(state.cleaner.keep_warm())
+        auto_task = None
+        if load_model:
+            auto_task = asyncio.create_task(autotrain.loop(state))
         if cfg.discovery.mdns:
             state.discovery = Discovery(cfg.server.port)
             # zeroconf's sync API must not run on the event loop thread (EventLoopBlocked)
@@ -70,6 +78,8 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
                  cfg.server.bind, cfg.server.port)
         yield
 
+        if auto_task is not None:
+            auto_task.cancel()
         if warm_task is not None:
             warm_task.cancel()
         if state.discovery:

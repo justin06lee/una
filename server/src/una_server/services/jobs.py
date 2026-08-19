@@ -29,17 +29,21 @@ class JobManager:
     def active(self) -> bool:
         return self.process is not None and self.process.returncode is None
 
-    async def has_active_run(self) -> bool:
+    async def has_active_run(self, exclude: str | None = None) -> bool:
         placeholders = ",".join("?" * len(ACTIVE_STATUSES))
-        async with self.db.execute(
-            f"SELECT COUNT(*) AS n FROM training_runs WHERE status IN ({placeholders})",
-            ACTIVE_STATUSES,
-        ) as cur:
+        sql = f"SELECT COUNT(*) AS n FROM training_runs WHERE status IN ({placeholders})"
+        params: list[str] = list(ACTIVE_STATUSES)
+        if exclude is not None:
+            sql += " AND id != ?"
+            params.append(exclude)
+        async with self.db.execute(sql, params) as cur:
             row = await cur.fetchone()
         return row["n"] > 0
 
     async def start(self, run_id: str) -> None:
-        if self.active or await self.has_active_run():
+        # The caller inserts run_id as 'queued' before calling; exclude it or the
+        # guard trips over the very row it is meant to start.
+        if self.active or await self.has_active_run(exclude=run_id):
             raise RunActive("a training run is already active")
         self.process = await asyncio.create_subprocess_exec(
             sys.executable,
