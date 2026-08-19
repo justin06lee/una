@@ -1,0 +1,47 @@
+# una server for an NVIDIA GPU Linux box.
+#
+# SECURITY: una has no auth. host networking exposes it on every interface —
+# keep this machine on a trusted LAN and never port-forward 8100 or 11434.
+#
+#   docker compose up -d --build
+#
+# host networking is used so mDNS discovery works and localhost Ollama is reachable.
+# If you already run Ollama on the host, remove the ollama service below.
+
+services:
+  una-server:
+    build: ./server
+    network_mode: host          # serves on :8100
+    restart: unless-stopped
+    environment:
+      UNA__CLEANUP__OLLAMA_URL: http://localhost:11434
+      # UNA__ASR__COMPUTE_TYPE: int8_float16   # uncomment for <=8GB VRAM cards
+      # UNA__TRAINING__PAUSE_SERVING: "true"   # uncomment for <=12GB VRAM cards
+    volumes:
+      - ./data:/data
+      - hf-cache:/hf-cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama:
+    image: ollama/ollama
+    network_mode: host          # serves on :11434
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:
+  ollama-models:
