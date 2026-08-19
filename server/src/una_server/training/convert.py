@@ -34,7 +34,13 @@ def merge_adapter(base_hf_model: str, adapter_dir: Path, merged_dir: Path, devic
     merged_dir.mkdir(parents=True, exist_ok=True)
     merged.save_pretrained(str(merged_dir), safe_serialization=True)
     # tokenizer.json + preprocessor_config.json ride along for the CT2 converter / faster-whisper
-    WhisperProcessor.from_pretrained(base_hf_model).save_pretrained(str(merged_dir))
+    processor = WhisperProcessor.from_pretrained(base_hf_model)
+    processor.save_pretrained(str(merged_dir))
+    # Newer transformers save the processor without preprocessor_config.json;
+    # faster-whisper reads the mel-bin count from it (128 for v3 models), so
+    # save the feature extractor explicitly — without it the converted model is
+    # fed 80-mel features and every transcription fails.
+    processor.feature_extractor.save_pretrained(str(merged_dir))
     del model, merged
     gc.collect()
     return merged_dir
@@ -57,6 +63,19 @@ def converter_command(merged_dir: Path, out_dir: Path) -> list[str]:
     return cmd
 
 
+def ensure_feature_extractor_config(merged_dir: Path, out_dir: Path) -> None:
+    """Guarantee preprocessor_config.json sits next to model.bin.
+
+    Belt and suspenders for the --copy_files path: if the converter did not
+    copy it, faster-whisper falls back to 80 mel bins and a v3 (128-mel)
+    model rejects every input.
+    """
+    src = merged_dir / "preprocessor_config.json"
+    dst = out_dir / "preprocessor_config.json"
+    if src.exists() and not dst.exists():
+        shutil.copy2(src, dst)
+
+
 def convert_to_ct2(merged_dir: Path, out_dir: Path) -> Path:
     out_dir.parent.mkdir(parents=True, exist_ok=True)
     cmd = converter_command(merged_dir, out_dir)
@@ -66,6 +85,7 @@ def convert_to_ct2(merged_dir: Path, out_dir: Path) -> Path:
         raise RuntimeError(
             f"ct2 conversion failed with code {proc.returncode}: {proc.stderr.strip()[-2000:]}"
         )
+    ensure_feature_extractor_config(merged_dir, out_dir)
     return out_dir
 
 

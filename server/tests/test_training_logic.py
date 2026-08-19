@@ -217,3 +217,20 @@ def test_converter_command_prefers_console_script(tmp_path, monkeypatch):
     assert cmd[0] == script
     assert cmd[cmd.index("--model") + 1] == str(tmp_path / "merged")
     assert cmd[cmd.index("--output_dir") + 1] == str(tmp_path / "out")
+
+
+def test_ensure_feature_extractor_config(tmp_path):
+    merged = tmp_path / "merged"
+    out = tmp_path / "ct2"
+    merged.mkdir()
+    out.mkdir()
+    # no source file -> no-op
+    convert.ensure_feature_extractor_config(merged, out)
+    assert not (out / "preprocessor_config.json").exists()
+    (merged / "preprocessor_config.json").write_text('{"feature_size": 128}')
+    convert.ensure_feature_extractor_config(merged, out)
+    assert (out / "preprocessor_config.json").read_text() == '{"feature_size": 128}'
+    # already present -> left alone
+    (out / "preprocessor_config.json").write_text("keep")
+    convert.ensure_feature_extractor_config(merged, out)
+    assert (out / "preprocessor_config.json").read_text() == "keep"
