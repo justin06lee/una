@@ -159,11 +159,13 @@ pub struct LinuxFrontmost;
 
 impl FrontmostApp for LinuxFrontmost {
     fn current(&self) -> Option<String> {
-        // TODO: could shell out to `hyprctl activewindow -j` / `swaymsg -t
-        // get_tree` per compositor, or use _NET_ACTIVE_WINDOW on X11. Too
-        // compositor-specific to guarantee; the server accepts a missing
-        // app_name, so return None for now.
-        None
+        match detect::session_kind() {
+            SessionKind::X11 => x11::frontmost_app(),
+            SessionKind::Wayland => wayland::frontmost_app(),
+            // GNOME/KDE Wayland expose no focused-window query; the server
+            // accepts a missing app_name.
+            SessionKind::Unknown => None,
+        }
     }
 }
 

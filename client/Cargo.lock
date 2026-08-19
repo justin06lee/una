@@ -5190,6 +5190,7 @@ dependencies = [
  "objc2-av-foundation",
  "objc2-foundation",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "x11rb 0.14.0",
 ]

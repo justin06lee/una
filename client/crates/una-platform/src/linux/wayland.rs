@@ -49,6 +49,52 @@ fn which(bin: &str) -> bool {
     std::env::split_paths(&path).any(|dir| dir.join(bin).is_file())
 }
 
+/// Name of the focused application on compositors that expose it.
+///
+/// Hyprland: `hyprctl activewindow -j` -> "class". Sway (and compatible
+/// wlroots compositors with SWAYSOCK): `swaymsg -t get_tree` -> the focused
+/// node's app_id (native Wayland) or window_properties.class (XWayland).
+/// GNOME/KDE expose nothing queryable; returns None there.
+pub fn frontmost_app() -> Option<String> {
+    if std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok_and(|v| !v.is_empty()) {
+        let out = Command::new("hyprctl")
+            .args(["activewindow", "-j"])
+            .output()
+            .ok()?;
+        let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        return json["class"].as_str().filter(|s| !s.is_empty()).map(String::from);
+    }
+    if std::env::var("SWAYSOCK").is_ok_and(|v| !v.is_empty()) {
+        let out = Command::new("swaymsg")
+            .args(["-t", "get_tree"])
+            .output()
+            .ok()?;
+        let tree: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        return find_focused(&tree);
+    }
+    None
+}
+
+fn find_focused(node: &serde_json::Value) -> Option<String> {
+    if node["focused"].as_bool() == Some(true) {
+        return node["app_id"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .or_else(|| node["window_properties"]["class"].as_str())
+            .map(String::from);
+    }
+    for key in ["nodes", "floating_nodes"] {
+        if let Some(children) = node[key].as_array() {
+            for child in children {
+                if let Some(found) = find_focused(child) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// `ydotool key 29:1 47:1 47:0 29:0` (Ctrl+V), with Shift interleaved for
 /// Ctrl+Shift+V.
 pub fn paste_ydotool(chord: PasteChord) -> Result<(), InjectError> {

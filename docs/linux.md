@@ -1,9 +1,9 @@
 # una desktop on Linux
 
-Status: the Linux code paths are written and cfg-gated but are **not yet
-compile-verified or tested** (development happens on macOS). Treat this as
-a build recipe plus the setup the code expects; issues are likely and
-welcome.
+Status: the Linux code paths compile on x86_64 Linux (checked on Arch with
+webkit2gtk-4.1) but have **not been run against a live compositor yet**
+(development happens on macOS). Treat this as a build recipe plus the setup
+the code expects; issues are welcome.
 
 ## Build dependencies
 
@@ -137,10 +137,11 @@ instance forwards to the first).
 | Paste injection | XTest (built-in) | ydotool or wtype | ydotool only | ydotool only |
 | Global hotkey press | yes | yes | via custom shortcut | via custom shortcut |
 | Global hotkey release (hold mode) | yes | `bindr` / `--release` + CLI | no (toggle only) | no (toggle only) |
-| Frontmost app name (`app_name` field) | possible, not yet implemented | not implemented | no | no |
+| Frontmost app name (`app_name` field) | yes (EWMH WM_CLASS) | Hyprland/Sway: yes | no | no |
 | Clipboard restore | text only (arboard) | text only | text only | text only |
 | Tray icon | yes | yes (bar-dependent) | needs extension | yes |
 
 Known gaps in the current code (see `client/crates/una-platform/src/linux/`):
-frontmost-app detection returns `None` (the server accepts a missing
-`app_name`), and clipboard save/restore preserves plain text only.
+frontmost-app detection returns `None` on GNOME/KDE Wayland (the server
+accepts a missing `app_name`), and clipboard save/restore preserves plain
+text only.
