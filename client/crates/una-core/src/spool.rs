@@ -29,6 +29,13 @@ pub fn save(wav: &[u8]) -> Result<PathBuf, SpoolError> {
 
 pub fn save_in(dir: &Path, wav: &[u8]) -> Result<PathBuf, SpoolError> {
     std::fs::create_dir_all(dir)?;
+    // A retried upload that fails again re-spools the same bytes; keep the
+    // existing file instead of stacking duplicates.
+    if let Some((path, bytes)) = latest_in(dir)? {
+        if bytes == wav {
+            return Ok(path);
+        }
+    }
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -89,6 +96,23 @@ pub fn latest_in(dir: &Path) -> Result<Option<(PathBuf, Vec<u8>)>, SpoolError> {
     }
 }
 
+/// Delete the newest spooled file if its bytes match `wav` — called after a
+/// successful upload so a retried dictation is not re-sent forever.
+pub fn remove_latest_if_matches(wav: &[u8]) -> Result<bool, SpoolError> {
+    let dir = spool_dir()?;
+    remove_latest_if_matches_in(&dir, wav)
+}
+
+pub fn remove_latest_if_matches_in(dir: &Path, wav: &[u8]) -> Result<bool, SpoolError> {
+    if let Some((path, bytes)) = latest_in(dir)? {
+        if bytes == wav {
+            std::fs::remove_file(path)?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub fn prune_in(dir: &Path, keep: usize) -> Result<(), SpoolError> {
     let entries = list_in(dir)?;
     for old in entries.into_iter().skip(keep) {
@@ -120,5 +144,29 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(list_in(dir.path()).unwrap().is_empty());
         assert!(latest_in(dir.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn save_dedupes_identical_latest() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
+        let first = save_in(dir, &[1; 4]).unwrap();
+        let second = save_in(dir, &[1; 4]).unwrap();
+        assert_eq!(first, second, "identical retry bytes reuse the file");
+        assert_eq!(list_in(dir).unwrap().len(), 1);
+        save_in(dir, &[2; 4]).unwrap();
+        assert_eq!(list_in(dir).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn successful_retry_removes_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
+        save_in(dir, &[1; 4]).unwrap();
+        save_in(dir, &[2; 4]).unwrap();
+        assert!(!remove_latest_if_matches_in(dir, &[9; 4]).unwrap());
+        assert!(remove_latest_if_matches_in(dir, &[2; 4]).unwrap());
+        let (_, bytes) = latest_in(dir).unwrap().unwrap();
+        assert_eq!(bytes, vec![1u8; 4], "older entry becomes the latest");
     }
 }

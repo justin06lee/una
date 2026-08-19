@@ -18,6 +18,7 @@
   let q = $state('');
   let qDebounced = $state('');
   let reviewed = $state<'all' | 'yes' | 'no'>('all');
+  let appFilter = $state<string | null>(null);
 
   let expanded = $state<string | null>(null);
   let detail = $state<DictationDetail | null>(null);
@@ -34,6 +35,7 @@
   $effect(() => {
     void qDebounced;
     void reviewed;
+    void appFilter;
     untrack(() => void reload());
   });
 
@@ -53,6 +55,7 @@
         limit: 50,
         cursor: cursor ?? undefined,
         q: qDebounced || undefined,
+        app: appFilter ?? undefined,
         reviewed: reviewed === 'all' ? undefined : reviewed === 'yes',
       });
       items = cursor ? [...items, ...res.items] : res.items;
@@ -145,6 +148,15 @@
         </button>
       {/each}
     </div>
+    {#if appFilter}
+      <button
+        class="chip chip-accent"
+        onclick={() => (appFilter = null)}
+        title="Clear app filter"
+      >
+        {appFilter} ✕
+      </button>
+    {/if}
   </div>
 
   {#if error}
@@ -169,8 +181,8 @@
   {:else if items.length === 0 && !loading}
     <div class="card">
       <EmptyState
-        title={qDebounced || reviewed !== 'all' ? 'No matches' : 'No dictations yet'}
-        sub={qDebounced || reviewed !== 'all'
+        title={qDebounced || reviewed !== 'all' || appFilter ? 'No matches' : 'No dictations yet'}
+        sub={qDebounced || reviewed !== 'all' || appFilter
           ? 'Try a different search or filter.'
           : 'Dictations from your devices will appear here.'}
       />
@@ -192,7 +204,19 @@
               {#if it.text}{it.text}{:else}<em class="text-faint">(empty)</em>{/if}
             </span>
             {#if it.app_name}
-              <span class="chip hidden flex-none sm:inline-flex">{it.app_name}</span>
+              <span
+                class="chip hidden flex-none cursor-pointer hover:text-text sm:inline-flex"
+                role="button"
+                tabindex="-1"
+                title="Filter by {it.app_name}"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  appFilter = it.app_name;
+                }}
+                onkeydown={(e) => e.key === 'Enter' && (appFilter = it.app_name)}
+              >
+                {it.app_name}
+              </span>
             {/if}
             <span class="w-10 flex-none text-right text-xs text-faint tabular-nums">
               {fmtDur(it.duration_ms)}

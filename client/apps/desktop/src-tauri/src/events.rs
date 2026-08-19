@@ -18,6 +18,7 @@ pub fn spawn_forwarders(app: AppHandle) {
     let mut snapshots = state.controller.subscribe();
     let mut levels = state.engine.levels();
     let last_snapshot = state.last_snapshot.clone();
+    let config = state.config.clone();
 
     // State changes -> "state-changed" + tray label + HUD interactivity.
     let state_app = app.clone();
@@ -25,7 +26,22 @@ pub fn spawn_forwarders(app: AppHandle) {
         loop {
             match snapshots.recv().await {
                 Ok(snapshot) => {
-                    *last_snapshot.lock().unwrap() = snapshot.clone();
+                    let entered_done = {
+                        let mut last = last_snapshot.lock().unwrap();
+                        let was_done = matches!(*last, Snapshot::Done { .. });
+                        let was_error = matches!(*last, Snapshot::Error { .. });
+                        *last = snapshot.clone();
+                        match snapshot {
+                            Snapshot::Done { .. } if !was_done => Some(crate::sounds::Cue::Done),
+                            Snapshot::Error { .. } if !was_error => Some(crate::sounds::Cue::Error),
+                            _ => None,
+                        }
+                    };
+                    if let Some(cue) = entered_done {
+                        if config.read().unwrap().ui.sounds {
+                            crate::sounds::play(cue);
+                        }
+                    }
                     let recording = matches!(snapshot, Snapshot::Recording { .. });
                     tray::set_recording(&state_app, recording);
                     // The HUD is click-through except when showing an error
