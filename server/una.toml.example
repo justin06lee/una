@@ -1,0 +1,39 @@
+# una server configuration.
+# Copy to una.toml (or set UNA_CONFIG=/path/to/una.toml).
+# Every value can also be set via env: UNA__SECTION__KEY, e.g. UNA__SERVER__PORT=9000.
+
+[server]
+# SECURITY: una has NO authentication. It records your voice history and can swap models.
+# Bind to your LAN only and NEVER port-forward it to the internet.
+# For remote use, put it behind Tailscale/WireGuard, or bind = "127.0.0.1" + SSH tunnel.
+bind = "0.0.0.0"
+port = 8100
+data_dir = "./data"
+
+[asr]
+model = "large-v3-turbo"     # faster-whisper alias, or leave as-is when fine-tunes take over
+device = "cuda"              # "cpu" works for testing (use compute_type = "int8")
+compute_type = "float16"     # "int8_float16" for <=8GB VRAM cards
+language = "en"              # pin your language; auto-detect costs an extra pass
+
+[cleanup]
+enabled = true
+ollama_url = "http://localhost:11434"
+model = "qwen3:8b"           # any instruct model; use a 3-4B model on small GPUs
+timeout_s = 3.0              # cleanup slower than this -> raw transcript is returned instead
+
+# app-name substring -> tone hint (first match wins)
+[cleanup.tone_map]
+slack = "casual chat; lowercase is fine"
+mail = "professional prose"
+terminal = "verbatim; do not alter punctuation inside commands"
+
+[training]
+threshold_minutes = 30.0     # eligible corrected audio needed before training is offered
+auto = false                 # true: start a run automatically once over threshold (when idle)
+pause_serving = false        # true on <16GB cards: unload ASR while training
+max_edit_distance = 0.30     # corrections further than this from raw are content rewrites -> excluded
+promotion_margin_wer = 0.5   # candidate must beat baseline WER by this many absolute points
+
+[discovery]
+mdns = true                  # advertise _una._tcp for client auto-discovery
