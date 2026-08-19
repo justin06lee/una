@@ -23,7 +23,7 @@ def _gpu_info() -> dict | None:
     try:
         out = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,memory.free", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True, text=True, timeout=2, check=False,
         )
         name, free = out.stdout.strip().split("\n")[0].split(", ")
         return {"name": name, "vram_free_mb": int(free)}

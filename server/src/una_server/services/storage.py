@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -34,7 +34,7 @@ def duration_ms(samples: np.ndarray) -> int:
 
 
 def save_wav(audio_dir: Path, dictation_id: str, samples: np.ndarray) -> Path:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     out_dir = audio_dir / f"{now:%Y}" / f"{now:%m}"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{dictation_id}.wav"

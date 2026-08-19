@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import zlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
@@ -12,7 +12,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def is_eval_holdout(dictation_id: str) -> bool:

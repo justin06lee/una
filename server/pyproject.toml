@@ -57,3 +57,11 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 src = ["src"]
+
+[tool.ruff.lint]
+ignore = [
+    "B008",   # FastAPI File()/Form() argument defaults are the framework idiom
+    "BLE001", # broad excepts are deliberate in best-effort degradation paths
+    "S110",   # documented intentional try/except-pass (mDNS shutdown)
+    "C408",   # dict(**overrides) test fixtures read better than literals
+]
