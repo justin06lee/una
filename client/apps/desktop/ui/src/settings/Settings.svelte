@@ -251,6 +251,24 @@
 
 <div class="layout">
   <nav class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="9" fill="var(--accent)" />
+        <rect x="13.25" y="7" width="5.5" height="12" rx="2.75" fill="var(--on-accent)" />
+        <path
+          d="M9.5 15.5a6.5 6.5 0 0 0 13 0"
+          stroke="var(--on-accent)"
+          stroke-width="2.4"
+          fill="none"
+          stroke-linecap="round"
+        />
+        <path d="M16 22v3.5" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" />
+      </svg>
+      <div>
+        <div class="brand-name">una</div>
+        <div class="brand-sub">your voice, your model</div>
+      </div>
+    </div>
     {#each TABS as t}
       <button class="tab" class:active={tab === t} onclick={() => (tab = t)}>
         {t}
@@ -556,16 +574,45 @@
 </div>
 
 <style>
+  /* ---------------------------------------------------------------- brand */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 8px 14px;
+  }
+
+  .mark {
+    width: 24px;
+    height: 24px;
+    flex: none;
+  }
+
+  .brand-name {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+
+  .brand-sub {
+    font-size: 10.5px;
+    color: var(--faint);
+    margin-top: 2px;
+  }
+
+  /* ---------------------------------------------------------------- shell */
   .layout {
     display: flex;
-    height: 100vh;
+    height: 100%;
   }
 
   .sidebar {
-    width: 148px;
+    width: 168px;
     flex: none;
-    padding: 14px 8px;
+    padding: 14px 10px;
     border-right: 1px solid var(--border);
+    background: var(--surface);
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -575,64 +622,93 @@
     appearance: none;
     border: 0;
     background: transparent;
-    color: var(--text);
+    color: var(--muted);
     text-align: left;
-    padding: 7px 12px;
-    border-radius: 7px;
+    padding: 0 11px;
+    height: 32px;
+    border-radius: var(--radius);
+    font-family: inherit;
     font-size: 13px;
+    font-weight: 550;
     cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease;
   }
 
   .tab:hover {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    background: var(--raised);
+    color: var(--text);
   }
 
   .tab.active {
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 
   .content {
     flex: 1;
-    padding: 20px 26px;
+    padding: 26px 30px 40px;
     overflow-y: auto;
   }
 
   h2 {
-    font-size: 17px;
-    font-weight: 700;
-    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin-bottom: 18px;
   }
 
   h3 {
-    font-size: 13px;
-    font-weight: 700;
-    margin: 18px 0 8px;
+    font-size: 12px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--faint);
+    margin: 22px 0 10px;
   }
 
+  /* ----------------------------------------------------------- rows/forms */
   .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 8px 0;
+    gap: 16px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .row:last-of-type {
+    border-bottom: 0;
   }
 
   .row > span:first-child {
     color: var(--text);
+    font-weight: 500;
   }
 
   input[type="text"],
   select,
   .num {
-    background: var(--panel);
-    border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1px solid var(--edge);
     color: var(--text);
-    border-radius: 7px;
-    padding: 6px 9px;
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    font-family: inherit;
     font-size: 13px;
     min-width: 260px;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  input[type="text"]:focus,
+  select:focus,
+  .num:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--edge));
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
   }
 
   .num {
@@ -653,39 +729,58 @@
     max-width: 340px;
   }
 
+  /* -------------------------------------------------------------- buttons */
   .btn {
     appearance: none;
-    background: var(--accent);
-    color: #fff;
-    border: 0;
-    border-radius: 7px;
-    padding: 6px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-sm);
+    padding: 0 14px;
+    height: 32px;
+    font-family: inherit;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 550;
+    white-space: nowrap;
     cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--raised);
   }
 
   .btn:disabled {
-    opacity: 0.55;
+    opacity: 0.4;
     cursor: default;
   }
 
   .btn.small {
-    padding: 2px 10px;
+    height: 26px;
+    padding: 0 10px;
     font-size: 12px;
     margin-left: 8px;
   }
 
+  /* ------------------------------------------------------- hotkey capture */
   .binding-panel {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
+    gap: 14px;
+    padding: 20px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--panel);
-    margin-bottom: 14px;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+    margin-bottom: 16px;
   }
 
   .chips {
@@ -705,11 +800,11 @@
     border-radius: 8px;
     border: 1px solid var(--border);
     border-bottom-width: 2.5px;
-    background: color-mix(in srgb, var(--text) 6%, transparent);
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 15px;
+    background: var(--raised);
+    font-family: inherit;
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
   }
 
   .capture-btn {
@@ -718,13 +813,19 @@
     align-items: center;
     gap: 8px;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     border: 0;
-    border-radius: 8px;
-    padding: 10px 20px;
+    border-radius: var(--radius);
+    padding: 11px 20px;
+    font-family: inherit;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    transition: background-color 160ms ease;
+  }
+
+  .capture-btn:hover {
+    background: var(--accent-hover);
   }
 
   .capture-btn em {
@@ -734,7 +835,6 @@
   }
 
   .capture-btn.capturing {
-    background: color-mix(in srgb, var(--accent) 82%, #000);
     animation: capture-pulse 1.2s ease-in-out infinite;
   }
 
@@ -742,17 +842,17 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #fff;
+    background: currentColor;
     animation: dot-pulse 1.2s ease-in-out infinite;
   }
 
   @keyframes capture-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 55%, transparent);
     }
     50% {
-      box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent);
+      box-shadow: 0 0 0 7px color-mix(in oklab, var(--accent) 0%, transparent);
     }
   }
 
@@ -768,55 +868,65 @@
     }
   }
 
+  /* ----------------------------------------------------------------- misc */
   .warn-note {
     color: var(--warn);
+    background: var(--warn-soft);
+    border-radius: var(--radius-sm);
+    padding: 8px 11px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.55;
     margin: 0;
   }
 
   code {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 11.5px;
-    background: color-mix(in srgb, var(--text) 8%, transparent);
+    background: var(--raised);
     border-radius: 4px;
-    padding: 1px 5px;
+    padding: 1.5px 5px;
   }
 
   .mode {
     border: 0;
-    margin-top: 10px;
+    margin-top: 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
   .mode legend {
-    font-weight: 700;
-    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--faint);
+    margin-bottom: 8px;
   }
 
   .radio {
     display: flex;
-    gap: 8px;
+    gap: 9px;
     align-items: baseline;
+    line-height: 1.5;
+    cursor: pointer;
   }
 
   .dot {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: var(--muted);
+    background: var(--faint);
     display: inline-block;
     flex: none;
   }
 
   .dot.ok {
-    background: var(--ok);
+    background: var(--accent);
   }
 
   .dot.down {
-    background: var(--bad);
+    background: var(--danger);
   }
 
   .dot.warn {
@@ -825,7 +935,7 @@
 
   .servers {
     list-style: none;
-    margin-top: 8px;
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -834,33 +944,39 @@
   .server {
     width: 100%;
     text-align: left;
-    background: var(--panel);
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
     color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease;
   }
 
   .server:hover {
-    border-color: var(--accent);
+    border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+    background: var(--accent-soft);
   }
 
   .meter {
     height: 8px;
-    border-radius: 4px;
-    background: var(--panel);
-    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--raised);
     overflow: hidden;
-    margin: 6px 0;
+    margin: 8px 0;
   }
 
   .meter-fill {
     height: 100%;
     background: var(--accent);
+    border-radius: 999px;
     transition: width 60ms linear;
   }
 
@@ -868,20 +984,20 @@
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
   .perm-list li {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 9px;
   }
 
   .hint {
     color: var(--muted);
     font-size: 12px;
-    margin: 8px 0;
-    line-height: 1.5;
+    margin: 10px 0;
+    line-height: 1.6;
   }
 
   .muted {
@@ -889,7 +1005,10 @@
   }
 
   .error {
-    color: var(--bad);
-    margin-top: 12px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    border-radius: var(--radius-sm);
+    padding: 8px 11px;
+    margin-top: 14px;
   }
 </style>

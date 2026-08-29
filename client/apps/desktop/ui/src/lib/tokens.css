@@ -1,0 +1,87 @@
+/**
+ * Shared design tokens for the desktop client, matching the server dashboard:
+ * warm neutrals, a calm green accent, soft corners.
+ *
+ * The client follows the operating system's colour scheme rather than offering
+ * its own picker — a menu-bar utility should look native to whatever the rest
+ * of the desktop is doing.
+ *
+ * Figtree is bundled rather than linked, so the window renders correctly with
+ * no network access.
+ */
+@import "@fontsource-variable/figtree";
+
+:root {
+  --canvas: #faf9f7;
+  --surface: #ffffff;
+  --raised: #f4f2ee;
+  --hover: #ece9e3;
+  --border: #e9e5de;
+  --edge: #dad5cc;
+  --text: #191815;
+  --muted: #6e6a62;
+  --faint: #9a958c;
+
+  --accent: #2e8b63;
+  --accent-hover: #277754;
+  --accent-soft: #e9f3ed;
+  --on-accent: #ffffff;
+
+  --warn: #a96f22;
+  --warn-soft: #fbf1e2;
+  --danger: #bd463c;
+  --danger-soft: #fbecea;
+
+  --radius-sm: 7px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 2px rgb(25 24 21 / 0.04), 0 1px 3px rgb(25 24 21 / 0.03);
+  --shadow-pop: 0 4px 10px rgb(25 24 21 / 0.07), 0 20px 40px -18px rgb(25 24 21 / 0.22);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #121110;
+    --surface: #191817;
+    --raised: #201e1c;
+    --hover: #272522;
+    --border: #2b2825;
+    --edge: #3a3631;
+    --text: #f2efea;
+    --muted: #a39d94;
+    --faint: #6e6960;
+
+    --accent: #4fbf8b;
+    --accent-hover: #63cd9c;
+    --accent-soft: #16281f;
+    --on-accent: #0d1a13;
+
+    --warn: #d69a4e;
+    --warn-soft: #2a2115;
+    --danger: #e0736a;
+    --danger-soft: #2c1917;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.2);
+    --shadow-pop: 0 4px 10px rgb(0 0 0 / 0.35), 0 20px 40px -18px rgb(0 0 0 / 0.7);
+
+    color-scheme: dark;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -68,9 +68,13 @@
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    if (w <= 0 || h <= 0) return;
 
     const gap = 3;
-    const barW = (w - gap * (BAR_COUNT - 1)) / BAR_COUNT;
+    // The pill animates open from 64px, so for the first frames the canvas is
+    // narrower than the gaps alone and the naive bar width goes negative —
+    // roundRect throws on a negative radius and the frame is lost. Clamp.
+    const barW = Math.max(0.5, (w - gap * (BAR_COUNT - 1)) / BAR_COUNT);
     const now = performance.now();
     const t = now / 1000;
 
@@ -188,7 +192,7 @@
     gap: 8px;
     overflow: hidden;
     border-radius: 9999px;
-    background: rgba(16, 17, 22, 0.78);
+    background: rgba(20, 19, 17, 0.8);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
     border: 0.5px solid rgba(255, 255, 255, 0.16);
@@ -276,11 +280,10 @@
 
   .timer {
     flex: none;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 11.5px;
+    font-weight: 550;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.62);
   }
 
   /* -------------------------------------------- Transcribing/Inserting */
@@ -324,7 +327,7 @@
   .pill.done {
     width: 84px;
     height: 32px;
-    border-color: rgba(126, 231, 135, 0.45);
+    border-color: rgba(79, 191, 139, 0.5);
     animation: pulse 0.7s ease-out;
   }
 
@@ -332,7 +335,7 @@
     width: 18px;
     height: 18px;
     flex: none;
-    color: #7ee787;
+    color: #4fbf8b;
   }
 
   .check path {
@@ -351,12 +354,12 @@
     0% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 0 rgba(126, 231, 135, 0.45);
+        0 0 0 0 rgba(79, 191, 139, 0.5);
     }
     100% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 14px rgba(126, 231, 135, 0);
+        0 0 0 14px rgba(79, 191, 139, 0);
     }
   }
 
@@ -365,8 +368,8 @@
     width: 356px;
     height: 44px;
     padding: 0 10px 0 16px;
-    background: rgba(44, 18, 20, 0.82);
-    border-color: rgba(255, 105, 97, 0.5);
+    background: rgba(46, 22, 20, 0.86);
+    border-color: rgba(224, 115, 106, 0.55);
     animation: shake 0.35s ease;
   }
 
@@ -374,13 +377,12 @@
     width: 17px;
     height: 17px;
     flex: none;
-    color: #ff6961;
+    color: #e0736a;
   }
 
   .msg {
     font-size: 12.5px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
+    font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -394,9 +396,10 @@
     border: 1px solid rgba(255, 255, 255, 0.25);
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
+    font-family: inherit;
     font-size: 12px;
     font-weight: 600;
-    padding: 4px 12px;
+    padding: 5px 13px;
     border-radius: 9999px;
     cursor: pointer;
   }
