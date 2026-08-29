@@ -24,8 +24,8 @@ actually better.
 │ global hotkey → record 16kHz             │─────▶│  faster-whisper (CUDA)                   │
 │ POST wav → receive text → paste-inject   │◀─────│   → Ollama cleanup (falls back to raw)   │
 │ mDNS auto-discovery of _una._tcp         │      │  SQLite + WAV history                    │
-└──────────────────────────────────────────┘      │  web dashboard: review · dictionary ·    │
-                                                  │    training · stats                      │
+└──────────────────────────────────────────┘      │  web dashboard: home · review ·          │
+                                                  │    dictionary · training · insights      │
                                                   │  fine-tune: LoRA → WER gate → hot-swap   │
                                                   └──────────────────────────────────────────┘
 ```
@@ -45,8 +45,9 @@ docker compose up -d --build          # una-server on :8100 + Ollama on :11434
 docker exec -it una-ollama-1 ollama pull qwen3:8b
 ```
 
-Open `http://<box>:8100` for the dashboard. First dictation downloads the Whisper model
-(~1.6 GB) into the `hf-cache` volume.
+Open `http://<box>:8100` for the dashboard — your transcript feed, review queue, dictionary,
+training runs and usage insights, in light or dark. First dictation downloads the Whisper
+model (~1.6 GB) into the `hf-cache` volume.
 
 Without Docker: `cd server && uv sync --extra training && uv run uvicorn una_server.main:app --host 0.0.0.0 --port 8100`.
 
@@ -110,7 +111,7 @@ injected into Whisper's decoding prompt and the cleanup prompt immediately.
 ## Repo layout
 
 - `server/` — FastAPI + faster-whisper + Ollama client + training pipeline (Python, uv)
-- `server/dashboard/` — web dashboard (Svelte 5 + Vite + Tailwind)
+- `server/dashboard/` — web dashboard (Svelte 5 + Vite + Tailwind 4)
 - `client/` — desktop client (Rust workspace + Tauri v2, Svelte HUD/settings)
 - `docs/` — install + platform notes
 
@@ -120,4 +121,5 @@ injected into Whisper's decoding prompt and the cleanup prompt immediately.
 make server-test        # server test suite
 make client-test        # client FSM tests
 make server-dev         # UNA__ASR__DEVICE=cpu UNA__ASR__COMPUTE_TYPE=int8 for GPU-less hacking
+make dashboard-dev      # UNA_SERVER=http://<box>:8100 to point the UI at a real server
 ```
