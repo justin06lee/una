@@ -212,6 +212,19 @@ impl ApiClient {
         }
     }
 
+    /// Whether `base` answers a health check within `timeout`.
+    ///
+    /// Used to choose between candidate endpoints, so it only cares that a una
+    /// server responded at all — a degraded server (model still loading) is
+    /// still the right one to send this dictation to.
+    pub async fn reachable(&self, base: &str, timeout: Duration) -> bool {
+        let url = format!("{}/v1/health", base.trim_end_matches('/'));
+        match self.http.get(&url).timeout(timeout).send().await {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
     /// GET /v1/health with a short (1.5s) timeout.
     pub async fn health(&self, base: &str) -> Result<Health, NetError> {
         let url = format!("{}/v1/health", base.trim_end_matches('/'));

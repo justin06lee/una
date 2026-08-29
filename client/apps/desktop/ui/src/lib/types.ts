@@ -14,7 +14,7 @@ export interface LevelFrame {
 }
 
 export interface Config {
-  server: { url: string; autodiscover: boolean };
+  server: { urls: string[]; autodiscover: boolean };
   hotkey: { binding: string; mode: "hold" | "toggle" | "hybrid" };
   audio: { input_device: string; prefer_builtin: boolean };
   insert: {
@@ -24,6 +24,12 @@ export interface Config {
   };
   ui: { sounds: boolean; hud_mode: "pill" | "flash" };
   general: { launch_at_login: boolean };
+}
+
+export interface EndpointStatus {
+  url: string;
+  reachable: boolean;
+  ms: number;
 }
 
 export interface CapturedHotkey {

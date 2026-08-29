@@ -59,11 +59,18 @@ Platform guides: [macOS install](../docs/macos-install.md) ·
 ## Server
 
 The client talks to the una server's `POST /v1/dictations` and
-`GET /v1/health`, and discovers servers advertising `_una._tcp` via mDNS —
-a manually configured URL always wins. Configuration lives at the platform
-config dir (macOS: `~/Library/Application Support/sh.tenet.una/config.toml`,
-Linux: `~/.config/una/config.toml`) and is editable from the settings window
-(tray → Settings…).
+`GET /v1/health`. `[server] urls` holds an ordered list of addresses; every
+dictation goes to whichever answers first, so one config covers the home LAN
+and a VPN address for use away from home (see
+[remote-access.md](../docs/remote-access.md)). Candidates are probed
+concurrently and the winner is cached, so an unreachable address costs no
+latency. If none answer and `autodiscover` is on, the client falls back to
+servers advertising `_una._tcp` over mDNS.
+
+Configuration lives at the platform config dir (macOS: `~/Library/Application
+Support/sh.tenet.una/config.toml`, Linux: `~/.config/una/config.toml`) and is
+editable from the settings window (tray → Settings…). An older `url = "..."`
+setting is migrated into `urls` on first load.
 
 Failed uploads are spooled (last 5) and can be resent via tray →
 **Retry Last Dictation**.

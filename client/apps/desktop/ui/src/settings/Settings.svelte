@@ -6,6 +6,7 @@
     CapturedHotkey,
     Config,
     DiscoveredServer,
+    EndpointStatus,
     LevelFrame,
     PermissionsStatus,
     TestRecordResult,
@@ -23,6 +24,8 @@
   let healthDetail = $state("");
   let discovering = $state(false);
   let discovered = $state<DiscoveredServer[]>([]);
+  let probes = $state<EndpointStatus[]>([]);
+  let probing = $state(false);
 
   // Hotkey tab
   let recordingHotkey = $state(false); // legacy JS recorder (non-macOS)
@@ -62,9 +65,7 @@
   async function checkHealth() {
     if (!config) return;
     try {
-      const res = await invoke<Record<string, unknown>>("health_check", {
-        url: config.server.url || null,
-      });
+      const res = await invoke<Record<string, unknown>>("health_check", { url: null });
       health = "ok";
       const model = res["asr_model_loaded"];
       healthDetail =
@@ -87,10 +88,46 @@
   }
 
   function adoptServer(s: DiscoveredServer) {
-    if (!config) return;
-    config.server.url = s.url;
+    if (!config || config.server.urls.includes(s.url)) return;
+    config.server.urls = [...config.server.urls, s.url];
     scheduleSave();
     checkHealth();
+  }
+
+  function setUrl(i: number, value: string) {
+    if (!config) return;
+    config.server.urls = config.server.urls.map((u, k) => (k === i ? value : u));
+    scheduleSave();
+  }
+
+  function addUrl() {
+    if (!config) return;
+    config.server.urls = [...config.server.urls, ""];
+  }
+
+  function removeUrl(i: number) {
+    if (!config) return;
+    config.server.urls = config.server.urls.filter((_, k) => k !== i);
+    probes = [];
+    scheduleSave();
+    checkHealth();
+  }
+
+  /** Test every address from wherever this machine currently is. */
+  async function probeEndpoints() {
+    probing = true;
+    try {
+      probes = await invoke<EndpointStatus[]>("probe_endpoints");
+    } catch {
+      probes = [];
+    } finally {
+      probing = false;
+    }
+    checkHealth();
+  }
+
+  function probeFor(url: string): EndpointStatus | undefined {
+    return probes.find((p) => p.url === url.trim().replace(/\/+$/, ""));
   }
 
   // ---- Native capture (macOS event tap) ------------------------------
@@ -406,24 +443,68 @@
       {/if}
     {:else if tab === "Server"}
       <h2>Server</h2>
-      <div class="row">
-        <span>Server URL</span>
-        <span class="url-group">
-          <span
-            class="dot"
-            class:ok={health === "ok"}
-            class:down={health === "down"}
-            title={healthDetail}
-          ></span>
-          <input
-            type="text"
-            placeholder="http://192.168.1.20:8765 (empty = autodiscover)"
-            bind:value={config.server.url}
-            oninput={scheduleSave}
-            onchange={checkHealth}
-          />
-        </span>
+
+      <p class="hint">
+        una tries every address below and uses whichever answers first, so one
+        setup works both at home and away. Put the address that is fastest on
+        your home network first, and a VPN address (Tailscale, WireGuard) after
+        it — that one keeps working from anywhere.
+      </p>
+
+      <div class="endpoints">
+        {#each config.server.urls as url, i (i)}
+          {@const probe = probeFor(url)}
+          <div class="endpoint">
+            <span
+              class="dot"
+              class:ok={probe?.reachable === true}
+              class:down={probe?.reachable === false}
+              title={probe
+                ? probe.reachable
+                  ? `Reachable in ${probe.ms} ms`
+                  : "No answer from here"
+                : "Not tested yet"}
+            ></span>
+            <input
+              type="text"
+              placeholder="http://192.168.1.20:8100"
+              value={url}
+              oninput={(e) => setUrl(i, e.currentTarget.value)}
+              onchange={checkHealth}
+            />
+            {#if probe?.reachable}
+              <span class="muted ms">{probe.ms} ms</span>
+            {/if}
+            <button
+              class="btn small"
+              onclick={() => removeUrl(i)}
+              title="Remove this address"
+              aria-label="Remove {url}"
+            >
+              Remove
+            </button>
+          </div>
+        {/each}
+
+        {#if config.server.urls.length === 0}
+          <p class="hint">
+            No addresses yet — add one, or turn on discovery below to find a
+            server on this network.
+          </p>
+        {/if}
+
+        <div class="endpoint-actions">
+          <button class="btn" onclick={addUrl}>Add address</button>
+          <button
+            class="btn"
+            onclick={probeEndpoints}
+            disabled={probing || config.server.urls.length === 0}
+          >
+            {probing ? "Testing…" : "Test all"}
+          </button>
+        </div>
       </div>
+
       <p class="hint">
         {health === "ok"
           ? `Server ${healthDetail}.`
@@ -431,14 +512,20 @@
             ? `Cannot reach server: ${healthDetail}`
             : "Checking…"}
       </p>
+
+      <h3>On this network</h3>
       <label class="row">
-        <span>Discover servers on this network (mDNS)</span>
+        <span>Discover servers with mDNS</span>
         <input
           type="checkbox"
           bind:checked={config.server.autodiscover}
           onchange={scheduleSave}
         />
       </label>
+      <p class="hint">
+        Only works on the same network as the server; it is a convenience for
+        home, not a substitute for a VPN address.
+      </p>
       <div class="row">
         <span></span>
         <button class="btn" onclick={discover} disabled={discovering}>
@@ -451,7 +538,10 @@
             <li>
               <button class="server" onclick={() => adoptServer(s)}>
                 <strong>{s.name}</strong>
-                <span class="muted">{s.url}{s.version ? ` · v${s.version}` : ""}</span>
+                <span class="muted">
+                  {s.url}{s.version ? ` · v${s.version}` : ""}
+                  {config.server.urls.includes(s.url) ? " · already added" : ""}
+                </span>
               </button>
             </li>
           {/each}
@@ -931,6 +1021,36 @@
 
   .dot.warn {
     background: var(--warn);
+  }
+
+  .endpoints {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 14px 0 4px;
+  }
+
+  .endpoint {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .endpoint input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ms {
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .endpoint-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .servers {

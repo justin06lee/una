@@ -73,14 +73,14 @@ fn on_menu_event(app: &AppHandle, id: &str) {
         },
         ID_SETTINGS => windows::show_settings(app),
         ID_HISTORY => {
-            let url = state.config_snapshot().server.url;
-            if url.trim().is_empty() {
+            match state.dashboard_url() {
                 // No server configured: settings is the useful destination.
-                windows::show_settings(app);
-            } else {
-                let history_url = format!("{}/#/history", url.trim_end_matches('/'));
-                if let Err(e) = app.opener().open_url(history_url, None::<&str>) {
-                    tracing::warn!("could not open history: {e}");
+                None => windows::show_settings(app),
+                Some(url) => {
+                    let home = format!("{}/#/home", url.trim_end_matches('/'));
+                    if let Err(e) = app.opener().open_url(home, None::<&str>) {
+                        tracing::warn!("could not open the dashboard: {e}");
+                    }
                 }
             }
         }

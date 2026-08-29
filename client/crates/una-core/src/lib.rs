@@ -7,10 +7,12 @@
 pub mod audio;
 pub mod config;
 pub mod discovery;
+pub mod endpoint;
 #[cfg(unix)]
 pub mod ipc;
 pub mod net;
 pub mod spool;
 pub mod state;
 
+pub use endpoint::EndpointResolver;
 pub use state::{Command, Controller, ControllerHandle, Effect, Event, Machine, Snapshot, State};

@@ -118,6 +118,13 @@ pub struct Config {
     pub general: GeneralConfig,
 }
 
+impl Config {
+    /// Canonicalize anything a config file or the settings window may have set.
+    pub fn normalize(&mut self) {
+        self.server.normalize();
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -134,18 +141,50 @@ impl Default for Config {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ServerConfig {
-    /// Manual server base URL, e.g. `http://192.168.1.20:8765`. Empty means
-    /// "not configured" — autodiscovery is used instead when enabled.
-    pub url: String,
+    /// Candidate base URLs, e.g. `["http://192.168.1.20:8100",
+    /// "http://box.tailnet.ts.net:8100"]`. Every dictation goes to whichever
+    /// of these answers first, so one config works both on the home LAN and
+    /// remotely over a VPN without the user switching anything.
+    ///
+    /// Empty means "not configured" — autodiscovery is used instead when
+    /// enabled.
+    pub urls: Vec<String>,
+    /// Legacy single-URL form. Folded into `urls` by [`ServerConfig::normalize`]
+    /// when an older config file is loaded, then never written back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
     pub autodiscover: bool,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            url: String::new(),
+            urls: Vec::new(),
+            url: None,
             autodiscover: true,
         }
+    }
+}
+
+impl ServerConfig {
+    /// Fold a legacy `url` into `urls`, then trim, drop blanks and dedupe.
+    ///
+    /// Runs on load and on every save, so hand-edited files and anything the
+    /// settings window sends converge on the same shape.
+    pub fn normalize(&mut self) {
+        if let Some(legacy) = self.url.take() {
+            let legacy = legacy.trim().to_string();
+            if !legacy.is_empty() {
+                self.urls.insert(0, legacy);
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        self.urls = std::mem::take(&mut self.urls)
+            .into_iter()
+            .map(|u| u.trim().trim_end_matches('/').to_string())
+            .filter(|u| !u.is_empty())
+            .filter(|u| seen.insert(u.clone()))
+            .collect();
     }
 }
 
@@ -267,7 +306,9 @@ pub fn load_or_create() -> Result<Config, ConfigError> {
 pub fn load_or_create_at(path: &std::path::Path) -> Result<Config, ConfigError> {
     if path.exists() {
         let raw = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&raw)?)
+        let mut cfg: Config = toml::from_str(&raw)?;
+        cfg.normalize();
+        Ok(cfg)
     } else {
         let cfg = Config::default();
         save_at(&cfg, path)?;
@@ -284,7 +325,9 @@ pub fn save_at(cfg: &Config, path: &std::path::Path) -> Result<(), ConfigError> 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let raw = toml::to_string_pretty(cfg)?;
+    let mut cfg = cfg.clone();
+    cfg.normalize();
+    let raw = toml::to_string_pretty(&cfg)?;
     std::fs::write(path, raw)?;
     Ok(())
 }
@@ -313,13 +356,65 @@ mod tests {
     fn partial_file_gets_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        std::fs::write(&path, "[server]\nurl = \"http://x:1\"\n").unwrap();
+        std::fs::write(&path, "[server]\nurls = [\"http://x:1\"]\n").unwrap();
         let cfg = load_or_create_at(&path).unwrap();
-        assert_eq!(cfg.server.url, "http://x:1");
+        assert_eq!(cfg.server.urls, vec!["http://x:1"]);
         assert!(cfg.server.autodiscover);
         assert_eq!(cfg.hotkey.mode, "hybrid");
         assert_eq!(cfg.insert.restore_delay_ms, 300);
         assert_eq!(cfg.ui.hud_mode, "pill");
+    }
+
+    #[test]
+    fn legacy_single_url_is_migrated_to_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[server]\nurl = \"http://192.168.1.253:8100\"\n").unwrap();
+        let cfg = load_or_create_at(&path).unwrap();
+        assert_eq!(cfg.server.urls, vec!["http://192.168.1.253:8100"]);
+        assert_eq!(cfg.server.url, None, "legacy field is consumed");
+    }
+
+    #[test]
+    fn legacy_url_leads_the_list_and_is_not_duplicated() {
+        let mut server = ServerConfig {
+            urls: vec!["http://b:8100".into(), "http://a:8100".into()],
+            url: Some("http://a:8100".into()),
+            autodiscover: true,
+        };
+        server.normalize();
+        // The legacy value keeps priority, and the duplicate further down goes.
+        assert_eq!(server.urls, vec!["http://a:8100", "http://b:8100"]);
+    }
+
+    #[test]
+    fn normalize_trims_blanks_and_trailing_slashes() {
+        let mut server = ServerConfig {
+            urls: vec![
+                "  http://a:8100/  ".into(),
+                "".into(),
+                "   ".into(),
+                "http://a:8100".into(),
+            ],
+            url: None,
+            autodiscover: true,
+        };
+        server.normalize();
+        assert_eq!(server.urls, vec!["http://a:8100"]);
+    }
+
+    #[test]
+    fn saved_config_never_writes_the_legacy_field_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[server]\nurl = \"http://old:8100\"\n").unwrap();
+        let cfg = load_or_create_at(&path).unwrap();
+        save_at(&cfg, &path).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("urls = [\"http://old:8100\"]"), "{raw}");
+        assert!(!raw.contains("\nurl ="), "legacy key should be gone:\n{raw}");
+        // And it round-trips unchanged.
+        assert_eq!(load_or_create_at(&path).unwrap().server.urls, cfg.server.urls);
     }
 
     #[test]
