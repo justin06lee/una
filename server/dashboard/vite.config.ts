@@ -25,8 +25,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    // Point at a real server while hacking on the UI:
+    //   UNA_SERVER=http://tenet:8100 bun run dev
     proxy: {
-      '/v1': 'http://localhost:8100',
+      '/v1': process.env.UNA_SERVER || 'http://localhost:8100',
     },
   },
 });

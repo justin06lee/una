@@ -140,3 +140,63 @@ class Health(BaseModel):
     ollama: str
     training_active: bool
     gpu: dict | None = None
+
+
+class StatsTotals(BaseModel):
+    dictations: int
+    words: int
+    ms: int
+    """Dictation speed: words spoken per minute of recorded audio."""
+    avg_wpm: float
+    days_active: int
+
+
+class StatsStreak(BaseModel):
+    current: int
+    longest: int
+
+
+class StatsDay(BaseModel):
+    day: str
+    n: int
+    ms: int
+    words: int
+
+
+class StatsApp(BaseModel):
+    app: str
+    n: int
+    ms: int
+    words: int
+
+
+class StatsCleanup(BaseModel):
+    """What the cleanup pass and the dictionary did for you."""
+
+    applied: int
+    words_removed: int
+    dictionary_hits: int
+
+
+class StatsReview(BaseModel):
+    backlog: int
+    reviewed: int
+    eligible: int
+
+
+class WerPoint(BaseModel):
+    id: str
+    finished_at: str | None
+    wer_baseline: float | None
+    wer_candidate: float | None
+    status: str
+
+
+class Stats(BaseModel):
+    totals: StatsTotals
+    streak: StatsStreak
+    per_day: list[StatsDay]
+    by_app: list[StatsApp]
+    cleanup: StatsCleanup
+    review: StatsReview
+    wer_series: list[WerPoint]

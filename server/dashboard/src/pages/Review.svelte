@@ -1,13 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
 
-  import {
-    api,
-    errMsg,
-    type DictationDetail,
-    type Eligibility,
-    type ReviewAction,
-  } from '../api';
+  import { api, errMsg, type DictationDetail, type Eligibility, type ReviewAction } from '../api';
+  import { autosize } from '../lib/autosize';
   import AudioPlayer from '../lib/AudioPlayer.svelte';
   import EmptyState from '../lib/EmptyState.svelte';
   import Kbd from '../lib/Kbd.svelte';
@@ -40,7 +35,7 @@
 
   async function refreshBacklog(): Promise<void> {
     try {
-      backlog = (await api.stats()).review_backlog;
+      backlog = (await api.stats()).review.backlog;
     } catch {
       /* non-critical */
     }
@@ -64,6 +59,7 @@
   onMount(() => {
     void loadNext();
     void refreshBacklog();
+    return () => clearTimeout(flashTimer);
   });
 
   const ACTION_LABEL: Record<ReviewAction, string> = {
@@ -96,7 +92,7 @@
       const label = ACTION_LABEL[action];
       const style = res.polished_text != null ? ' · style pair saved' : '';
       flash = res.training_eligible
-        ? { ok: true, text: `${label} — eligible ✓${style}` }
+        ? { ok: true, text: `${label} — eligible${style}` }
         : { ok: false, text: `${label} — ${res.eligibility_reason ?? 'not eligible'}${style}` };
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => (flash = null), 3200);
@@ -199,34 +195,44 @@
         break;
     }
   }
+
+  const SHORTCUTS = [
+    { keys: ['Space'], label: 'play' },
+    { keys: ['R'], label: 'replay' },
+    { keys: ['1', '2', '3'], label: 'speed' },
+    { keys: ['↵'], label: 'accept' },
+    { keys: ['E'], label: 'edit' },
+    { keys: ['S'], label: 'skip' },
+    { keys: ['X'], label: 'exclude' },
+  ];
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="mx-auto flex min-h-full max-w-3xl flex-col px-6 py-8">
-  <header class="mb-6 flex items-start justify-between gap-4">
+<div class="mx-auto flex min-h-full max-w-3xl flex-col px-8 py-10">
+  <header class="mb-7 flex items-start justify-between gap-4">
     <div>
-      <h1 class="text-base font-semibold tracking-tight">Review</h1>
-      <p class="mt-0.5 text-[13px] text-muted">Listen, correct, feed the model.</p>
+      <h1 class="text-[20px] font-semibold tracking-tight">Review</h1>
+      <p class="mt-1 text-[13px] text-muted">
+        Listen, fix what was misheard, and una learns your voice.
+      </p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-none items-center gap-2">
       {#if flash}
-        <span class="chip {flash.ok ? 'chip-ok' : 'chip-warn'} max-w-72">
+        <span class="chip {flash.ok ? 'chip-ok' : 'chip-warn'} max-w-72 fade-in">
           <span class="chip-dot"></span><span class="truncate">{flash.text}</span>
         </span>
       {/if}
       {#if backlog !== null}
-        <span class="chip tabular-nums" title="Unreviewed dictations">
-          {backlog} in queue
-        </span>
+        <span class="chip tabular-nums" title="Dictations still waiting">{backlog} waiting</span>
       {/if}
     </div>
   </header>
 
   {#if error}
     <div
-      class="mb-4 flex items-center justify-between rounded-lg border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--color-danger) 30%, transparent); background: color-mix(in oklab, var(--color-danger) 7%, transparent); color: var(--color-danger)"
+      class="mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-[13px]"
+      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
     >
       <span>{error}</span>
       <button class="btn btn-sm" onclick={() => void loadNext()}>Retry</button>
@@ -235,50 +241,42 @@
 
   {#if loading}
     <div class="card overflow-hidden">
-      <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <div class="flex items-center gap-2 border-b border-border px-6 py-4">
         <Skeleton class="h-5 w-20" />
         <Skeleton class="h-5 w-28" />
       </div>
-      <div class="border-b border-border px-5 py-4">
-        <Skeleton class="h-8 w-full" />
-      </div>
-      <div class="space-y-2 px-5 py-5">
-        <Skeleton class="h-5 w-full" />
-        <Skeleton class="h-5 w-11/12" />
-        <Skeleton class="h-5 w-3/4" />
+      <div class="border-b border-border px-6 py-5"><Skeleton class="h-8 w-full" /></div>
+      <div class="space-y-2 px-6 py-6">
+        <Skeleton class="h-6 w-full" />
+        <Skeleton class="h-6 w-11/12" />
+        <Skeleton class="h-6 w-3/4" />
       </div>
     </div>
   {:else if item}
-    <div class="card overflow-hidden">
-      <div class="flex items-center gap-2.5 border-b border-border px-5 py-3 text-xs text-muted">
-        {#if item.app_name}
-          <span class="chip">{item.app_name}</span>
-        {/if}
+    <div class="card overflow-hidden rise-in">
+      <div class="flex flex-wrap items-center gap-2.5 border-b border-border px-6 py-3.5 text-[11px] text-muted">
+        {#if item.app_name}<span class="chip">{item.app_name}</span>{/if}
         <span>{fmtDate(item.created_at)}</span>
         <span class="text-faint">·</span>
         <span class="tabular-nums">{fmtDur(item.duration_ms)}</span>
-        {#if item.language}
-          <span class="text-faint uppercase">{item.language}</span>
-        {/if}
+        {#if item.language}<span class="text-faint uppercase">{item.language}</span>{/if}
         {#if item.eval_holdout}
           <span
             class="chip chip-warn"
-            title="Held out of training — this dictation measures WER instead"
+            title="Held out of training — this dictation measures accuracy instead"
           >
             holdout
           </span>
         {/if}
       </div>
 
-      <div class="border-b border-border px-5 py-4">
+      <div class="border-b border-border px-6 py-4">
         <AudioPlayer bind:this={player} src={api.audioUrl(item.id)} autoplay />
       </div>
 
-      <div class="px-5 py-4">
-        <div class="mb-2 flex items-baseline justify-between gap-4">
-          <span class="text-[11px] font-medium tracking-wide text-faint uppercase">
-            Raw transcript
-          </span>
+      <div class="px-6 py-5">
+        <div class="mb-2.5 flex items-baseline justify-between gap-4">
+          <span class="label">Raw transcript</span>
           <span class="text-[11px] text-faint italic">
             Fix what was said, not what you wish you'd said.
           </span>
@@ -286,57 +284,51 @@
         <textarea
           bind:this={textareaEl}
           bind:value={editor}
-          rows="5"
+          rows="1"
           spellcheck="false"
-          class="w-full resize-y rounded-md border border-transparent bg-transparent px-1 py-1 text-lg leading-relaxed transition-colors duration-150 focus:border-edge focus:bg-raised/40 focus:outline-none"
+          use:autosize={{ value: editor, min: 76 }}
+          class="w-full resize-none overflow-hidden rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[17px] leading-relaxed transition-colors duration-150 focus:border-edge focus:bg-raised/50 focus:outline-none"
           aria-label="Raw transcript editor"
           onkeydown={onRawKeydown}
         ></textarea>
 
         {#if item.cleaned_text}
-          <div class="mt-3 border-t border-border/60 pt-3">
-            <div class="mb-1 text-[11px] font-medium tracking-wide text-faint uppercase">
-              LLM-cleaned reference
-            </div>
-            <p class="text-sm leading-relaxed text-faint">{item.cleaned_text}</p>
+          <div class="mt-4 border-t border-border pt-3.5">
+            <div class="label mb-1.5">What una sent to your app</div>
+            <p class="text-[13px] leading-relaxed text-muted">{item.cleaned_text}</p>
           </div>
         {/if}
 
-        <div class="mt-3 border-t border-border/60 pt-3">
-          <div class="mb-1.5 flex items-baseline justify-between gap-4">
-            <span class="text-[11px] font-medium tracking-wide text-faint uppercase">
-              Final text
-            </span>
+        <div class="mt-4 border-t border-border pt-3.5">
+          <div class="mb-2 flex items-baseline justify-between gap-4">
+            <span class="label">Final text</span>
             <span class="text-[11px] text-faint italic">
-              Optional — how you want it written. Trains your personal style model.
+              Optional — how you'd have written it. Trains your style.
             </span>
           </div>
           <textarea
             bind:this={polishEl}
             bind:value={polishEditor}
-            rows="3"
+            rows="1"
             spellcheck="false"
-            class="w-full resize-y rounded-md border border-border/50 bg-transparent px-1.5 py-1 text-sm leading-relaxed text-muted transition-colors duration-150 focus:border-edge focus:bg-raised/40 focus:text-text focus:outline-none"
+            use:autosize={{ value: polishEditor, min: 56 }}
+            class="w-full resize-none overflow-hidden rounded-lg border border-border bg-transparent px-2 py-1.5 text-[13px] leading-relaxed text-muted transition-colors duration-150 focus:border-edge focus:bg-raised/50 focus:text-text focus:outline-none"
             aria-label="Final text editor"
           ></textarea>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 border-t border-border bg-raised/40 px-5 py-3">
+      <div class="flex items-center gap-2 border-t border-border bg-raised/40 px-6 py-3.5">
         {#if dirty}
           <button class="btn btn-primary" onclick={saveEdit} disabled={acting}>
             Save edit <Kbd>{isMac ? '⌘↵' : 'Ctrl ↵'}</Kbd>
           </button>
-          <button
-            class="btn btn-ghost"
-            onclick={() => (editor = item?.raw_text ?? '')}
-            disabled={acting}
-          >
+          <button class="btn btn-ghost" onclick={() => (editor = item?.raw_text ?? '')} disabled={acting}>
             Revert
           </button>
         {:else}
           <button class="btn btn-primary" onclick={accept} disabled={acting}>
-            Accept as-is <Kbd>↵</Kbd>
+            Sounds right <Kbd>↵</Kbd>
           </button>
         {/if}
         <div class="ml-auto flex items-center gap-2">
@@ -355,7 +347,7 @@
       >
         {#if eligibility}
           <div class="text-left">
-            <div class="mb-1.5 flex items-baseline justify-between text-xs">
+            <div class="mb-2 flex items-baseline justify-between text-[12px]">
               <span class="text-muted">Eligible training data</span>
               <span class="tabular-nums">
                 {eligibility.eligible_minutes.toFixed(1)} / {eligibility.threshold_minutes.toFixed(0)} min
@@ -363,16 +355,13 @@
             </div>
             <ProgressBar
               value={eligibility.eligible_minutes / Math.max(1e-9, eligibility.threshold_minutes)}
-              tone={eligibility.ready ? 'ok' : 'accent'}
             />
-            <div class="mt-1.5 flex items-center justify-between text-[11px] text-faint">
+            <div class="mt-2 flex items-center justify-between text-[11px] text-faint">
               <span class="tabular-nums">
-                {eligibility.eligible_pairs} pairs{typeof eligibility.style_pairs === 'number'
-                  ? ` · ${eligibility.style_pairs} style pairs collected`
-                  : ''}
+                {eligibility.eligible_pairs} pairs · {eligibility.style_pairs} style pairs
               </span>
               {#if eligibility.ready}
-                <a href="#/training" class="font-medium" style="color: var(--color-ok)">
+                <a href="#/training" class="font-semibold" style="color: var(--c-accent)">
                   Ready to train →
                 </a>
               {/if}
@@ -384,20 +373,16 @@
   {/if}
 
   <div class="mt-auto pt-10">
-    <div
-      class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-border pt-3 text-[11px] text-faint"
-    >
-      <span class="flex items-center gap-1.5"><Kbd>Space</Kbd> play / pause</span>
-      <span class="flex items-center gap-1.5"><Kbd>R</Kbd> replay</span>
-      <span class="flex items-center gap-1.5"><Kbd>1</Kbd><Kbd>2</Kbd><Kbd>3</Kbd> speed</span>
-      <span class="flex items-center gap-1.5"><Kbd>↵</Kbd> accept</span>
-      <span class="flex items-center gap-1.5"><Kbd>E</Kbd> edit</span>
+    <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-border pt-4 text-[11px] text-faint">
+      {#each SHORTCUTS as s (s.label)}
+        <span class="flex items-center gap-1.5">
+          {#each s.keys as k (k)}<Kbd>{k}</Kbd>{/each}
+          {s.label}
+        </span>
+      {/each}
       <span class="flex items-center gap-1.5">
         <Kbd>{isMac ? '⌘↵' : 'Ctrl ↵'}</Kbd> save edit
       </span>
-      <span class="flex items-center gap-1.5"><Kbd>S</Kbd> skip</span>
-      <span class="flex items-center gap-1.5"><Kbd>X</Kbd> exclude</span>
-      <span class="flex items-center gap-1.5"><Kbd>Esc</Kbd> leave editor</span>
     </div>
   </div>
 </div>

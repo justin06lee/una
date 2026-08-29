@@ -6,27 +6,31 @@
   import Skeleton from '../lib/Skeleton.svelte';
   import Toggle from '../lib/Toggle.svelte';
 
+  type Sort = 'used' | 'newest' | 'alpha';
+
   let entries = $state<DictionaryEntry[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // add row
-  let newPhrase = $state('');
-  let newSounds = $state('');
-  let newNotes = $state('');
+  let query = $state('');
+  let sort = $state<Sort>('used');
+
+  // Add form
+  let phrase = $state('');
+  let soundsLike = $state('');
+  let notes = $state('');
   let adding = $state(false);
   let addError = $state<string | null>(null);
+  let phraseEl = $state<HTMLInputElement>();
 
-  // inline edit
-  let editId = $state<string | null>(null);
+  // Inline edit
+  let editingId = $state<string | null>(null);
   let editPhrase = $state('');
   let editSounds = $state('');
   let editNotes = $state('');
   let saving = $state(false);
 
-  let confirmId = $state<string | null>(null);
-
-  onMount(() => void load());
+  let confirmDelete = $state<string | null>(null);
 
   async function load(): Promise<void> {
     loading = true;
@@ -40,50 +44,53 @@
     }
   }
 
-  async function add(): Promise<void> {
-    const phrase = newPhrase.trim();
-    if (!phrase || adding) return;
+  onMount(load);
+
+  async function add(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    const value = phrase.trim();
+    if (!value || adding) return;
     adding = true;
     addError = null;
     try {
-      const entry = await api.createDictionaryEntry({
-        phrase,
-        sounds_like: newSounds.trim() || null,
-        notes: newNotes.trim() || null,
+      const created = await api.createDictionaryEntry({
+        phrase: value,
+        sounds_like: soundsLike.trim() || null,
+        notes: notes.trim() || null,
       });
-      entries = [...entries, entry];
-      newPhrase = '';
-      newSounds = '';
-      newNotes = '';
-    } catch (e) {
-      addError = errMsg(e);
+      entries = [created, ...entries];
+      phrase = '';
+      soundsLike = '';
+      notes = '';
+      phraseEl?.focus();
+    } catch (err) {
+      addError = errMsg(err);
     } finally {
       adding = false;
     }
   }
 
   function startEdit(entry: DictionaryEntry): void {
-    editId = entry.id;
+    editingId = entry.id;
     editPhrase = entry.phrase;
     editSounds = entry.sounds_like ?? '';
     editNotes = entry.notes ?? '';
-    confirmId = null;
+    confirmDelete = null;
   }
 
   async function saveEdit(): Promise<void> {
-    if (!editId || saving) return;
-    const phrase = editPhrase.trim();
-    if (!phrase) return;
+    if (!editingId || saving) return;
+    const value = editPhrase.trim();
+    if (!value) return;
     saving = true;
-    error = null;
     try {
-      const updated = await api.patchDictionaryEntry(editId, {
-        phrase,
+      const updated = await api.patchDictionaryEntry(editingId, {
+        phrase: value,
         sounds_like: editSounds.trim() || null,
         notes: editNotes.trim() || null,
       });
-      entries = entries.map((e) => (e.id === updated.id ? updated : e));
-      editId = null;
+      entries = entries.map((x) => (x.id === updated.id ? updated : x));
+      editingId = null;
     } catch (e) {
       error = errMsg(e);
     } finally {
@@ -91,10 +98,10 @@
     }
   }
 
-  async function toggleActive(entry: DictionaryEntry): Promise<void> {
+  async function setActive(entry: DictionaryEntry, active: boolean): Promise<void> {
     try {
-      const updated = await api.patchDictionaryEntry(entry.id, { active: !entry.active });
-      entries = entries.map((e) => (e.id === updated.id ? updated : e));
+      const updated = await api.patchDictionaryEntry(entry.id, { active });
+      entries = entries.map((x) => (x.id === updated.id ? updated : x));
     } catch (e) {
       error = errMsg(e);
     }
@@ -103,228 +110,207 @@
   async function remove(id: string): Promise<void> {
     try {
       await api.deleteDictionaryEntry(id);
-      entries = entries.filter((e) => e.id !== id);
-      confirmId = null;
+      entries = entries.filter((x) => x.id !== id);
+      confirmDelete = null;
+      if (editingId === id) editingId = null;
     } catch (e) {
       error = errMsg(e);
     }
   }
 
-  function onAddKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      void add();
+  const visible = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? entries.filter(
+          (e) =>
+            e.phrase.toLowerCase().includes(q) ||
+            (e.sounds_like ?? '').toLowerCase().includes(q) ||
+            (e.notes ?? '').toLowerCase().includes(q),
+        )
+      : entries;
+    const rows = [...filtered];
+    switch (sort) {
+      case 'alpha':
+        return rows.sort((a, b) => a.phrase.localeCompare(b.phrase));
+      // Ids are ULIDs, so lexical order is creation order.
+      case 'newest':
+        return rows.sort((a, b) => b.id.localeCompare(a.id));
+      default:
+        return rows.sort((a, b) => b.hit_count - a.hit_count || a.phrase.localeCompare(b.phrase));
     }
-  }
+  });
 
-  function onEditKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      void saveEdit();
-    } else if (e.key === 'Escape') {
-      editId = null;
-    }
-  }
+  const SORTS: { k: Sort; l: string }[] = [
+    { k: 'used', l: 'Most used' },
+    { k: 'newest', l: 'Newest' },
+    { k: 'alpha', l: 'A–Z' },
+  ];
 </script>
 
-<div class="mx-auto max-w-5xl px-6 py-8">
-  <header class="mb-6">
-    <h1 class="text-base font-semibold tracking-tight">Dictionary</h1>
-    <p class="mt-0.5 text-[13px] text-muted">
-      Names and jargon the model should get right. Prompt injection is capped — the most-used
-      terms are prioritized.
+<div class="mx-auto max-w-3xl px-8 py-10">
+  <header class="mb-7">
+    <h1 class="text-[20px] font-semibold tracking-tight">Dictionary</h1>
+    <p class="mt-1 text-[13px] text-muted">
+      Names, jargon and acronyms una should always get right. These take effect on your very next
+      dictation — no training required.
     </p>
   </header>
 
+  <!-- Add ---------------------------------------------------------------- -->
+  <form class="card mb-6 p-5" onsubmit={add}>
+    <div class="grid gap-3 sm:grid-cols-[1fr_1fr]">
+      <label class="block">
+        <span class="label">Word or phrase</span>
+        <input
+          bind:this={phraseEl}
+          class="input mt-1.5"
+          bind:value={phrase}
+          placeholder="Figma"
+          maxlength="60"
+        />
+      </label>
+      <label class="block">
+        <span class="label">Often misheard as <span class="normal-case">(optional)</span></span>
+        <input class="input mt-1.5" bind:value={soundsLike} placeholder="figment, sigma" />
+      </label>
+    </div>
+    <label class="mt-3 block">
+      <span class="label">Note <span class="normal-case">(optional)</span></span>
+      <input class="input mt-1.5" bind:value={notes} placeholder="design tool we use" />
+    </label>
+    {#if addError}
+      <p class="mt-2.5 text-[12px]" style="color: var(--c-danger)">{addError}</p>
+    {/if}
+    <div class="mt-4 flex items-center justify-between gap-4">
+      <p class="text-[11px] text-faint">
+        The phrase biases transcription; the misheard spelling helps the cleanup pass fix it.
+      </p>
+      <button class="btn btn-primary" type="submit" disabled={!phrase.trim() || adding}>
+        {adding ? 'Adding…' : 'Add word'}
+      </button>
+    </div>
+  </form>
+
+  <!-- Filters ------------------------------------------------------------ -->
+  <div class="mb-3 flex flex-wrap items-center gap-2">
+    <div class="relative min-w-48 flex-1">
+      <svg
+        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+      </svg>
+      <input class="input pl-9" placeholder="Search words…" bind:value={query} aria-label="Search dictionary" />
+    </div>
+    <div class="seg">
+      {#each SORTS as s (s.k)}
+        <button type="button" class="seg-item" class:active={sort === s.k} onclick={() => (sort = s.k)}>
+          {s.l}
+        </button>
+      {/each}
+    </div>
+  </div>
+
   {#if error}
     <div
-      class="mb-4 rounded-lg border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--color-danger) 30%, transparent); background: color-mix(in oklab, var(--color-danger) 7%, transparent); color: var(--color-danger)"
+      class="mb-4 rounded-xl border px-4 py-2.5 text-[13px]"
+      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
     >
       {error}
     </div>
   {/if}
 
-  <div class="card overflow-x-auto">
-    <table class="w-full min-w-[640px] text-sm">
-      <thead>
-        <tr class="border-b border-border">
-          <th class="th w-[24%]">Phrase</th>
-          <th class="th w-[20%]">Sounds like</th>
-          <th class="th">Notes</th>
-          <th class="th w-16 !text-right">Uses</th>
-          <th class="th w-16">Active</th>
-          <th class="th w-28"><span class="sr-only">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-border">
-        <tr class="bg-raised/30">
-          <td class="px-3 py-2">
-            <input
-              class="input"
-              placeholder="Add a phrase…"
-              bind:value={newPhrase}
-              onkeydown={onAddKeydown}
-              aria-label="New phrase"
-            />
-          </td>
-          <td class="px-3 py-2">
-            <input
-              class="input"
-              placeholder="e.g. wisper, whispr"
-              bind:value={newSounds}
-              onkeydown={onAddKeydown}
-              aria-label="Sounds like"
-            />
-          </td>
-          <td class="px-3 py-2">
-            <input
-              class="input"
-              placeholder="Optional context"
-              bind:value={newNotes}
-              onkeydown={onAddKeydown}
-              aria-label="Notes"
-            />
-          </td>
-          <td class="px-3 py-2"></td>
-          <td class="px-3 py-2"></td>
-          <td class="px-3 py-2 text-right">
-            <button
-              class="btn btn-sm btn-primary"
-              onclick={() => void add()}
-              disabled={adding || !newPhrase.trim()}
-            >
-              Add
-            </button>
-          </td>
-        </tr>
-        {#if addError}
-          <tr>
-            <td colspan="6" class="px-3 py-2 text-xs" style="color: var(--color-danger)">
-              {addError}
-            </td>
-          </tr>
-        {/if}
-
-        {#if loading}
-          {#each Array(4) as _, i (i)}
-            <tr>
-              <td class="px-3 py-3"><Skeleton class="h-4 w-24" /></td>
-              <td class="px-3 py-3"><Skeleton class="h-4 w-20" /></td>
-              <td class="px-3 py-3"><Skeleton class="h-4 w-32" /></td>
-              <td class="px-3 py-3"><Skeleton class="ml-auto h-4 w-6" /></td>
-              <td class="px-3 py-3"><Skeleton class="h-4 w-8" /></td>
-              <td></td>
-            </tr>
-          {/each}
-        {:else}
-          {#each entries as entry (entry.id)}
-            <tr class="group transition-colors duration-150 hover:bg-hover/50">
-              {#if editId === entry.id}
-                <td class="px-3 py-2">
-                  <input
-                    class="input"
-                    bind:value={editPhrase}
-                    onkeydown={onEditKeydown}
-                    aria-label="Phrase"
-                  />
-                </td>
-                <td class="px-3 py-2">
-                  <input
-                    class="input"
-                    bind:value={editSounds}
-                    onkeydown={onEditKeydown}
-                    aria-label="Sounds like"
-                  />
-                </td>
-                <td class="px-3 py-2">
-                  <input
-                    class="input"
-                    bind:value={editNotes}
-                    onkeydown={onEditKeydown}
-                    aria-label="Notes"
-                  />
-                </td>
-                <td class="px-3 py-2 text-right text-xs text-faint tabular-nums">
-                  {entry.hit_count}
-                </td>
-                <td class="px-3 py-2">
-                  <Toggle
-                    checked={entry.active}
-                    onchange={() => void toggleActive(entry)}
-                    label="Active"
-                  />
-                </td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">
-                  <button
-                    class="btn btn-sm btn-primary"
-                    onclick={() => void saveEdit()}
-                    disabled={saving || !editPhrase.trim()}
-                  >
-                    Save
-                  </button>
-                  <button class="btn btn-sm btn-ghost" onclick={() => (editId = null)}>
-                    Cancel
-                  </button>
-                </td>
-              {:else}
-                <td class="px-3 py-2.5 font-medium" class:opacity-50={!entry.active}>
-                  {entry.phrase}
-                </td>
-                <td class="px-3 py-2.5 text-muted" class:opacity-50={!entry.active}>
-                  {entry.sounds_like ?? '—'}
-                </td>
-                <td
-                  class="max-w-0 truncate px-3 py-2.5 text-muted"
-                  class:opacity-50={!entry.active}
-                  title={entry.notes ?? undefined}
-                >
-                  {entry.notes ?? '—'}
-                </td>
-                <td class="px-3 py-2.5 text-right text-muted tabular-nums">{entry.hit_count}</td>
-                <td class="px-3 py-2.5">
-                  <Toggle
-                    checked={entry.active}
-                    onchange={() => void toggleActive(entry)}
-                    label="Active"
-                  />
-                </td>
-                <td class="px-3 py-2.5 text-right whitespace-nowrap">
-                  {#if confirmId === entry.id}
-                    <button class="btn btn-sm btn-danger" onclick={() => void remove(entry.id)}>
-                      Delete?
-                    </button>
-                    <button class="btn btn-sm btn-ghost" onclick={() => (confirmId = null)}>
-                      Cancel
-                    </button>
-                  {:else}
-                    <span
-                      class="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
-                    >
-                      <button class="btn btn-sm btn-ghost" onclick={() => startEdit(entry)}>
-                        Edit
-                      </button>
-                      <button
-                        class="btn btn-sm btn-ghost btn-danger"
-                        onclick={() => (confirmId = entry.id)}
-                      >
-                        Delete
-                      </button>
+  <!-- List --------------------------------------------------------------- -->
+  {#if loading}
+    <div class="space-y-2">
+      {#each [0, 1, 2] as i (i)}<Skeleton class="h-14 w-full" />{/each}
+    </div>
+  {:else if visible.length === 0}
+    <div class="card">
+      <EmptyState
+        title={query ? 'No matches' : 'No words yet'}
+        sub={query
+          ? 'Nothing in your dictionary matches that search.'
+          : 'Add the names and jargon una keeps getting wrong.'}
+      />
+    </div>
+  {:else}
+    <div class="card divide-y divide-border overflow-hidden">
+      {#each visible as entry (entry.id)}
+        <div class="px-5 py-3.5" class:opacity-55={!entry.active}>
+          {#if editingId === entry.id}
+            <div class="grid gap-2.5 sm:grid-cols-2">
+              <input class="input" bind:value={editPhrase} aria-label="Phrase" />
+              <input class="input" bind:value={editSounds} placeholder="often misheard as…" aria-label="Sounds like" />
+            </div>
+            <input class="input mt-2.5" bind:value={editNotes} placeholder="note" aria-label="Note" />
+            <div class="mt-3 flex gap-2">
+              <button class="btn btn-primary btn-sm" onclick={saveEdit} disabled={saving || !editPhrase.trim()}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick={() => (editingId = null)}>Cancel</button>
+            </div>
+          {:else}
+            <div class="flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-2">
+                  <span class="text-[14px] font-semibold">{entry.phrase}</span>
+                  {#if entry.sounds_like}
+                    <span class="text-[12px] text-faint">
+                      often heard as <span class="italic">{entry.sounds_like}</span>
                     </span>
                   {/if}
-                </td>
-              {/if}
-            </tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
+                </div>
+                {#if entry.notes}
+                  <p class="mt-0.5 text-[12px] text-muted">{entry.notes}</p>
+                {/if}
+              </div>
 
-    {#if !loading && entries.length === 0}
-      <EmptyState
-        title="No dictionary entries"
-        sub="Add product names, acronyms, or people the transcriber keeps mishearing."
-      />
-    {/if}
-  </div>
+              <div class="flex flex-none items-center gap-2">
+                <span
+                  class="chip tabular-nums"
+                  title="Times this phrase appeared in a transcript"
+                  class:chip-accent={entry.hit_count > 0}
+                >
+                  {entry.hit_count}×
+                </span>
+                <Toggle
+                  checked={entry.active}
+                  onchange={(v) => void setActive(entry, v)}
+                  label="Active"
+                />
+                <button class="btn btn-ghost btn-sm" onclick={() => startEdit(entry)}>Edit</button>
+                {#if confirmDelete === entry.id}
+                  <button class="btn btn-danger btn-sm" onclick={() => void remove(entry.id)}>
+                    Delete
+                  </button>
+                  <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = null)}>
+                    Cancel
+                  </button>
+                {:else}
+                  <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = entry.id)}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                      <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+                    </svg>
+                    <span class="sr-only">Delete {entry.phrase}</span>
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+    <p class="mt-3 text-center text-[11px] text-faint">
+      {visible.length} word{visible.length === 1 ? '' : 's'}
+      {#if entries.some((e) => !e.active)}· inactive words are kept but ignored{/if}
+    </p>
+  {/if}
 </div>
