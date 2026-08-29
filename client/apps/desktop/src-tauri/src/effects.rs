@@ -1,12 +1,13 @@
 //! The controller's effect runner: bridges FSM effects to the audio engine,
 //! HTTP uploads, text injection, and the HUD window.
 
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 use una_core::audio::AudioEngine;
 use una_core::config::Config;
+use una_core::endpoint::EndpointResolver;
 use una_core::net::{ApiClient, DictationRequest};
 use una_core::state::{ControllerHandle, EffectRunner, ErrKind, Event};
 
@@ -18,6 +19,7 @@ pub struct TauriEffects {
     engine: Arc<AudioEngine>,
     api: ApiClient,
     config: Arc<RwLock<Config>>,
+    endpoints: Arc<EndpointResolver>,
 }
 
 impl TauriEffects {
@@ -26,12 +28,14 @@ impl TauriEffects {
         engine: Arc<AudioEngine>,
         api: ApiClient,
         config: Arc<RwLock<Config>>,
+        endpoints: Arc<EndpointResolver>,
     ) -> Self {
         Self {
             app,
             engine,
             api,
             config,
+            endpoints,
         }
     }
 
@@ -69,44 +73,19 @@ impl EffectRunner for TauriEffects {
         };
         let api = self.api.clone();
         let config = self.config.clone();
+        let endpoints = self.endpoints.clone();
         tauri::async_runtime::spawn(async move {
-            let (manual_url, autodiscover) = {
+            let (urls, autodiscover) = {
                 let cfg = config.read().unwrap();
-                (cfg.server.url.trim().to_string(), cfg.server.autodiscover)
+                (cfg.server.urls.clone(), cfg.server.autodiscover)
             };
 
-            // Resolve the server: manual URL always wins; otherwise the cached
-            // mDNS result, browsing only when the cache is empty (a 2s browse
-            // per dictation is real latency).
-            let base = if !manual_url.is_empty() {
-                Some(manual_url)
-            } else if autodiscover {
-                match discovered_url() {
-                    Some(url) => Some(url),
-                    None => {
-                        let found = tauri::async_runtime::spawn_blocking(|| {
-                            una_core::discovery::discover(Duration::from_secs(2))
-                        })
-                        .await
-                        .ok()
-                        .and_then(|list| list.into_iter().next())
-                        .map(|s| s.url);
-                        if let Some(url) = &found {
-                            set_discovered_url(Some(url.clone()));
-                        }
-                        found
-                    }
-                }
-            } else {
-                None
-            };
-
-            let Some(base) = base else {
+            let Some(base) = endpoints.resolve(&urls, autodiscover).await else {
                 let _ = una_core::spool::save(&wav);
                 controller.event(Event::UploadErr {
                     session,
                     kind: ErrKind::Connect,
-                    message: "No una server configured or discovered".into(),
+                    message: no_server_message(&urls, autodiscover),
                     retryable: true,
                     at: Instant::now(),
                 });
@@ -120,7 +99,24 @@ impl EffectRunner for TauriEffects {
                     .flatten();
 
             let request = DictationRequest::new(wav, app_name);
-            match api.dictate(&base, &request).await {
+            let mut result = api.dictate(&base, &request).await;
+
+            // A transport failure usually means the cached endpoint is no
+            // longer the right one — the laptop moved between the home LAN and
+            // a remote network. Re-probe and, if that turns up a *different*
+            // endpoint, send the same utterance there. The server dedupes on
+            // utterance_id, so a retry can never produce a second dictation.
+            if matches!(&result, Err(e) if e.retryable()) {
+                endpoints.invalidate();
+                if let Some(next) = endpoints.resolve(&urls, autodiscover).await {
+                    if next != base {
+                        tracing::info!("endpoint moved {base} -> {next}; retrying dictation");
+                        result = api.dictate(&next, &request).await;
+                    }
+                }
+            }
+
+            match result {
                 Ok(resp) => {
                     // A retried dictation just landed; drop its spool entry.
                     match una_core::spool::remove_latest_if_matches(&request.wav) {
@@ -136,8 +132,7 @@ impl EffectRunner for TauriEffects {
                 Err(err) => {
                     tracing::warn!("dictation upload failed: {err}");
                     if matches!(err.kind(), ErrKind::Connect | ErrKind::Timeout) {
-                        // The cached server may have moved; re-browse next time.
-                        set_discovered_url(None);
+                        endpoints.invalidate();
                     }
                     if let Err(e) = una_core::spool::save(&request.wav) {
                         tracing::warn!("could not spool failed dictation: {e}");
@@ -207,16 +202,15 @@ fn injector() -> &'static dyn una_platform::TextInjector {
     INJECTOR.get_or_init(una_platform::injector).as_ref()
 }
 
-/// Last mDNS-discovered server URL, invalidated when a connection fails.
-fn discovery_cache() -> &'static Mutex<Option<String>> {
-    static CACHE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(None))
-}
-
-fn discovered_url() -> Option<String> {
-    discovery_cache().lock().unwrap().clone()
-}
-
-fn set_discovered_url(url: Option<String>) {
-    *discovery_cache().lock().unwrap() = url;
+/// What to tell the user when no configured endpoint answered.
+fn no_server_message(urls: &[String], autodiscover: bool) -> String {
+    if urls.is_empty() && !autodiscover {
+        "No una server configured — add one in Settings".into()
+    } else if urls.is_empty() {
+        "No una server found on this network".into()
+    } else if urls.len() == 1 {
+        "Can't reach your una server".into()
+    } else {
+        format!("Can't reach your una server (tried {} addresses)", urls.len())
+    }
 }

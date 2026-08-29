@@ -107,6 +107,7 @@ fn main() {
             commands::hotkey_capture_supported,
             commands::capture_hotkey,
             commands::cancel_hotkey_capture,
+            commands::probe_endpoints,
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -120,12 +121,17 @@ fn main() {
             windows::create_hud(&handle, pill)?;
             windows::create_settings(&handle)?;
 
+            // One resolver shared by the dictation path and the settings
+            // window, so both agree on which endpoint is live.
+            let endpoints = Arc::new(una_core::endpoint::EndpointResolver::new(ApiClient::new()));
+
             // Controller actor with the tauri effect runner.
             let runner = effects::TauriEffects::new(
                 handle.clone(),
                 engine.clone(),
                 ApiClient::new(),
                 config.clone(),
+                endpoints.clone(),
             );
             // Controller::spawn needs a tokio runtime context; setup runs on
             // the main thread, so enter tauri's runtime for the spawn.
@@ -147,6 +153,7 @@ fn main() {
                 engine: engine.clone(),
                 api: ApiClient::new(),
                 config: config.clone(),
+                endpoints: endpoints.clone(),
                 tray_toggle: Mutex::new(None),
                 last_snapshot: Arc::new(Mutex::new(Snapshot::Idle)),
             };

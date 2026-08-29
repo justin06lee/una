@@ -31,13 +31,21 @@ pub fn set_config(
     if !matches!(config.ui.hud_mode.as_str(), "pill" | "flash") {
         return Err(format!("invalid hud mode {:?}", config.ui.hud_mode));
     }
-    let url = config.server.url.trim();
-    if !url.is_empty() && !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err("server URL must start with http:// or https://".into());
+    for url in &config.server.urls {
+        let url = url.trim();
+        if url.is_empty() {
+            continue;
+        }
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err(format!("server address {url:?} must start with http:// or https://"));
+        }
     }
     if config.insert.restore_delay_ms > 10_000 {
         return Err("restore delay must be at most 10000 ms".into());
     }
+
+    let mut config = config;
+    config.normalize();
 
     let previous = state.config_snapshot();
     una_core::config::save(&config).map_err(|e| e.to_string())?;
@@ -60,6 +68,10 @@ pub fn set_config(
             input_device: config.audio.input_device.clone(),
             prefer_builtin: config.audio.prefer_builtin,
         });
+    }
+    if previous.server != config.server {
+        // The candidate list changed; stop using whatever was resolved from it.
+        state.endpoints.invalidate();
     }
     if previous.general.launch_at_login != config.general.launch_at_login {
         use tauri_plugin_autostart::ManagerExt as _;
@@ -88,14 +100,23 @@ pub async fn health_check(
     state: State<'_, AppState>,
     url: Option<String>,
 ) -> Result<serde_json::Value, String> {
+    // No explicit URL: report on whichever endpoint the client would actually
+    // use right now, so the dot in Settings matches dictation behaviour.
     let base = match url.filter(|u| !u.trim().is_empty()) {
         Some(u) => u,
         None => {
-            let configured = state.config_snapshot().server.url.trim().to_string();
-            if configured.is_empty() {
-                return Err("no server configured".into());
-            }
-            configured
+            let cfg = state.config_snapshot();
+            state
+                .endpoints
+                .resolve(&cfg.server.urls, cfg.server.autodiscover)
+                .await
+                .ok_or_else(|| {
+                    if cfg.server.urls.is_empty() {
+                        "no server configured".to_string()
+                    } else {
+                        "none of your server addresses answered".to_string()
+                    }
+                })?
         }
     };
     let health = state.api.health(&base).await.map_err(|e| e.to_string())?;
@@ -128,6 +149,37 @@ pub async fn permissions_status() -> Result<PermissionsStatus, String> {
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+pub struct EndpointStatus {
+    url: String,
+    reachable: bool,
+    /// Round-trip time of the probe, for picking the better address.
+    ms: u64,
+}
+
+/// Probe every configured address so the settings window can show which ones
+/// work from where you are right now.
+#[tauri::command]
+pub async fn probe_endpoints(state: State<'_, AppState>) -> Result<Vec<EndpointStatus>, String> {
+    let cfg = state.config_snapshot();
+    let api = state.api.clone();
+    let mut out = Vec::with_capacity(cfg.server.urls.len());
+    // Sequential on purpose: a handful of addresses, and the per-endpoint
+    // timings are only comparable when they don't contend for the uplink.
+    for url in cfg.server.urls {
+        let started = std::time::Instant::now();
+        let reachable = api
+            .reachable(&url, una_core::endpoint::PROBE_TIMEOUT)
+            .await;
+        out.push(EndpointStatus {
+            url,
+            reachable,
+            ms: started.elapsed().as_millis() as u64,
+        });
+    }
+    Ok(out)
 }
 
 #[tauri::command]

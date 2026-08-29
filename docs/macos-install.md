@@ -107,9 +107,11 @@ resets the grants of every app on the system.
 ## First run checklist
 
 1. Launch Una; the star badge appears in the menu bar.
-2. Tray → **Settings… → Server**: enter your server URL, or click
-   **Discover** to find `_una._tcp` servers on the LAN. The dot next to the
-   URL turns green when `/v1/health` answers.
+2. Tray → **Settings… → Server**: add your server's address, or click
+   **Discover** to find `_una._tcp` servers on the LAN. The dot next to each
+   address turns green when `/v1/health` answers. Add a VPN address too if you
+   want to dictate away from home — see
+   [remote-access.md](remote-access.md).
 3. Settings → **Audio** → **Test**: speak; the meter should move.
 4. Hold `Ctrl+Alt+Space`, speak, release. The HUD shows live level bars,
    then a shimmer while transcribing, then the text is pasted where your

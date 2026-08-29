@@ -32,9 +32,10 @@ actually better.
 
 ## ⚠️ Security model
 
-una has **no authentication** by design — it is a LAN tool. The server holds recordings of
-everything you dictate and can swap the model it serves. **Never port-forward it to the
-internet.** For remote use, put the server behind Tailscale/WireGuard, or bind it to
+una has **no authentication** by design — it is a private-network tool. The server holds
+recordings of everything you dictate and can swap the model it serves. **Never port-forward it
+to the internet.** To use it away from home, put the server on a private network
+(Tailscale/WireGuard) — see [docs/remote-access.md](docs/remote-access.md) — or bind it to
 `127.0.0.1` and SSH-tunnel.
 
 ## Server quickstart (NVIDIA GPU Linux box)
@@ -80,6 +81,14 @@ accessibility permissions, then hold `Ctrl+Alt+Space` and talk. Three hotkey mod
 **hold** (push-to-talk), **toggle** (tap to start/stop), **hybrid** (default — a quick tap
 latches, a hold behaves like push-to-talk).
 
+### Dictating from anywhere
+
+Settings → Server takes a **list** of addresses and each dictation goes to whichever answers
+first, so the same setup works on your home network and on a hotel one. Put the LAN address
+first for speed and a VPN address (Tailscale/WireGuard) after it; **Test all** shows which are
+reachable from where you are. Full walkthrough, including the Tailscale key-expiry trap that
+silently kills remote access months later: [docs/remote-access.md](docs/remote-access.md).
+
 ## The self-improvement loop
 
 1. Every dictation stores the audio, the raw Whisper transcript, and the LLM-cleaned text.
@@ -113,7 +122,7 @@ injected into Whisper's decoding prompt and the cleanup prompt immediately.
 - `server/` — FastAPI + faster-whisper + Ollama client + training pipeline (Python, uv)
 - `server/dashboard/` — web dashboard (Svelte 5 + Vite + Tailwind 4)
 - `client/` — desktop client (Rust workspace + Tauri v2, Svelte HUD/settings)
-- `docs/` — install + platform notes
+- `docs/` — install, platform, and remote-access notes
 
 ## Development
 
