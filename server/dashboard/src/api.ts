@@ -123,7 +123,15 @@ export interface Health {
 export interface StatsDay {
   day: string;
   n: number;
-  ms: number | null;
+  ms: number;
+  words: number;
+}
+
+export interface StatsApp {
+  app: string;
+  n: number;
+  ms: number;
+  words: number;
 }
 
 export interface WerPoint {
@@ -135,8 +143,19 @@ export interface WerPoint {
 }
 
 export interface Stats {
+  totals: {
+    dictations: number;
+    words: number;
+    ms: number;
+    /** Words spoken per minute of recorded audio. */
+    avg_wpm: number;
+    days_active: number;
+  };
+  streak: { current: number; longest: number };
   per_day: StatsDay[];
-  review_backlog: number;
+  by_app: StatsApp[];
+  cleanup: { applied: number; words_removed: number; dictionary_hits: number };
+  review: { backlog: number; reviewed: number; eligible: number };
   wer_series: WerPoint[];
 }
 

@@ -1,10 +1,17 @@
-/** Tiny hash router: #/review, #/history, ... No dependency needed. */
+/** Tiny hash router: #/home, #/review, ... No dependency needed. */
 
-const DEFAULT_PATH = '/review';
+const DEFAULT_PATH = '/home';
+
+/** Routes that moved when the dashboard was reorganised around Home/Insights. */
+const ALIASES: Record<string, string> = {
+  '/history': '/home',
+  '/stats': '/insights',
+};
 
 function parse(): string {
   const h = window.location.hash.slice(1);
-  return h.startsWith('/') ? h : DEFAULT_PATH;
+  const path = h.startsWith('/') ? h : DEFAULT_PATH;
+  return ALIASES[path] ?? path;
 }
 
 class Router {
