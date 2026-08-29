@@ -1,14 +1,26 @@
-"""Health + stats."""
+"""Health + usage statistics."""
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from ..schemas import Health
+from ..schemas import (
+    Health,
+    Stats,
+    StatsApp,
+    StatsCleanup,
+    StatsDay,
+    StatsReview,
+    StatsStreak,
+    StatsTotals,
+    WerPoint,
+)
 from ..state import AppState
 from .deps import get_state
 
@@ -43,23 +55,141 @@ async def health(state: State) -> Health:
     )
 
 
-@router.get("/stats")
-async def stats(state: State) -> dict:
+def _word_count(expr: str) -> str:
+    """SQL word count for a text expression.
+
+    Counts space-delimited runs after flattening newlines and collapsing double
+    spaces. Transcripts are single-spaced prose, so the error is negligible and
+    the whole aggregation stays inside SQLite rather than pulling every
+    transcript into Python.
+    """
+    flat = (
+        "trim(replace(replace(replace(replace("
+        f"coalesce({expr}, ''), char(10), ' '), char(13), ' '), '  ', ' '), '  ', ' '))"
+    )
+    return (
+        f"CASE WHEN {flat} = '' THEN 0 "
+        f"ELSE length({flat}) - length(replace({flat}, ' ', '')) + 1 END"
+    )
+
+
+# The text the user actually received: cleaned when cleanup succeeded, else raw.
+FINAL_TEXT = "CASE WHEN d.cleanup_applied = 1 THEN d.cleaned_text ELSE d.raw_text END"
+FINAL_WORDS = _word_count(FINAL_TEXT)
+RAW_WORDS = _word_count("d.raw_text")
+CLEANED_WORDS = _word_count("d.cleaned_text")
+
+
+def _streaks(days: list[str], today: date) -> StatsStreak:
+    """Current and longest run of consecutive UTC days with at least one dictation.
+
+    The current streak counts back from today, tolerating a gap of one day so a
+    streak isn't reported as broken before the user has dictated today.
+    """
+    if not days:
+        return StatsStreak(current=0, longest=0)
+    parsed = sorted({date.fromisoformat(d) for d in days})
+
+    longest = run = 1
+    for previous, current in pairwise(parsed):
+        run = run + 1 if current - previous == timedelta(days=1) else 1
+        longest = max(longest, run)
+
+    latest = parsed[-1]
+    if (today - latest).days > 1:
+        return StatsStreak(current=0, longest=longest)
+    current_streak = 1
+    seen = set(parsed)
+    cursor = latest
+    while cursor - timedelta(days=1) in seen:
+        cursor -= timedelta(days=1)
+        current_streak += 1
+    return StatsStreak(current=current_streak, longest=longest)
+
+
+@router.get("/stats", response_model=Stats)
+async def stats(state: State) -> Stats:
     async with state.db.execute(
-        """SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n, SUM(duration_ms) AS ms
-           FROM dictations WHERE deleted = 0 GROUP BY day ORDER BY day DESC LIMIT 60"""
+        f"""SELECT substr(d.created_at, 1, 10) AS day, COUNT(*) AS n,
+                   COALESCE(SUM(d.duration_ms), 0) AS ms,
+                   COALESCE(SUM({FINAL_WORDS}), 0) AS words
+            FROM dictations d WHERE d.deleted = 0
+            GROUP BY day ORDER BY day DESC LIMIT 400"""
     ) as cur:
-        per_day = [dict(r) for r in await cur.fetchall()]
+        per_day = [StatsDay(**dict(r)) for r in await cur.fetchall()]
+
     async with state.db.execute(
-        """SELECT COUNT(*) AS n FROM dictations d
-           LEFT JOIN corrections c ON c.dictation_id = d.id
-           WHERE d.deleted = 0 AND (c.action IS NULL OR c.action = 'skipped')"""
+        f"""SELECT COALESCE(NULLIF(TRIM(d.app_name), ''), 'Unknown') AS app,
+                   COUNT(*) AS n, COALESCE(SUM(d.duration_ms), 0) AS ms,
+                   COALESCE(SUM({FINAL_WORDS}), 0) AS words
+            FROM dictations d WHERE d.deleted = 0
+            GROUP BY app ORDER BY words DESC, n DESC LIMIT 12"""
     ) as cur:
-        backlog = (await cur.fetchone())["n"]
+        by_app = [StatsApp(**dict(r)) for r in await cur.fetchall()]
+
+    async with state.db.execute(
+        f"""SELECT COUNT(*) AS dictations, COALESCE(SUM(d.duration_ms), 0) AS ms,
+                   COALESCE(SUM({FINAL_WORDS}), 0) AS words
+            FROM dictations d WHERE d.deleted = 0"""
+    ) as cur:
+        totals_row = await cur.fetchone()
+
+    # Filler words and false starts the cleanup pass stripped out. Clamped at 0
+    # per row so a cleanup that legitimately expanded the text can't subtract.
+    async with state.db.execute(
+        f"""SELECT COUNT(*) AS applied,
+                   COALESCE(SUM(MAX({RAW_WORDS} - {CLEANED_WORDS}, 0)), 0) AS words_removed
+            FROM dictations d WHERE d.deleted = 0 AND d.cleanup_applied = 1"""
+    ) as cur:
+        cleanup_row = await cur.fetchone()
+
+    async with state.db.execute(
+        "SELECT COALESCE(SUM(hit_count), 0) AS hits FROM dictionary_entries"
+    ) as cur:
+        dictionary_hits = (await cur.fetchone())["hits"]
+
+    async with state.db.execute(
+        """SELECT
+             SUM(CASE WHEN c.action IS NULL OR c.action = 'skipped' THEN 1 ELSE 0 END) AS backlog,
+             SUM(CASE WHEN c.action IS NOT NULL AND c.action != 'skipped' THEN 1 ELSE 0 END) AS reviewed,
+             SUM(CASE WHEN c.training_eligible = 1 THEN 1 ELSE 0 END) AS eligible
+           FROM dictations d LEFT JOIN corrections c ON c.dictation_id = d.id
+           WHERE d.deleted = 0"""
+    ) as cur:
+        review_row = await cur.fetchone()
+
     async with state.db.execute(
         """SELECT id, finished_at, wer_baseline, wer_candidate, status
            FROM training_runs WHERE wer_candidate IS NOT NULL AND kind = 'asr'
            ORDER BY id ASC"""
     ) as cur:
-        wer_series = [dict(r) for r in await cur.fetchall()]
-    return {"per_day": per_day, "review_backlog": backlog, "wer_series": wer_series}
+        wer_series = [WerPoint(**dict(r)) for r in await cur.fetchall()]
+
+    total_ms = totals_row["ms"]
+    total_words = totals_row["words"]
+    minutes = total_ms / 60_000
+    totals = StatsTotals(
+        dictations=totals_row["dictations"],
+        words=total_words,
+        ms=total_ms,
+        avg_wpm=round(total_words / minutes, 1) if minutes > 0 else 0.0,
+        days_active=len(per_day),
+    )
+
+    return Stats(
+        totals=totals,
+        streak=_streaks([d.day for d in per_day], datetime.now(UTC).date()),
+        per_day=per_day,
+        by_app=by_app,
+        cleanup=StatsCleanup(
+            applied=cleanup_row["applied"],
+            words_removed=cleanup_row["words_removed"],
+            dictionary_hits=dictionary_hits,
+        ),
+        review=StatsReview(
+            backlog=review_row["backlog"] or 0,
+            reviewed=review_row["reviewed"] or 0,
+            eligible=review_row["eligible"] or 0,
+        ),
+        wer_series=wer_series,
+    )
