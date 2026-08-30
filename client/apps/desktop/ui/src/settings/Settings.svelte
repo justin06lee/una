@@ -806,19 +806,6 @@
     width: 90px;
   }
 
-  .url-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    justify-content: flex-end;
-  }
-
-  .url-group input {
-    flex: 1;
-    max-width: 340px;
-  }
-
   /* -------------------------------------------------------------- buttons */
   .btn {
     appearance: none;

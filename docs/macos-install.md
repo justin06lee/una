@@ -32,8 +32,9 @@ cargo tauri build
 
 There is also a `Makefile` in `client/` — a bare `make` builds the UI and the
 app bundle, resets stale permission grants, installs `Una.app` into
-`/Applications` plus the `una` CLI into `/usr/local/bin`, and launches the
-app.
+`/Applications` plus the `una` CLI into `/usr/local/bin` (or `~/.local/bin`
+when `/usr/local/bin` is root-owned, as it is on a stock macOS), and launches
+the app.
 
 The `una` CLI helper builds with the workspace:
 

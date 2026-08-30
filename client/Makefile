@@ -6,7 +6,9 @@ BUNDLE_ID := sh.tenet.una
 APP       := Una
 APP_PATH  := target/release/bundle/macos/$(APP).app
 CLI_BIN   := target/release/una
-PREFIX    := /usr/local/bin
+# /usr/local/bin is root-owned on a stock macOS; fall back to ~/.local/bin
+# rather than failing the whole install on a permission error.
+PREFIX    := $(shell if [ -w /usr/local/bin ]; then echo /usr/local/bin; else echo $$HOME/.local/bin; fi)
 UI_DIR    := apps/desktop/ui
 UNAME_S   := $(shell uname -s)
 
@@ -19,11 +21,14 @@ endif
 	$(MAKE) install
 	$(MAKE) launch
 
+# `--bundles app` stops at Una.app: that is all `install` needs, and skipping
+# the dmg keeps the golden path from re-running hdiutil on every rebuild.
+# Linking is fat-LTO'd, so the last cargo step sits at 100% for a while — that
+# is the linker working, not a hang.
 build: ui
 ifeq ($(UNAME_S),Darwin)
 	$(MAKE) tauri-cli
-	cargo tauri build --no-bundle || cargo build --release -p una-desktop
-	cargo tauri build 2>/dev/null || true
+	cargo tauri build --bundles app
 else
 	cargo build --release -p una-desktop
 endif
@@ -36,13 +41,15 @@ tauri-cli:
 	@command -v cargo-tauri >/dev/null 2>&1 || cargo install tauri-cli --locked
 
 install:
+	@mkdir -p $(PREFIX)
 ifeq ($(UNAME_S),Darwin)
 	@if [ -d "$(APP_PATH)" ]; then \
 		rm -rf "/Applications/$(APP).app"; \
 		cp -R "$(APP_PATH)" /Applications/; \
 		echo "installed /Applications/$(APP).app"; \
 	else \
-		echo "no .app bundle found (tauri-cli bundle step skipped?); binary at target/release/una-desktop"; \
+		echo "no $(APP_PATH) — the bundle step did not run; nothing installed" >&2; \
+		exit 1; \
 	fi
 else
 	install -m 755 target/release/una-desktop $(PREFIX)/una-desktop

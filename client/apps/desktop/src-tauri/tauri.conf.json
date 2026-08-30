@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bun run --cwd ../ui dev",
-    "beforeBuildCommand": "bun run --cwd ../ui build"
+    "beforeDevCommand": { "script": "bun run dev", "cwd": "../ui" },
+    "beforeBuildCommand": { "script": "bun run build", "cwd": "../ui" }
   },
   "app": {
     "macOSPrivateApi": true,
