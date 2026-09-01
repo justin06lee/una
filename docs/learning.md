@@ -12,7 +12,7 @@ Every paste ends in exactly one of these:
 
 | What you do | What is filed | Where the pair goes |
 |---|---|---|
-| Nothing — you keep working | `accepted` | Confirms the transcript. Trains both models. |
+| Nothing — you keep working | `accepted` | Confirms the transcript. ASR pair only. |
 | Fix a word or two | `edited` | Your text becomes the ASR + style target. |
 | Delete the whole thing | `excluded` | Marks the utterance as not worth training on. |
 | Edit text una *didn't* paste | nothing | Not a correction; ignored. |
@@ -25,6 +25,18 @@ The server applies its usual eligibility filter to whatever arrives — an "edit
 normalized edit distance from the raw transcript exceeds `training.max_edit_distance` (0.30)
 is stored but marked ineligible, because rewriting the content of a sentence would teach the
 model to paraphrase rather than to hear.
+
+Accepting is treated carefully for the same reason. What you approved by not touching it is
+the *cleaned* text, but the ASR pair targets the raw transcript, which you never saw — and
+cleanup can quietly repair a mishearing, especially when a dictionary hint points at it.
+So when cleanup rewrote more than `max_edit_distance` of the transcript, the accept is
+recorded but held back from training and left in Review to be judged by hand. Corrections
+typed in the dashboard are exempt: there the raw transcript is on screen, and it is what you
+are approving.
+
+An accepted dictation contributes an ASR pair only, never a style pair — the text being
+accepted is the cleanup model's own output, and training it on that would teach it nothing
+while drowning out the pairs where you really did change the wording.
 
 ## Two ways it watches, depending on the app
 

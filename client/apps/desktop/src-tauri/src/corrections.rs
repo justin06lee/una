@@ -315,13 +315,16 @@ pub async fn submit_with_source(
         tracing::debug!("correction: no server reachable; dropping this pair");
         return;
     };
-    // An excluded dictation carries no target text; an accepted one is the
-    // transcript itself, which the server already has.
     let payload = match action {
+        // An accepted dictation needs no text at all: the server uses the raw
+        // transcript as the ASR target. It deliberately sends no style pair —
+        // the text being accepted is the cleanup model's own output, and
+        // feeding that back as a style target would train the model on itself
+        // and drown out the pairs where the user really did change something.
         Action::Accepted => CorrectionRequest {
             action: action.as_str().into(),
             corrected_text: None,
-            polished_text: Some(text),
+            polished_text: None,
             source: source.into(),
         },
         Action::Edited => CorrectionRequest {
@@ -330,6 +333,8 @@ pub async fn submit_with_source(
             polished_text: Some(text),
             source: source.into(),
         },
+        // Deleted outright: no target of any kind, just a note not to train
+        // on this utterance.
         Action::Excluded => CorrectionRequest {
             action: action.as_str().into(),
             corrected_text: None,

@@ -42,6 +42,8 @@ export interface DictationDetail extends DictationSummary {
   polished_text?: string | null;
   training_eligible: boolean | null;
   eligibility_reason: string | null;
+  /** Where the correction came from: 'auto' | 'popup' | 'review'. Absent on older servers. */
+  correction_source?: string | null;
   eval_holdout: boolean;
 }
 
