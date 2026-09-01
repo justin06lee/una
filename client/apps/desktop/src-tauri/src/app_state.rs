@@ -8,7 +8,7 @@ use una_core::endpoint::EndpointResolver;
 use una_core::net::ApiClient;
 use una_core::state::{ControllerHandle, Snapshot};
 
-use crate::corrections::PendingSlot;
+use crate::corrections::{Pending, PendingSlot};
 
 pub struct AppState {
     pub controller: ControllerHandle,
@@ -27,6 +27,9 @@ pub struct AppState {
     pub last_dictation: Mutex<Option<(String, String)>>,
     /// The correction the window is currently editing.
     pub pending_correction: PendingSlot,
+    /// The most recent paste, kept after its watch window closes so "Fix Last
+    /// Dictation…" can still file a correction against it minutes later.
+    pub recent_paste: Mutex<Option<Pending>>,
 }
 
 impl AppState {

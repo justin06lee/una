@@ -27,8 +27,9 @@ Afterwards the client watches what you do with the text: fixing a word files
 that fix as a training pair, leaving it alone files it as a correct
 transcription, and both feed the server's fine-tunes without a review session.
 Where macOS won't let it read the field — terminals, canvas editors — a small
-correction window asks instead. Settings → **Learning**, and
-[docs/learning.md](../docs/learning.md).
+correction window asks instead, and the tray's **Fix Last Dictation…** opens
+that window for the last paste whenever you want it. Settings → **Learning**,
+and [docs/learning.md](../docs/learning.md).
 
 ## Layout
 

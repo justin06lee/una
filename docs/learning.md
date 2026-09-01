@@ -54,6 +54,15 @@ the app you were in. Escape walks away and records nothing.
 Turn the window off with **Ask when the text can't be read** — edits in those apps then simply
 aren't captured (untouched pastes still are).
 
+## Fixing one after the fact
+
+The watch window is short by design, and the silent path deliberately gives up
+whenever it can't attribute an edit. When you notice a bad transcription later — or
+you were in an app where nothing was captured — the tray's **Fix Last Dictation…**
+opens the correction window for the most recent paste, however long ago it was. That
+files the pair; it doesn't try to rewrite anything in the app, because by then the
+caret is long gone.
+
 ## What it will not do
 
 The design errs toward missing a pair rather than inventing one, because a wrong training pair

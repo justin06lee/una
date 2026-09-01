@@ -106,6 +106,23 @@ async fn watch(
     .await
     .unwrap_or((None, None));
 
+    // Kept past the watch window so a correction can still be made by hand.
+    // No span length: by the time the user goes to the menu the caret is long
+    // gone, so this path records the pair without rewriting anything.
+    if let Some(state) = app.try_state::<AppState>() {
+        let app_name = tauri::async_runtime::spawn_blocking(|| una_platform::frontmost().current())
+            .await
+            .ok()
+            .flatten();
+        *state.recent_paste.lock().unwrap() = Some(Pending {
+            dictation_id: dictation_id.clone(),
+            inserted: inserted.clone(),
+            app_pid: target_pid,
+            app_name,
+            span_len: None,
+        });
+    }
+
     let Some(mut rx) = arm_watcher(&app) else {
         tracing::debug!("correction: no event tap available; not watching this paste");
         return;
@@ -462,4 +479,21 @@ pub async fn write_back(pending: Pending, corrected: String, restore_clipboard: 
     })
     .await
     .unwrap_or(false)
+}
+
+/// Open the correction window for the most recent paste, however long ago it
+/// was — the tray's "Fix Last Dictation…".
+///
+/// Returns false when there is nothing to correct (no dictation since launch,
+/// or the server never returned an id for it).
+pub fn open_for_recent(app: &AppHandle) -> bool {
+    let Some(state) = app.try_state::<AppState>() else {
+        return false;
+    };
+    let Some(recent) = state.recent_paste.lock().unwrap().clone() else {
+        return false;
+    };
+    *state.pending_correction.lock().unwrap() = Some(recent);
+    windows::show_correction(app);
+    true
 }

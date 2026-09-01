@@ -163,6 +163,7 @@ fn main() {
                 last_snapshot: Arc::new(Mutex::new(Snapshot::Idle)),
                 last_dictation: Mutex::new(None),
                 pending_correction: Arc::new(Mutex::new(None)),
+                recent_paste: Mutex::new(None),
             };
             app.manage(state);
 
