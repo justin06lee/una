@@ -4,6 +4,7 @@
 
 mod app_state;
 mod commands;
+mod corrections;
 mod effects;
 mod events;
 mod hotkey;
@@ -108,6 +109,9 @@ fn main() {
             commands::capture_hotkey,
             commands::cancel_hotkey_capture,
             commands::probe_endpoints,
+            commands::correction_pending,
+            commands::correction_submit,
+            commands::correction_dismiss,
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -120,6 +124,7 @@ fn main() {
             let pill = config.read().unwrap().ui.hud_mode != "flash";
             windows::create_hud(&handle, pill)?;
             windows::create_settings(&handle)?;
+            windows::create_correction(&handle)?;
 
             // One resolver shared by the dictation path and the settings
             // window, so both agree on which endpoint is live.
@@ -156,6 +161,9 @@ fn main() {
                 endpoints: endpoints.clone(),
                 tray_toggle: Mutex::new(None),
                 last_snapshot: Arc::new(Mutex::new(Snapshot::Idle)),
+                last_dictation: Mutex::new(None),
+                pending_correction: Arc::new(Mutex::new(None)),
+                recent_paste: Mutex::new(None),
             };
             app.manage(state);
 

@@ -2,7 +2,8 @@
 //!
 //! Contract: `POST {base}/v1/dictations` as multipart/form-data with an
 //! `audio` file part (16 kHz mono s16le WAV) plus text fields, and
-//! `GET {base}/v1/health`. Connect timeout 3s, total timeout 60s (health:
+//! `GET {base}/v1/health`, and `PUT {base}/v1/dictations/{id}/correction`
+//! for edits captured after a paste. Connect timeout 3s, total timeout 60s (health:
 //! 1.5s). Exactly one automatic retry on connect/reset errors with the same
 //! `utterance_id`; never retried on HTTP status errors.
 
@@ -49,6 +50,32 @@ pub struct DictationResponse {
     pub timings: Option<Timings>,
     pub asr_model: Option<String>,
     pub llm_model: Option<String>,
+}
+
+/// Body of `PUT /v1/dictations/{id}/correction`.
+///
+/// `corrected_text` is the ASR target ("what I actually said"); `polished_text`
+/// is the style target ("how I want it written"). A correction captured from a
+/// real edit is both at once — the server's edit-distance filter decides
+/// whether it is close enough to the raw transcript to train Whisper on.
+#[derive(Debug, Clone, Serialize)]
+pub struct CorrectionRequest {
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corrected_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub polished_text: Option<String>,
+    /// How the correction was captured, for the dashboard's stats.
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CorrectionResponse {
+    pub dictation_id: Option<String>,
+    pub action: Option<String>,
+    pub norm_edit_distance: Option<f64>,
+    pub training_eligible: Option<bool>,
+    pub eligibility_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -241,6 +268,38 @@ impl ApiClient {
             serde_json::from_slice::<Health>(&body).map_err(|e| NetError::Decode(e.to_string()))
         } else {
             Err(api_error(status.as_u16(), &body))
+        }
+    }
+
+    /// PUT a correction for a dictation the server already stored.
+    ///
+    /// Idempotent server-side (one correction row per dictation, upserted), so
+    /// a later refinement of the same dictation simply overwrites the first.
+    pub async fn put_correction(
+        &self,
+        base: &str,
+        dictation_id: &str,
+        body: &CorrectionRequest,
+    ) -> Result<CorrectionResponse, NetError> {
+        let url = format!(
+            "{}/v1/dictations/{}/correction",
+            base.trim_end_matches('/'),
+            dictation_id
+        );
+        let resp = self
+            .http
+            .put(&url)
+            .json(body)
+            .send()
+            .await
+            .map_err(classify)?;
+        let status = resp.status();
+        let bytes = resp.bytes().await.map_err(classify)?;
+        if status.is_success() {
+            serde_json::from_slice::<CorrectionResponse>(&bytes)
+                .map_err(|e| NetError::Decode(e.to_string()))
+        } else {
+            Err(api_error(status.as_u16(), &bytes))
         }
     }
 }

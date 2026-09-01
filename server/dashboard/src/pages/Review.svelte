@@ -268,6 +268,15 @@
             holdout
           </span>
         {/if}
+        {#if item.correction_source === 'auto'}
+          <span class="chip" title="The client captured this correction from your edits">
+            captured
+          </span>
+        {:else if item.correction_source === 'popup'}
+          <span class="chip" title="Corrected in the client's correction window">
+            corrected in app
+          </span>
+        {/if}
       </div>
 
       <div class="border-b border-border px-6 py-4">

@@ -92,22 +92,27 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
 ## The self-improvement loop
 
 1. Every dictation stores the audio, the raw Whisper transcript, and the LLM-cleaned text.
-2. In the dashboard's **Review** page you correct transcripts with a keyboard-driven flow
-   (~5 s per utterance). Corrections fix *what was said* — the raw transcript — never the
-   cleaned text, so the model learns transcription, not paraphrasing.
-3. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
-   are auto-excluded as content rewrites. Accepted-as-is reviews count as gold pairs for free.
-4. At 30+ minutes of eligible audio (configurable), the **Training** page lets you launch a
+2. **The client watches what you do with the text it pasted** and files the result itself —
+   no review session required. Fix a word and the fix is captured; leave it alone and it is
+   recorded as a correct transcription. In apps whose text macOS will let una read, this
+   happens silently; in terminals and canvas editors it asks with a small editor window.
+   See [docs/learning.md](docs/learning.md).
+3. The dashboard's **Review** page is still there for deliberate passes over the backlog
+   (~5 s per utterance), and is the place to add the *Final text* style targets.
+4. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
+   are auto-excluded as content rewrites. Accepted-as-is dictations count as gold pairs for
+   free — which, with automatic capture on, is most of them.
+5. At 30+ minutes of eligible audio (configurable), the **Training** page lets you launch a
    LoRA fine-tune of Whisper on your voice — or flip on **auto-train** in Settings and una
    starts one itself once dictation has been idle for `training.auto_idle_minutes`, there is
    new reviewed data since the last run, and no run is active. ~10% of dictations are frozen
    into a held-out eval split at insert time.
-5. The candidate is converted to CTranslate2 and measured against the current production
+6. The candidate is converted to CTranslate2 and measured against the current production
    model on that held-out set. It is promoted **only if WER improves by ≥0.5 points**, after
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click
    rollback from the model registry, always.
 
-6. The same loop learns your **style**. The optional *Final text* field in Review collects
+7. The same loop learns your **style**. The optional *Final text* field in Review collects
    (raw transcript → how you actually wanted it written) pairs; once enough accumulate
    (`training.style_threshold_pairs`, default 50), the Training page can QLoRA-fine-tune the
    cleanup LLM on them. The adapter is layered onto the Ollama base model, both models are
@@ -122,7 +127,7 @@ injected into Whisper's decoding prompt and the cleanup prompt immediately.
 - `server/` — FastAPI + faster-whisper + Ollama client + training pipeline (Python, uv)
 - `server/dashboard/` — web dashboard (Svelte 5 + Vite + Tailwind 4)
 - `client/` — desktop client (Rust workspace + Tauri v2, Svelte HUD/settings)
-- `docs/` — install, platform, and remote-access notes
+- `docs/` — install, platform, remote-access, and learning-loop notes
 
 ## Development
 

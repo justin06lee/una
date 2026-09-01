@@ -23,6 +23,14 @@ Three hotkey modes: **hold** (push-to-talk), **toggle** (press to start /
 press to finish), and **hybrid** (default — hold to talk, or tap within
 250 ms to latch into toggle).
 
+Afterwards the client watches what you do with the text: fixing a word files
+that fix as a training pair, leaving it alone files it as a correct
+transcription, and both feed the server's fine-tunes without a review session.
+Where macOS won't let it read the field — terminals, canvas editors — a small
+correction window asks instead, and the tray's **Fix Last Dictation…** opens
+that window for the last paste whenever you want it. Settings → **Learning**,
+and [docs/learning.md](../docs/learning.md).
+
 ## Layout
 
 ```
@@ -30,12 +38,13 @@ client/
 ├── crates/
 │   ├── una-core        # FSM + controller, audio capture/resample, HTTP,
 │   │                   # mDNS discovery, config, spool, IPC (no GUI deps)
-│   ├── una-platform    # text injection / permissions per OS
-│   │                   # (macOS: NSPasteboard + CGEvent; Linux: XTest/ydotool/wtype)
+│   ├── una-platform    # text injection / permissions / focused-field access
+│   │                   # (macOS: NSPasteboard + CGEvent + AX; Linux: XTest/ydotool/wtype)
 │   └── una-cli         # `una` — toggle/start/stop/cancel over the unix socket
 ├── apps/desktop/
-│   ├── src-tauri       # tauri v2 app: tray, HUD + settings windows, hotkey
-│   └── ui              # Svelte 5 + Vite, multi-page (hud.html, settings.html)
+│   ├── src-tauri       # tauri v2 app: tray, HUD + settings + correction
+│   │                   # windows, hotkey, correction capture
+│   └── ui              # Svelte 5 + Vite, multi-page (hud, settings, correction)
 └── scripts/gen_icons.py  # stdlib-only PNG icon generator
 ```
 

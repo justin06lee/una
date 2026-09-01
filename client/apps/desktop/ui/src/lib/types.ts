@@ -22,6 +22,13 @@ export interface Config {
     restore_delay_ms: number;
     paste_overrides: Record<string, string>;
   };
+  correction: {
+    enabled: boolean;
+    watch_seconds: number;
+    settle_ms: number;
+    auto_accept: boolean;
+    popup: boolean;
+  };
   ui: { sounds: boolean; hud_mode: "pill" | "flash" };
   general: { launch_at_login: boolean };
 }

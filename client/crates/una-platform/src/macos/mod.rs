@@ -2,6 +2,7 @@
 //! paste chord, NSWorkspace frontmost app, TCC permission checks, and the
 //! CGEventTap hotkey backend (see [`eventtap`]).
 
+pub mod axtext;
 pub mod eventtap;
 pub mod keys;
 
@@ -306,4 +307,55 @@ fn tracing_granted(granted: bool) {
 /// Whether secure event input is currently enabled (password field focused).
 pub fn secure_input_active() -> bool {
     unsafe { IsSecureEventInputEnabled() }
+}
+
+// ---------------------------------------------------------------------------
+// Focus handoff for the correction window
+//
+// The window has to take focus to be typed into, which means the app the user
+// was dictating into loses it. Remembering *which* app that was (by pid, not
+// by name — several windows of the same app, and names change) is what lets
+// the corrected text go back where it came from.
+// ---------------------------------------------------------------------------
+
+/// Process id of the frontmost application.
+pub fn frontmost_pid() -> Option<i32> {
+    let workspace = NSWorkspace::sharedWorkspace();
+    let app = workspace.frontmostApplication()?;
+    Some(app.processIdentifier())
+}
+
+/// Bring `pid`'s application back to the front. Returns false when the process
+/// is gone.
+pub fn activate_pid(pid: i32) -> bool {
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) else {
+        return false;
+    };
+    #[allow(deprecated)]
+    app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps)
+}
+
+/// Post `n` backspace presses to the focused app.
+///
+/// Used only to clear a span whose length was tracked keystroke by keystroke,
+/// where the accessibility API could not simply overwrite the text.
+pub fn send_backspaces(n: usize) -> Result<(), InjectError> {
+    const KC_DELETE: u16 = 51;
+    if n == 0 {
+        return Ok(());
+    }
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+        .map_err(|_| InjectError::Keystroke("could not create CGEventSource".into()))?;
+    for _ in 0..n {
+        let down = CGEvent::new_keyboard_event(source.clone(), KC_DELETE, true)
+            .map_err(|_| InjectError::Keystroke("could not create key-down event".into()))?;
+        let up = CGEvent::new_keyboard_event(source.clone(), KC_DELETE, false)
+            .map_err(|_| InjectError::Keystroke("could not create key-up event".into()))?;
+        down.post(CGEventTapLocation::HID);
+        up.post(CGEventTapLocation::HID);
+        // Terminals and Electron apps drop keystrokes posted back to back.
+        std::thread::sleep(Duration::from_millis(4));
+    }
+    Ok(())
 }

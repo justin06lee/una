@@ -23,7 +23,7 @@ from ..schemas import (
 )
 from ..services import storage
 from ..state import AppState
-from ..training.filters import check_pair
+from ..training.filters import EligibilityResult, check_pair, norm_edit_distance
 from .deps import get_state
 
 router = APIRouter(tags=["dictations"])
@@ -192,7 +192,8 @@ def _summary(row) -> DictationSummary:
 
 
 LIST_SQL = """
-SELECT d.*, c.action AS review_action, c.corrected_text, c.polished_text, c.training_eligible, c.eligibility_reason
+SELECT d.*, c.action AS review_action, c.corrected_text, c.polished_text, c.training_eligible,
+       c.eligibility_reason, c.source AS correction_source
 FROM dictations d LEFT JOIN corrections c ON c.dictation_id = d.id
 WHERE d.deleted = 0
 """
@@ -257,6 +258,7 @@ def _detail(row) -> DictationDetail:
         polished_text=row["polished_text"],
         training_eligible=bool(row["training_eligible"]) if row["training_eligible"] is not None else None,
         eligibility_reason=row["eligibility_reason"],
+        correction_source=row["correction_source"],
         eval_holdout=bool(row["eval_holdout"]),
     )
 
@@ -283,6 +285,42 @@ async def get_audio(state: State, dictation_id: str) -> FileResponse:
     return FileResponse(path, media_type="audio/wav")
 
 
+def _guard_unseen_transcript(
+    result: EligibilityResult,
+    body: CorrectionRequest,
+    row,
+    max_edit_distance: float,
+) -> EligibilityResult:
+    """Don't let an auto-accept vouch for a transcript the user never saw.
+
+    A client-captured `accepted` means "the text in front of me was right".
+    With cleanup on, that text is the LLM's rendering, not the raw transcript
+    the ASR pair targets — and cleanup can quietly repair a mishearing,
+    especially with a dictionary hint behind it. Accepting then would train
+    Whisper on its own error.
+
+    Where the two texts are close, the approval carries over. Where cleanup
+    rewrote enough that it could have hidden a mishearing, the pair is kept but
+    marked ineligible, so it still shows up in Review to be judged by hand.
+    Hand review (`source: review`) is exempt: there the raw transcript is on
+    screen, which is exactly what is being approved.
+    """
+    if not result.eligible or body.action != "accepted" or body.source == "review":
+        return result
+    cleaned = row["cleaned_text"]
+    if not row["cleanup_applied"] or not cleaned:
+        return result
+    distance = norm_edit_distance(row["raw_text"], cleaned)
+    if distance <= max_edit_distance:
+        return result
+    return EligibilityResult(
+        False,
+        f"auto-accepted, but cleanup changed {distance:.2f} of the transcript "
+        "(the raw text was never shown); review by hand",
+        distance,
+    )
+
+
 @router.put("/dictations/{dictation_id}/correction", response_model=CorrectionResponse)
 async def put_correction(
     state: State, dictation_id: str, body: CorrectionRequest
@@ -303,12 +341,13 @@ async def put_correction(
         duration_ms=row["duration_ms"],
         max_edit_distance=state.config.training.max_edit_distance,
     )
+    result = _guard_unseen_transcript(result, body, row, state.config.training.max_edit_distance)
     now = utcnow()
     await state.db.execute(
         """INSERT INTO corrections
            (id, dictation_id, corrected_text, polished_text, action, norm_edit_distance,
-            training_eligible, eligibility_reason, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            training_eligible, eligibility_reason, source, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(dictation_id) DO UPDATE SET
              corrected_text = excluded.corrected_text,
              polished_text = CASE WHEN ? THEN excluded.polished_text
@@ -317,6 +356,7 @@ async def put_correction(
              norm_edit_distance = excluded.norm_edit_distance,
              training_eligible = excluded.training_eligible,
              eligibility_reason = excluded.eligibility_reason,
+             source = excluded.source,
              updated_at = excluded.updated_at""",
         (
             str(ULID()),
@@ -327,6 +367,7 @@ async def put_correction(
             result.distance,
             1 if result.eligible else 0,
             result.reason,
+            body.source,
             now,
             now,
             1 if polished_provided else 0,
@@ -345,6 +386,7 @@ async def put_correction(
         training_eligible=result.eligible,
         eligibility_reason=result.reason,
         polished_text=polished,
+        source=body.source,
     )
 
 

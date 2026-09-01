@@ -37,6 +37,31 @@ def test_utterance_id_dedupes_retries(client):
     assert len(client.get("/v1/dictations").json()["items"]) == 1
 
 
+def test_correction_source_defaults_and_round_trips(client):
+    """The client tags auto-captured edits so the dashboard can tell them from
+    hand review; omitting the field keeps the historical 'review' value."""
+    dictation_id = post_dictation(client).json()["id"]
+
+    default = client.put(
+        f"/v1/dictations/{dictation_id}/correction", json={"action": "accepted"}
+    ).json()
+    assert default["source"] == "review"
+
+    auto = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={
+            "action": "edited",
+            "corrected_text": "um so this is a test dictation okay",
+            "source": "auto",
+        },
+    ).json()
+    assert auto["source"] == "auto"
+    assert auto["training_eligible"] is True
+
+    detail = client.get(f"/v1/dictations/{dictation_id}").json()
+    assert detail["correction_source"] == "auto"
+
+
 def test_correction_flow(client):
     dictation_id = post_dictation(client).json()["id"]
 

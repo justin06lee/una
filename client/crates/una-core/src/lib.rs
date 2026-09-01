@@ -6,6 +6,7 @@
 
 pub mod audio;
 pub mod config;
+pub mod correction;
 pub mod discovery;
 pub mod endpoint;
 #[cfg(unix)]

@@ -114,6 +114,7 @@ pub struct Config {
     pub hotkey: HotkeyConfig,
     pub audio: AudioConfig,
     pub insert: InsertConfig,
+    pub correction: CorrectionConfig,
     pub ui: UiConfig,
     pub general: GeneralConfig,
 }
@@ -132,6 +133,7 @@ impl Default for Config {
             hotkey: HotkeyConfig::default(),
             audio: AudioConfig::default(),
             insert: InsertConfig::default(),
+            correction: CorrectionConfig::default(),
             ui: UiConfig::default(),
             general: GeneralConfig::default(),
         }
@@ -241,6 +243,44 @@ impl Default for InsertConfig {
             restore_clipboard: true,
             restore_delay_ms: 300,
             paste_overrides,
+        }
+    }
+}
+
+/// Learning from the edits you make to text una pasted.
+///
+/// Every correction captured here becomes a training pair on the server: the
+/// ASR target for the Whisper fine-tune and the style target for the cleanup
+/// model. Turning this off means the models only ever learn from dictations
+/// reviewed by hand in the dashboard.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct CorrectionConfig {
+    pub enabled: bool,
+    /// How long after a paste edits still count as correcting that dictation.
+    pub watch_seconds: u64,
+    /// Silence after the last keystroke before an edit is considered final.
+    pub settle_ms: u64,
+    /// Report an untouched paste as an accepted (correct) transcription.
+    ///
+    /// This is where the bulk of the training data comes from — corrections
+    /// alone are a small, biased sample of only the model's mistakes. The
+    /// server's WER gate is the backstop if a run's data turns out bad.
+    pub auto_accept: bool,
+    /// Show the correction window in apps whose text the accessibility API
+    /// cannot read (terminals, canvas editors). With this off, edits in those
+    /// apps are simply not captured.
+    pub popup: bool,
+}
+
+impl Default for CorrectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            watch_seconds: 25,
+            settle_ms: 1200,
+            auto_accept: true,
+            popup: true,
         }
     }
 }
