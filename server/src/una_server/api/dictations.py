@@ -192,7 +192,8 @@ def _summary(row) -> DictationSummary:
 
 
 LIST_SQL = """
-SELECT d.*, c.action AS review_action, c.corrected_text, c.polished_text, c.training_eligible, c.eligibility_reason
+SELECT d.*, c.action AS review_action, c.corrected_text, c.polished_text, c.training_eligible,
+       c.eligibility_reason, c.source AS correction_source
 FROM dictations d LEFT JOIN corrections c ON c.dictation_id = d.id
 WHERE d.deleted = 0
 """
@@ -257,6 +258,7 @@ def _detail(row) -> DictationDetail:
         polished_text=row["polished_text"],
         training_eligible=bool(row["training_eligible"]) if row["training_eligible"] is not None else None,
         eligibility_reason=row["eligibility_reason"],
+        correction_source=row["correction_source"],
         eval_holdout=bool(row["eval_holdout"]),
     )
 
@@ -307,8 +309,8 @@ async def put_correction(
     await state.db.execute(
         """INSERT INTO corrections
            (id, dictation_id, corrected_text, polished_text, action, norm_edit_distance,
-            training_eligible, eligibility_reason, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            training_eligible, eligibility_reason, source, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(dictation_id) DO UPDATE SET
              corrected_text = excluded.corrected_text,
              polished_text = CASE WHEN ? THEN excluded.polished_text
@@ -317,6 +319,7 @@ async def put_correction(
              norm_edit_distance = excluded.norm_edit_distance,
              training_eligible = excluded.training_eligible,
              eligibility_reason = excluded.eligibility_reason,
+             source = excluded.source,
              updated_at = excluded.updated_at""",
         (
             str(ULID()),
@@ -327,6 +330,7 @@ async def put_correction(
             result.distance,
             1 if result.eligible else 0,
             result.reason,
+            body.source,
             now,
             now,
             1 if polished_provided else 0,
@@ -345,6 +349,7 @@ async def put_correction(
         training_eligible=result.eligible,
         eligibility_reason=result.reason,
         polished_text=polished,
+        source=body.source,
     )
 
 

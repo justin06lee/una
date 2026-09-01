@@ -58,6 +58,22 @@ extern "C" {
     fn CFRunLoopStop(rl: *mut c_void);
 }
 
+/// What a key press does to text that was just pasted.
+///
+/// Used by the correction watcher to follow an edit in apps whose text the
+/// accessibility API cannot read. Only keyDown events are classified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyClass {
+    /// Adds a character (any printable key, plus space).
+    Insert,
+    /// Backspace or forward delete.
+    Delete,
+    /// Moves the caret or does something unaccountable (arrows, Home/End,
+    /// Return, Tab, Escape, and anything held with ⌘ or ⌃ — including the
+    /// readline motions terminals bind to ⌃A/⌃E/⌃W/⌃U).
+    Navigate,
+}
+
 /// A key press captured for the settings recorder.
 #[derive(Debug, Clone)]
 pub struct CapturedKey {
@@ -93,6 +109,9 @@ struct CaptureState {
 
 struct Shared {
     on_hotkey: Box<dyn Fn(bool) + Send + Sync>,
+    /// Fast path: skip the watcher mutex entirely when nothing is armed.
+    watching: AtomicBool,
+    on_edit: Mutex<Option<Box<dyn Fn(KeyClass) + Send + Sync>>>,
     /// Bound keycode + 1; 0 means no native binding.
     matcher: AtomicU32,
     /// Whether the bound key is currently believed held.
@@ -122,6 +141,8 @@ impl EventTap {
     pub fn spawn(on_hotkey: Box<dyn Fn(bool) + Send + Sync>) -> Result<Self, String> {
         let shared = Arc::new(Shared {
             on_hotkey,
+            watching: AtomicBool::new(false),
+            on_edit: Mutex::new(None),
             matcher: AtomicU32::new(0),
             pressed: AtomicBool::new(false),
             capture: Mutex::new(None),
@@ -265,6 +286,22 @@ impl EventTap {
     pub fn cancel_capture(&self) {
         self.shared.capture.lock().unwrap().take();
     }
+
+    /// Report every subsequent key press to `on_edit` until
+    /// [`Self::stop_watching_edits`].
+    ///
+    /// Never consumes events — the keys still reach the focused app. The
+    /// callback runs inside the tap callback, so it must not block: send on a
+    /// channel and do the work elsewhere.
+    pub fn watch_edits(&self, on_edit: Box<dyn Fn(KeyClass) + Send + Sync>) {
+        *self.shared.on_edit.lock().unwrap() = Some(on_edit);
+        self.shared.watching.store(true, Ordering::SeqCst);
+    }
+
+    pub fn stop_watching_edits(&self) {
+        self.shared.watching.store(false, Ordering::SeqCst);
+        self.shared.on_edit.lock().unwrap().take();
+    }
 }
 
 impl Drop for EventTap {
@@ -292,6 +329,43 @@ fn key_physically_down(kc: u16) -> bool {
         }
     }
     false
+}
+
+/// Virtual keycodes that move the caret rather than change text.
+const KC_RETURN: u16 = 36;
+const KC_TAB: u16 = 48;
+const KC_KEYPAD_ENTER: u16 = 76;
+const KC_HOME: u16 = 115;
+const KC_PAGE_UP: u16 = 116;
+const KC_FORWARD_DELETE: u16 = 117;
+const KC_END: u16 = 119;
+const KC_PAGE_DOWN: u16 = 121;
+const KC_DELETE: u16 = 51;
+const KC_ARROW_FIRST: u16 = 123;
+const KC_ARROW_LAST: u16 = 126;
+
+fn classify_edit_key(keycode: u16, flags: CGEventFlags) -> KeyClass {
+    // ⌘ and ⌃ combos can do anything at all — undo, select-all, a readline
+    // kill — so they end the run of accountable keystrokes.
+    if flags.contains(CGEventFlags::CGEventFlagCommand)
+        || flags.contains(CGEventFlags::CGEventFlagControl)
+    {
+        return KeyClass::Navigate;
+    }
+    match keycode {
+        KC_DELETE | KC_FORWARD_DELETE => KeyClass::Delete,
+        KC_ARROW_FIRST..=KC_ARROW_LAST
+        | KC_HOME
+        | KC_END
+        | KC_PAGE_UP
+        | KC_PAGE_DOWN
+        | KC_TAB
+        | KC_RETURN
+        | KC_KEYPAD_ENTER
+        | keys::KC_ESCAPE => KeyClass::Navigate,
+        kc if keys::is_modifier(kc) => KeyClass::Navigate,
+        _ => KeyClass::Insert,
+    }
 }
 
 fn tracing_forced_release(kc: u16) {
@@ -362,6 +436,15 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
                 }
                 _ => return CallbackResult::Keep,
             }
+        }
+    }
+
+    // ---- Correction watcher ----------------------------------------------
+    // Observational only: classify the press and pass it straight through.
+    if shared.watching.load(Ordering::SeqCst) && matches!(etype, CGEventType::KeyDown) {
+        let class = classify_edit_key(keycode, event.get_flags());
+        if let Some(on_edit) = shared.on_edit.lock().unwrap().as_ref() {
+            on_edit(class);
         }
     }
 
@@ -468,6 +551,57 @@ fn resolve_capture(raw: RawCapture) -> CapturedKey {
 
 #[cfg(test)]
 mod tests {
+    use super::{classify_edit_key, KeyClass};
+    use core_graphics::event::CGEventFlags;
+
+    /// Backspace is the signal the whole correction flow hangs on.
+    #[test]
+    fn delete_keys_are_deletes() {
+        assert_eq!(
+            classify_edit_key(super::KC_DELETE, CGEventFlags::empty()),
+            KeyClass::Delete
+        );
+        assert_eq!(
+            classify_edit_key(super::KC_FORWARD_DELETE, CGEventFlags::empty()),
+            KeyClass::Delete
+        );
+    }
+
+    #[test]
+    fn letters_and_space_insert() {
+        for kc in [0u16 /* a */, 49 /* space */, 18 /* 1 */] {
+            assert_eq!(classify_edit_key(kc, CGEventFlags::empty()), KeyClass::Insert);
+        }
+    }
+
+    #[test]
+    fn caret_movers_navigate() {
+        for kc in [123u16, 126, super::KC_HOME, super::KC_RETURN, super::KC_TAB] {
+            assert_eq!(
+                classify_edit_key(kc, CGEventFlags::empty()),
+                KeyClass::Navigate
+            );
+        }
+    }
+
+    /// ⌘Z, ⌃W and friends can rewrite the line arbitrarily, so a held ⌘/⌃
+    /// voids the count no matter which key it is combined with.
+    #[test]
+    fn command_and_control_combos_navigate() {
+        assert_eq!(
+            classify_edit_key(6 /* z */, CGEventFlags::CGEventFlagCommand),
+            KeyClass::Navigate
+        );
+        assert_eq!(
+            classify_edit_key(13 /* w */, CGEventFlags::CGEventFlagControl),
+            KeyClass::Navigate
+        );
+        assert_eq!(
+            classify_edit_key(super::KC_DELETE, CGEventFlags::CGEventFlagCommand),
+            KeyClass::Navigate
+        );
+    }
+
     use super::*;
 
     /// End-to-end capture check with a synthetic HID event. Requires the

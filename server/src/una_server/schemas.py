@@ -47,6 +47,7 @@ class DictationDetail(DictationSummary):
     polished_text: str | None = None
     training_eligible: bool | None = None
     eligibility_reason: str | None = None
+    correction_source: str | None = None
     eval_holdout: bool
 
 
@@ -59,6 +60,7 @@ class CorrectionRequest(BaseModel):
     corrected_text: str | None = None
     action: Literal["accepted", "edited", "skipped", "excluded"]
     polished_text: str | None = None  # preferred final rendering -> style-LLM training pair
+    source: Literal["review", "auto", "popup"] = "review"
 
 
 class CorrectionResponse(BaseModel):
@@ -68,6 +70,7 @@ class CorrectionResponse(BaseModel):
     training_eligible: bool
     eligibility_reason: str | None
     polished_text: str | None = None
+    source: str = "review"
 
 
 class DictionaryEntry(BaseModel):

@@ -2,6 +2,7 @@
 //! paste chord, NSWorkspace frontmost app, TCC permission checks, and the
 //! CGEventTap hotkey backend (see [`eventtap`]).
 
+pub mod axtext;
 pub mod eventtap;
 pub mod keys;
 
