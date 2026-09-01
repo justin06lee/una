@@ -146,14 +146,21 @@ async fn watch(
                 if !counter.touched() {
                     continue;
                 }
-                // The first real edit in an app whose text can't be read is
-                // the only moment the window can usefully open.
+                // The tap is system-wide, so the first apparent edit is also
+                // the first chance to notice the typing is going somewhere
+                // else entirely. If it is, the paste was never touched — the
+                // ordinary case of dictating into one app and carrying on
+                // typing in another — and it should still count as accepted.
+                if !same_app_still_focused(target_pid).await {
+                    counter = EditCounter::new(inserted_chars);
+                    break;
+                }
+                // In an app whose text cannot be read, this is the only moment
+                // the correction window can usefully open.
                 if snapshot.is_none() && settings.popup && !popped {
                     popped = true;
-                    if same_app_still_focused(target_pid).await {
-                        open_window(&app, &dictation_id, &inserted, &counter, target_pid).await;
-                        break;
-                    }
+                    open_window(&app, &dictation_id, &inserted, &counter, target_pid).await;
+                    break;
                 }
             }
             // The tap disarmed underneath us.
