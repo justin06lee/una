@@ -1,15 +1,16 @@
-//! Tauri commands invoked by the settings/HUD webviews.
+//! Tauri commands invoked by the settings, HUD, and correction webviews.
 
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use una_core::audio::{AudioEngine, AudioSettings};
 use una_core::config::Config;
 use una_core::discovery::DiscoveredServer;
 use una_core::state::{Command, HotkeyMode, Snapshot};
 
 use crate::app_state::AppState;
+use crate::corrections;
 use crate::{hotkey, windows};
 
 #[tauri::command]
@@ -327,4 +328,61 @@ pub async fn test_record(state: State<'_, AppState>) -> Result<TestRecordResult,
         max_rms,
         max_peak,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Correction window
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct PendingCorrection {
+    /// The text una pasted, for the editor to open with.
+    text: String,
+    /// Where it went, so the window can say what it is about to rewrite.
+    app_name: Option<String>,
+    /// Whether submitting can put the corrected text back, or only record it.
+    can_write_back: bool,
+}
+
+/// What the correction window should be showing, if anything.
+#[tauri::command]
+pub fn correction_pending(state: State<'_, AppState>) -> Option<PendingCorrection> {
+    let pending = state.pending_correction.lock().unwrap();
+    pending.as_ref().map(|p| PendingCorrection {
+        text: p.inserted.clone(),
+        app_name: p.app_name.clone(),
+        can_write_back: p.app_pid.is_some() && p.span_len.is_some(),
+    })
+}
+
+/// File the user's corrected text as a training pair and put it back into the
+/// app it came from.
+///
+/// The pair is recorded first: a write-back that fails (the app quit, the
+/// caret moved) must not cost the training data, which is the point of the
+/// whole exercise.
+#[tauri::command]
+pub async fn correction_submit(app: AppHandle, text: String) -> Result<bool, String> {
+    let (pending, restore_clipboard) = {
+        let state = app.state::<AppState>();
+        let pending = state.pending_correction.lock().unwrap().take();
+        let restore = state.config.read().unwrap().insert.restore_clipboard;
+        (pending, restore)
+    };
+    let Some(pending) = pending else {
+        return Err("nothing to correct".into());
+    };
+    windows::hide_correction(&app);
+
+    let action = una_core::correction::classify(&pending.inserted, &text);
+    corrections::submit_with_source(&app, &pending.dictation_id, action, text.clone(), "popup")
+        .await;
+    Ok(corrections::write_back(pending, text, restore_clipboard).await)
+}
+
+/// Close the window without recording anything.
+#[tauri::command]
+pub fn correction_dismiss(app: AppHandle, state: State<'_, AppState>) {
+    state.pending_correction.lock().unwrap().take();
+    windows::hide_correction(&app);
 }

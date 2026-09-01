@@ -12,6 +12,7 @@ use una_core::net::{ApiClient, DictationRequest};
 use una_core::state::{ControllerHandle, EffectRunner, ErrKind, Event};
 
 use crate::app_state::AppState;
+use crate::corrections;
 use crate::windows;
 
 pub struct TauriEffects {
@@ -74,6 +75,7 @@ impl EffectRunner for TauriEffects {
         let api = self.api.clone();
         let config = self.config.clone();
         let endpoints = self.endpoints.clone();
+        let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
             let (urls, autodiscover) = {
                 let cfg = config.read().unwrap();
@@ -124,6 +126,14 @@ impl EffectRunner for TauriEffects {
                         Ok(false) => {}
                         Err(e) => tracing::warn!("spool cleanup failed: {e}"),
                     }
+                    // The insert effect is the only place that learns the
+                    // paste actually landed, but only the response carries the
+                    // dictation id a correction has to be filed against.
+                    if let Some(id) = resp.id.clone() {
+                        if let Some(state) = app.try_state::<AppState>() {
+                            *state.last_dictation.lock().unwrap() = Some((id, resp.text.clone()));
+                        }
+                    }
                     controller.event(Event::UploadOk {
                         session,
                         text: resp.text,
@@ -154,6 +164,7 @@ impl EffectRunner for TauriEffects {
             return;
         };
         let config = self.config.clone();
+        let app = self.app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             let (restore_clipboard, restore_delay_ms, overrides) = {
                 let cfg = config.read().unwrap();
@@ -178,6 +189,11 @@ impl EffectRunner for TauriEffects {
             };
             match injector().inject(&text, &opts) {
                 Ok(_outcome) => {
+                    // The text is in front of the user now: start watching for
+                    // the edits that make it a training pair.
+                    if let Some(id) = dictation_id_for(&app, &text) {
+                        corrections::on_inserted(&app, id, text.clone());
+                    }
                     controller.event(Event::InsertOk {
                         session,
                         at: Instant::now(),
@@ -192,6 +208,21 @@ impl EffectRunner for TauriEffects {
                 }
             }
         });
+    }
+}
+
+/// The id of the dictation that produced `text`, consuming the record so a
+/// retry or a manual paste of the same string can't file a second correction.
+///
+/// Matching on the text (rather than threading the id through the state
+/// machine) keeps the FSM free of server concepts, and is exact: this is the
+/// same String the upload handed over.
+fn dictation_id_for(app: &AppHandle, text: &str) -> Option<String> {
+    let state = app.try_state::<AppState>()?;
+    let mut slot = state.last_dictation.lock().unwrap();
+    match slot.as_ref() {
+        Some((_, pasted)) if pasted == text => slot.take().map(|(id, _)| id),
+        _ => None,
     }
 }
 

@@ -1,4 +1,4 @@
-//! HUD and settings window management.
+//! HUD, settings, and correction window management.
 //!
 //! The HUD is a fixed-size, frameless, transparent, always-on-top,
 //! click-through window anchored bottom-center of the display that holds the
@@ -10,14 +10,25 @@
 //!   tiny dim lozenge, Wispr Flow style.
 //! - "flash": the previous behavior — hidden while idle, shown by the FSM's
 //!   ShowHud/HideHud effects.
+//!
+//! The correction window is the opposite of the HUD: it deliberately takes
+//! focus, because it exists to be typed into. Showing it flips the app out of
+//! accessory mode for as long as it is up (a menu-bar app's windows cannot
+//! take keyboard focus otherwise) and back afterwards.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use una_core::state::Snapshot;
 
 use crate::app_state::AppState;
 
 pub const HUD_LABEL: &str = "hud";
 pub const SETTINGS_LABEL: &str = "settings";
+pub const CORRECTION_LABEL: &str = "correction";
+
+/// The correction window is a small centered panel, sized for a sentence or
+/// two of dictated text plus its buttons.
+const CORRECTION_WIDTH: f64 = 520.0;
+const CORRECTION_HEIGHT: f64 = 260.0;
 
 /// Fixed outer window size; the visual pill (max ~360x44) floats inside.
 pub const HUD_WIDTH: f64 = 400.0;
@@ -161,6 +172,77 @@ fn position_hud(app: &AppHandle, window: &WebviewWindow) {
         x.round() as i32,
         y.round() as i32,
     ));
+}
+
+/// Create the correction window: a small always-on-top panel that takes
+/// focus, because its whole job is to be typed into.
+///
+/// Kept alive and hidden between uses like the settings window — recreating a
+/// webview per correction would add a visible delay to something that has to
+/// appear the instant an edit starts.
+pub fn create_correction(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let window = WebviewWindowBuilder::new(
+        app,
+        CORRECTION_LABEL,
+        WebviewUrl::App("correction.html".into()),
+    )
+    .title("Fix dictation")
+    .inner_size(CORRECTION_WIDTH, CORRECTION_HEIGHT)
+    .min_inner_size(380.0, 200.0)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible(false)
+    .center()
+    .build()?;
+
+    // Closing the window is "never mind": drop the pending correction so a
+    // later dictation can't be filed against it.
+    let handle = app.clone();
+    let win = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            if let Some(state) = handle.try_state::<AppState>() {
+                state.pending_correction.lock().unwrap().take();
+            }
+            let _ = win.hide();
+        }
+    });
+    Ok(window)
+}
+
+/// Bring the correction window up in front of whatever the user is doing.
+///
+/// Called from the correction watcher's task, not the UI thread, so the
+/// AppKit-touching parts are dispatched to the main thread explicitly.
+pub fn show_correction(app: &AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(window) = handle.get_webview_window(CORRECTION_LABEL) else {
+            return;
+        };
+        // A menu-bar app is an accessory: its windows cannot take keyboard
+        // focus until it is temporarily promoted to a regular app.
+        #[cfg(target_os = "macos")]
+        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Regular);
+        let _ = window.center();
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("correction-opened", ());
+    });
+}
+
+/// Hide the correction window and give the menu-bar app its accessory status
+/// back, so it stops showing up in the Dock and ⌘-Tab.
+pub fn hide_correction(app: &AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window(CORRECTION_LABEL) {
+            let _ = window.hide();
+        }
+        #[cfg(target_os = "macos")]
+        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
+    });
 }
 
 pub fn show_settings(app: &AppHandle) {

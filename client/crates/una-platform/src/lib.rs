@@ -170,3 +170,73 @@ pub fn frontmost() -> Box<dyn FrontmostApp> {
 pub fn permissions() -> Box<dyn Permissions> {
     Box::new(unsupported::Noop)
 }
+
+// ---------------------------------------------------------------------------
+// Correction capture
+//
+// Noticing that the user edited what una pasted needs three things the rest
+// of the platform surface doesn't: reading the focused field's text, handing
+// focus back to the app the text came from, and (where the text can't be
+// read) clearing a span by keystroke. Only macOS implements them today —
+// Linux has no equivalent of the accessibility text API that works across
+// X11 and Wayland toolkits, so the whole feature is inert there and the
+// caller falls back to doing nothing.
+// ---------------------------------------------------------------------------
+
+/// Whether this platform can observe edits to pasted text at all.
+pub const fn supports_correction_capture() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Whether the focused control publishes text the accessibility API can read
+/// — the difference between capturing an edit silently and having to ask.
+pub fn focused_text_readable() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::axtext::focused_field_is_readable()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+/// Process id of the frontmost application, for handing focus back later.
+pub fn frontmost_pid() -> Option<i32> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::frontmost_pid()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+/// Bring a process's application back to the front.
+pub fn activate_pid(pid: i32) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::activate_pid(pid)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// Post `n` backspaces to the focused app.
+pub fn send_backspaces(n: usize) -> Result<(), InjectError> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::send_backspaces(n)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = n;
+        Err(InjectError::Unavailable(
+            "backspace injection is not implemented on this platform".into(),
+        ))
+    }
+}

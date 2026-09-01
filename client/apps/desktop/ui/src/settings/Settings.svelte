@@ -12,7 +12,15 @@
     TestRecordResult,
   } from "../lib/types";
 
-  const TABS = ["General", "Hotkey", "Server", "Audio", "Insertion", "About"] as const;
+  const TABS = [
+    "General",
+    "Hotkey",
+    "Server",
+    "Audio",
+    "Insertion",
+    "Learning",
+    "About",
+  ] as const;
   type Tab = (typeof TABS)[number];
 
   let tab = $state<Tab>("General");
@@ -646,6 +654,86 @@
       {:else}
         <p class="muted">Checking permissions…</p>
       {/if}
+    {:else if tab === "Learning"}
+      <h2>Learning</h2>
+      <p class="muted section-intro">
+        una improves by comparing what it heard with what you actually meant.
+        Every correction you make becomes a training pair: the recording plus
+        the right words teaches the speech model your voice, and your final
+        wording teaches the cleanup model your style. Both fine-tunes run on
+        your own server.
+      </p>
+
+      <label class="row">
+        <span>Learn from my edits</span>
+        <input
+          type="checkbox"
+          bind:checked={config.correction.enabled}
+          onchange={scheduleSave}
+        />
+      </label>
+      <label class="row">
+        <span>
+          Count untouched dictations as correct
+          <small class="muted">Where most training data comes from</small>
+        </span>
+        <input
+          type="checkbox"
+          bind:checked={config.correction.auto_accept}
+          disabled={!config.correction.enabled}
+          onchange={scheduleSave}
+        />
+      </label>
+      <label class="row">
+        <span>
+          Ask when the text can't be read
+          <small class="muted">Opens an editor in terminals and canvas apps</small>
+        </span>
+        <input
+          type="checkbox"
+          bind:checked={config.correction.popup}
+          disabled={!config.correction.enabled}
+          onchange={scheduleSave}
+        />
+      </label>
+      <div class="row">
+        <span>
+          Watch for edits for
+          <small class="muted">Seconds after a paste</small>
+        </span>
+        <input
+          class="num"
+          type="number"
+          min="5"
+          max="120"
+          step="5"
+          bind:value={config.correction.watch_seconds}
+          disabled={!config.correction.enabled}
+          onchange={scheduleSave}
+        />
+      </div>
+      <div class="row">
+        <span>
+          Consider an edit finished after
+          <small class="muted">Milliseconds of no typing</small>
+        </span>
+        <input
+          class="num"
+          type="number"
+          min="300"
+          max="5000"
+          step="100"
+          bind:value={config.correction.settle_ms}
+          disabled={!config.correction.enabled}
+          onchange={scheduleSave}
+        />
+      </div>
+
+      <p class="muted footnote">
+        Nothing extra is recorded: the audio and transcript are already sent to
+        your server for every dictation. This only adds what you changed
+        afterwards. Edits to text una didn't paste are never captured.
+      </p>
     {:else if tab === "About"}
       <h2>About</h2>
       <p><strong>Una</strong> — self-hosted dictation.</p>
@@ -804,6 +892,26 @@
   .num {
     min-width: 90px;
     width: 90px;
+  }
+
+  .section-intro {
+    margin: -2px 0 14px;
+    max-width: 62ch;
+    line-height: 1.55;
+  }
+
+  .footnote {
+    margin-top: 18px;
+    max-width: 62ch;
+    line-height: 1.55;
+    font-size: 11.5px;
+  }
+
+  .row span small {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 400;
+    margin-top: 1px;
   }
 
   /* -------------------------------------------------------------- buttons */
