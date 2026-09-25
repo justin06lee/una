@@ -93,12 +93,18 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
 
 1. Every dictation stores the audio, the raw Whisper transcript, and the LLM-cleaned text.
 2. **The client watches what you do with the text it pasted** and files the result itself —
-   no review session required. Fix a word and the fix is captured; leave it alone and it is
-   recorded as a correct transcription. In apps whose text macOS will let una read, this
-   happens silently; in terminals and canvas editors it asks with a small editor window.
-   See [docs/learning.md](docs/learning.md).
-3. The dashboard's **Review** page is still there for deliberate passes over the backlog
-   (~5 s per utterance), and is the place to add *How you'd have written it* style targets.
+   no review session required. Fix it and the fix becomes a style target for the cleanup LLM;
+   leave it alone and it is recorded as a correct transcription. In apps whose text macOS will
+   let una read, this happens silently; in terminals and canvas editors it asks with a small
+   editor window. See [docs/learning.md](docs/learning.md).
+3. **An optional teacher pre-fills review.** In the background, a slower, more accurate
+   Whisper pass re-transcribes each dictation, and an LLM (Claude, via an API key or a
+   signed-in Claude Code through [yagami](https://github.com/justin06lee/yagami)) reconciles
+   the two transcripts into a guess at what you literally said and how it should read.
+   Review shows both guesses filled in, with the words the two passes disagreed on marked,
+   and asks about the dictations where something disagrees first. The **Review** page is
+   where the literal transcript and *How you'd have written it* get confirmed. See
+   [docs/personal-model.md](docs/personal-model.md).
 4. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
    are auto-excluded as content rewrites. Accepted-as-is dictations count as gold pairs for
    free — which, with automatic capture on, is most of them.

@@ -17,6 +17,7 @@ dependencies = [
     "jiwer>=3.0",
     "rapidfuzz>=3.10",
     "python-ulid>=2.7",
+    "anthropic>=1.0",
 ]
 
 [project.optional-dependencies]

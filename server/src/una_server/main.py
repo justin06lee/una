@@ -17,7 +17,7 @@ from .api import router as v1_router
 from .api.settings_api import apply_stored_settings
 from .config import Config, load_config
 from .errors import install_handlers
-from .services import autotrain
+from .services import autotrain, teacher
 from .services.cleaner import Cleaner
 from .services.discovery import Discovery
 from .services.jobs import JobManager
@@ -54,6 +54,8 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
             if load_model and not state.models.loaded:
                 await state.models.load_active()
 
+        if cfg.teacher.enabled:
+            state.teacher = teacher.Teacher(cfg.teacher, cfg.cleanup, db, cfg.asr.language)
         state.jobs.on_finished = reload_after_training
         await apply_stored_settings(state)
         # Boot counts as activity so a restart gets a full idle grace period
@@ -69,6 +71,9 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
         auto_task = None
         if load_model:
             auto_task = asyncio.create_task(autotrain.loop(state))
+        teacher_task = None
+        if load_model and state.teacher is not None:
+            teacher_task = asyncio.create_task(teacher.loop(state))
         if cfg.discovery.mdns:
             state.discovery = Discovery(cfg.server.port)
             # zeroconf's sync API must not run on the event loop thread (EventLoopBlocked)
@@ -80,6 +85,10 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
 
         if auto_task is not None:
             auto_task.cancel()
+        if teacher_task is not None:
+            teacher_task.cancel()
+        if state.teacher is not None:
+            await state.teacher.aclose()
         if warm_task is not None:
             warm_task.cancel()
         if state.discovery:

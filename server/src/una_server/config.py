@@ -85,6 +85,37 @@ class TrainingConfig(BaseModel):
     style_min_eval_samples: int = 20
 
 
+class TeacherConfig(BaseModel):
+    """An optional second opinion on every dictation, used to pre-fill review.
+
+    Off by default; with it off una behaves exactly as before. Nothing here is on
+    the dictation path — it runs in the background after the text is pasted.
+    """
+
+    enabled: bool = False
+    # A second, slower ASR pass over the stored audio. It isn't waited on, so it can
+    # afford the full large-v3 decoder and beam search. CPU by default so it never
+    # competes with the serving model for VRAM on a small card.
+    second_asr: bool = True
+    second_asr_model: str = "large-v3"
+    second_asr_device: str = "cpu"
+    second_asr_compute_type: str = "int8"
+    second_asr_cpu_threads: int = 4
+    second_asr_beam_size: int = 5
+    # An Anthropic Messages API endpoint that reconciles the two transcripts into a
+    # literal and a polished guess. Empty = skip this part. Point it at yagami to use
+    # a signed-in Claude Code instead of an API key.
+    llm_base_url: str = ""
+    # Falls back to ANTHROPIC_API_KEY, then to the first key in yagami's config.
+    llm_api_key: str = ""
+    llm_model: str = "claude-haiku-4-5"
+    llm_timeout_s: float = 180.0
+    # Also label dictations recorded before the teacher was turned on.
+    backfill: bool = True
+    # Seconds between checks for new work when there is none.
+    interval_s: float = 20.0
+
+
 class DiscoveryConfig(BaseModel):
     mdns: bool = True
 
@@ -96,6 +127,7 @@ class Config(BaseSettings):
     asr: AsrConfig = AsrConfig()
     cleanup: CleanupConfig = CleanupConfig()
     training: TrainingConfig = TrainingConfig()
+    teacher: TeacherConfig = TeacherConfig()
     discovery: DiscoveryConfig = DiscoveryConfig()
 
     @classmethod

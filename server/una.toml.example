@@ -43,5 +43,13 @@ style_threshold_pairs = 50   # polished pairs collected before style training is
 # style_ollama_base = "llama3.2:3b"                      # ollama model the adapter layers onto
 # style_promotion_margin = 0.02  # mean edit distance to your targets must improve by this
 
+# Teacher: a background second opinion that pre-fills review (docs/personal-model.md).
+[teacher]
+enabled = false
+# second_asr_model = "large-v3"             # slower, more accurate re-listen of every dictation
+# second_asr_device = "cpu"                 # keep it off the serving GPU on small cards
+# llm_base_url = "http://127.0.0.1:8787"    # Anthropic API endpoint; yagami works (no key needed)
+# llm_model = "claude-haiku-4-5"
+
 [discovery]
 mdns = true                  # advertise _una._tcp for client auto-discovery
