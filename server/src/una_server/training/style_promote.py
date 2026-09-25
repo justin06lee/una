@@ -42,6 +42,24 @@ def new_style_model_name(run_id: str) -> str:
     return f"una-style-{run_id[-4:].lower()}"
 
 
+def stage_adapter_for_ollama(adapter_dir: Path, run_dir: Path) -> Path:
+    """Copy a PEFT adapter into a directory `ollama create` will recognise.
+
+    Ollama only picks up `model*.safetensors` when scanning a directory, so peft's
+    `adapter_model.safetensors` is invisible to it ("no Modelfile or safetensors files
+    found", ollama#13314); pointing ADAPTER at the file instead uploads it without
+    adapter_config.json, which the conversion then can't find. Renamed, the directory
+    works and carries the config along.
+    """
+    staged = run_dir / "ollama-adapter"
+    if staged.exists():
+        shutil.rmtree(staged)
+    staged.mkdir(parents=True)
+    shutil.copy2(adapter_dir / "adapter_model.safetensors", staged / "model.safetensors")
+    shutil.copy2(adapter_dir / "adapter_config.json", staged / "adapter_config.json")
+    return staged
+
+
 def create_ollama_model(name: str, base: str, adapter_dir: Path, run_dir: Path) -> None:
     """`ollama create` a model layering the LoRA adapter over the quantized base.
 
@@ -49,20 +67,22 @@ def create_ollama_model(name: str, base: str, adapter_dir: Path, run_dir: Path) 
     In Docker, run the training on a host with the CLI or create the model by hand:
     `ollama create <name> -f <run_dir>/Modelfile`.
     """
+    # Written first, so the manual route below has something to point at.
+    staged = stage_adapter_for_ollama(adapter_dir, run_dir)
+    modelfile = run_dir / "Modelfile"
+    modelfile.write_text(f"FROM {base}\nADAPTER {staged.resolve()}\n")
     if shutil.which("ollama") is None:
         raise RuntimeError(
             "ollama CLI not found; create the model manually with "
-            f"`ollama create {name} -f {run_dir}/Modelfile`"
+            f"`ollama create {name} -f {modelfile}`"
         )
-    modelfile = run_dir / "Modelfile"
-    modelfile.write_text(f"FROM {base}\nADAPTER {adapter_dir.resolve()}\n")
     result = subprocess.run(
         ["ollama", "create", name, "-f", str(modelfile)],
         capture_output=True, text=True, timeout=600, check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"ollama create failed ({result.returncode}): {result.stderr.strip()[:500]}"
+            f"ollama create failed ({result.returncode}): {result.stderr.strip()[-500:]}"
         )
     log.info("created ollama model %s (FROM %s + adapter)", name, base)
 

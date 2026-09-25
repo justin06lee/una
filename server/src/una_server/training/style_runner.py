@@ -59,7 +59,7 @@ def _unload_ollama_models(cfg: Config) -> None:
 
 
 def _cleanup(run_dir: Path) -> None:
-    """Drop checkpoints; keep adapter/, Modelfile, and train.log for inspection."""
+    """Drop checkpoints; keep adapter/, the Modelfile and its ollama-adapter/, and train.log."""
     for checkpoint in run_dir.glob("checkpoint-*"):
         shutil.rmtree(checkpoint, ignore_errors=True)
 

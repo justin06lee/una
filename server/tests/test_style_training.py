@@ -109,3 +109,30 @@ def test_style_run_api_and_eligibility(client, fake_runner):
     assert run["kind"] == "style"
     # style runs resolve their baseline (cleanup.model) at execution time
     assert run["base_model_id"] is None
+
+
+def test_adapter_is_staged_where_ollama_can_see_it(tmp_path, monkeypatch):
+    """ollama only scans model*.safetensors; peft names its file adapter_model.safetensors."""
+    import subprocess
+
+    from una_server.training import style_promote
+
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    (adapter / "adapter_model.safetensors").write_bytes(b"weights")
+    (adapter / "adapter_config.json").write_text("{}")
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(style_promote.shutil, "which", lambda _: "/usr/bin/ollama")
+    monkeypatch.setattr(style_promote.subprocess, "run", fake_run)
+    style_promote.create_ollama_model("una-style-abcd", "llama3.2:3b", adapter, tmp_path)
+
+    staged = tmp_path / "ollama-adapter"
+    assert (staged / "model.safetensors").read_bytes() == b"weights"
+    assert (staged / "adapter_config.json").exists()
+    assert (tmp_path / "Modelfile").read_text() == f"FROM llama3.2:3b\nADAPTER {staged.resolve()}\n"
+    assert calls == [["ollama", "create", "una-style-abcd", "-f", str(tmp_path / "Modelfile")]]
