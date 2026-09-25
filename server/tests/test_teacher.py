@@ -264,3 +264,20 @@ async def test_examples_prefer_confirmed_pairs_from_the_same_app(client):
     assert [(e.said, e.wrote) for e in examples] == [
         ("um so this is a test dictation", "so this is a test")
     ]
+
+
+async def test_a_reply_pasted_as_cleanup_is_flagged(client):
+    state = client.app.state.una
+    dictation = _dictate(client)
+    await state.db.execute(
+        "UPDATE dictations SET cleaned_text = ?, cleanup_applied = 1 WHERE id = ?",
+        ("The OnePlus 2 was released in July 2016.", dictation),
+    )
+    await state.db.commit()
+    assert client.get(f"/v1/dictations/{dictation}").json()["cleanup_diverged"] is True
+    await state.db.execute(
+        "UPDATE dictations SET cleaned_text = ? WHERE id = ?",
+        ("so this is a test dictation", dictation),
+    )
+    await state.db.commit()
+    assert client.get(f"/v1/dictations/{dictation}").json()["cleanup_diverged"] is False

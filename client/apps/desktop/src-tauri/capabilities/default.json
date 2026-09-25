@@ -1,10 +1,11 @@
 {
   "identifier": "default",
-  "description": "Capabilities for the una HUD, settings and correction windows",
+  "description": "Capabilities for the una HUD, settings, correction and review windows",
   "windows": [
     "hud",
     "settings",
-    "correction"
+    "correction",
+    "review"
   ],
   "permissions": [
     "core:default",

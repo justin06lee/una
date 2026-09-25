@@ -28,6 +28,15 @@ class AsrConfig(BaseModel):
     initial_prompt_max_chars: int = 180
 
 
+# How the user writes to coding agents, where most dictation goes. Style pairs from
+# their own writing to agents are trained under this tone, so it has to be the one
+# those apps get at inference too.
+AGENT_TONE = (
+    "casual, the way they type to coding agents: lowercase is fine, keep their shorthand "
+    "and slang; file paths, commands and code names exact"
+)
+
+
 class CleanupConfig(BaseModel):
     enabled: bool = True
     ollama_url: str = "http://localhost:11434"
@@ -42,6 +51,13 @@ class CleanupConfig(BaseModel):
         "mail": "professional prose",
         "pages": "professional prose",
         "docs": "professional prose",
+        "claude code": AGENT_TONE,
+        "codex": AGENT_TONE,
+        "ruri": AGENT_TONE,
+        "alacritty": AGENT_TONE,
+        "ghostty": AGENT_TONE,
+        "kitty": AGENT_TONE,
+        "wezterm": AGENT_TONE,
         "terminal": "verbatim; do not alter punctuation inside commands",
         "iterm": "verbatim; do not alter punctuation inside commands",
     }
@@ -77,12 +93,29 @@ class TrainingConfig(BaseModel):
     style_lora_alpha: int = 32
     style_lora_dropout: float = 0.05
     style_learning_rate: float = 2e-4
-    style_epochs: float = 3.0
+    style_epochs: float = 2.0
     style_batch_size: int = 1
     style_grad_accum: int = 8
-    style_max_seq_len: int = 512
+    style_max_seq_len: int = 768  # the system prompt alone is ~220 tokens
     style_promotion_margin: float = 0.02  # mean normalized edit distance must improve by this
     style_min_eval_samples: int = 20
+    # Your own writing, back-translated into (spoken -> written) pairs; ready to train
+    # once this many are finished. See docs/personal-model.md.
+    style_use_writing: bool = True
+    style_writing_threshold: int = 200
+    # The teacher's unconfirmed polished guesses, as extra lower-trust training pairs.
+    style_use_silver: bool = True
+    # Confirmed pairs are the real thing: repeat them this many times in training.
+    style_gold_repeat: int = 3
+    # After supervised training, DPO on (preferred, dispreferred) outputs: your edits
+    # against what was pasted, and your writing against what the current model makes
+    # of its spoken version (up to style_dpo_synthetic of those).
+    style_dpo: bool = True
+    style_dpo_min_pairs: int = 20
+    style_dpo_synthetic: int = 150
+    style_dpo_beta: float = 0.1
+    style_dpo_learning_rate: float = 2e-5
+    style_dpo_epochs: float = 1.0
 
 
 class TeacherConfig(BaseModel):

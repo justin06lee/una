@@ -3,7 +3,8 @@
 //! Contract: `POST {base}/v1/dictations` as multipart/form-data with an
 //! `audio` file part (16 kHz mono s16le WAV) plus text fields, and
 //! `GET {base}/v1/health`, and `PUT {base}/v1/dictations/{id}/correction`
-//! for edits captured after a paste. Connect timeout 3s, total timeout 60s (health:
+//! for edits captured after a paste and for review; the review window also
+//! reads `GET /v1/review/queue` and each dictation's audio. Connect timeout 3s, total timeout 60s (health:
 //! 1.5s). Exactly one automatic retry on connect/reset errors with the same
 //! `utterance_id`; never retried on HTTP status errors.
 
@@ -55,9 +56,9 @@ pub struct DictationResponse {
 /// Body of `PUT /v1/dictations/{id}/correction`.
 ///
 /// `corrected_text` is the ASR target ("what I actually said"); `polished_text`
-/// is the style target ("how I want it written"). A correction captured from a
-/// real edit is both at once — the server's edit-distance filter decides
-/// whether it is close enough to the raw transcript to train Whisper on.
+/// is the style target ("how I want it written"). An edit to pasted text is
+/// only ever the second (action `polished`) — what was pasted is the cleaned
+/// text — while the review window confirms both at once.
 #[derive(Debug, Clone, Serialize)]
 pub struct CorrectionRequest {
     pub action: String,
@@ -69,7 +70,7 @@ pub struct CorrectionRequest {
     pub source: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CorrectionResponse {
     pub dictation_id: Option<String>,
     pub action: Option<String>,
@@ -266,6 +267,25 @@ impl ApiClient {
         let body = resp.bytes().await.map_err(classify)?;
         if status.is_success() {
             serde_json::from_slice::<Health>(&body).map_err(|e| NetError::Decode(e.to_string()))
+        } else {
+            Err(api_error(status.as_u16(), &body))
+        }
+    }
+
+    /// GET a JSON document, for windows that render server data as it comes.
+    pub async fn get_json(&self, base: &str, path: &str) -> Result<serde_json::Value, NetError> {
+        let bytes = self.get_bytes(base, path).await?;
+        serde_json::from_slice(&bytes).map_err(|e| NetError::Decode(e.to_string()))
+    }
+
+    /// GET a response body as bytes (e.g. a dictation's audio).
+    pub async fn get_bytes(&self, base: &str, path: &str) -> Result<Vec<u8>, NetError> {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        let resp = self.http.get(&url).send().await.map_err(classify)?;
+        let status = resp.status();
+        let body = resp.bytes().await.map_err(classify)?;
+        if status.is_success() {
+            Ok(body.to_vec())
         } else {
             Err(api_error(status.as_u16(), &body))
         }

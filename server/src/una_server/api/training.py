@@ -24,8 +24,12 @@ async def eligibility(state: State) -> Eligibility:
     pairs, minutes = await runs.eligible_counts(state)
     async with state.db.execute(runs.STYLE_SQL) as cur:
         style = await cur.fetchone()
-    threshold = state.config.training.threshold_minutes
-    style_threshold = state.config.training.style_threshold_pairs
+    async with state.db.execute(runs.WRITING_SQL) as cur:
+        writing = await cur.fetchone()
+    training = state.config.training
+    threshold = training.threshold_minutes
+    style_threshold = training.style_threshold_pairs
+    writing_ready = training.style_use_writing and writing["n"] >= training.style_writing_threshold
     return Eligibility(
         eligible_pairs=pairs,
         eligible_minutes=round(minutes, 2),
@@ -33,7 +37,9 @@ async def eligibility(state: State) -> Eligibility:
         ready=minutes >= threshold,
         style_pairs=style["n"],
         style_threshold_pairs=style_threshold,
-        style_ready=style["n"] >= style_threshold,
+        style_ready=style["n"] >= style_threshold or writing_ready,
+        style_writing_pairs=writing["n"],
+        style_writing_threshold=training.style_writing_threshold,
     )
 
 
@@ -52,6 +58,8 @@ def _run(row) -> TrainingRun:
         wer_candidate=row["wer_candidate"],
         error=row["error"],
         progress=row["progress"],
+        eval_set=row["eval_set"],
+        notes=row["notes"],
     )
 
 

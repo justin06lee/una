@@ -13,6 +13,7 @@ use crate::windows;
 const ID_TOGGLE: &str = "toggle-dictation";
 const ID_RETRY: &str = "retry-last";
 const ID_FIX: &str = "fix-last";
+const ID_REVIEW: &str = "review";
 const ID_SETTINGS: &str = "settings";
 const ID_HISTORY: &str = "history";
 const ID_LAUNCH: &str = "launch-at-login";
@@ -25,6 +26,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, ID_TOGGLE, "Start Dictation", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, ID_RETRY, "Retry Last Dictation", true, None::<&str>)?;
     let fix = MenuItem::with_id(app, ID_FIX, "Fix Last Dictation…", true, None::<&str>)?;
+    let review = MenuItem::with_id(app, ID_REVIEW, "Review Dictations…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, ID_SETTINGS, "Settings…", true, None::<&str>)?;
     let history = MenuItem::with_id(app, ID_HISTORY, "Dictation History…", true, None::<&str>)?;
     let launch = CheckMenuItem::with_id(
@@ -41,6 +43,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .item(&toggle)
         .item(&retry)
         .item(&fix)
+        .item(&review)
         .item(&PredefinedMenuItem::separator(app)?)
         .item(&settings)
         .item(&history)
@@ -79,6 +82,7 @@ fn on_menu_event(app: &AppHandle, id: &str) {
                 tracing::info!("fix requested but nothing has been dictated yet");
             }
         }
+        ID_REVIEW => windows::show_review(app),
         ID_SETTINGS => windows::show_settings(app),
         ID_HISTORY => {
             match state.dashboard_url() {

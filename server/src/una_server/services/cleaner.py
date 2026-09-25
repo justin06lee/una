@@ -55,12 +55,17 @@ class Cleaner:
         except httpx.HTTPError as exc:
             log.warning("cleanup model warm failed: %s", type(exc).__name__)
 
-    async def keep_warm(self, interval_s: float = 900.0) -> None:
-        """Background loop: re-warm before keep_alive expires so latency stays flat."""
+    async def keep_warm(self, interval_s: float = 900.0, paused=lambda: False) -> None:
+        """Background loop: re-warm before keep_alive expires so latency stays flat.
+
+        `paused()` true skips a round — a training run has the GPU, and reloading the
+        cleanup model under it could run the card out of memory.
+        """
         import asyncio
 
         while True:
-            await self.warm()
+            if not paused():
+                await self.warm()
             await asyncio.sleep(interval_s)
 
     async def ping(self) -> bool:

@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { resolve } from "node:path";
 
-// Multi-page build: the HUD, the settings window and the correction window
-// are separate pages, created by the tauri layer as separate WebviewWindows.
+// Multi-page build: the HUD, the settings, correction and review windows are
+// separate pages, created by the tauri layer as separate WebviewWindows.
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
@@ -18,6 +18,7 @@ export default defineConfig({
         hud: resolve(__dirname, "hud.html"),
         settings: resolve(__dirname, "settings.html"),
         correction: resolve(__dirname, "correction.html"),
+        review: resolve(__dirname, "review.html"),
       },
     },
   },

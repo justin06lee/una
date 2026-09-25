@@ -27,6 +27,7 @@ from rapidfuzz.distance import Levenshtein
 
 from ..config import CleanupConfig, TeacherConfig
 from ..db import utcnow
+from ..training import backtranslate as bt
 from ..training.filters import norm_edit_distance, normalize_text
 from .llm import Llm, LlmError
 from .prompts import build_initial_prompt, tone_for_app
@@ -283,7 +284,25 @@ WHERE c.polished_text IS NOT NULL AND d.deleted = 0 AND d.id != ?
 ORDER BY (d.app_name IS ?) DESC, c.updated_at DESC LIMIT ?
 """
 
+WRITING_EXAMPLES_SQL = """
+SELECT target_text, app_name FROM style_corpus WHERE target_text IS NOT NULL
+ORDER BY RANDOM() LIMIT 40
+"""
+
+# Writing that arrived without a back-translation (the import tool had no LLM).
+PENDING_WRITING_SQL = """
+SELECT id, written_text, content_hash FROM style_corpus
+WHERE spoken_text IS NULL AND generator_model IS NULL ORDER BY id LIMIT ?
+"""
+
+CALIBRATION_SQL = """
+SELECT raw_text FROM dictations
+WHERE deleted = 0 AND LENGTH(raw_text) - LENGTH(REPLACE(raw_text, ' ', '')) >= 7
+ORDER BY id DESC LIMIT 6
+"""
+
 MAX_LLM_BACKOFF_S = 3600.0
+WRITING_BATCH = 8
 
 
 class Teacher:
@@ -320,10 +339,18 @@ class Teacher:
             return [row["phrase"] for row in await cur.fetchall()]
 
     async def examples(self, dictation_id: str, app_name: str | None) -> list[StyleExample]:
-        """Confirmed (said → wanted) pairs, from the same app first."""
+        """How this person writes: their own writing in apps with the same tone, then
+        confirmed (said → wanted) pairs, from the same app first."""
+        tone = tone_for_app(self.cleanup_cfg, app_name)
+        async with self.db.execute(WRITING_EXAMPLES_SQL) as cur:
+            writing = [
+                StyleExample(None, row["target_text"])
+                for row in await cur.fetchall()
+                if tone_for_app(self.cleanup_cfg, row["app_name"]) == tone
+            ][:6]
         async with self.db.execute(STYLE_PAIRS_SQL, (dictation_id, app_name, 8)) as cur:
             rows = await cur.fetchall()
-        return [StyleExample(row["raw_text"], row["polished_text"]) for row in rows]
+        return writing + [StyleExample(row["raw_text"], row["polished_text"]) for row in rows]
 
     # -- one dictation ------------------------------------------------------
 
@@ -454,14 +481,55 @@ class Teacher:
                     return row, await cur.fetchone()
         return None
 
-    async def tick(self) -> bool:
-        """Do one unit of work. True if there was some."""
-        job = await self.next_job()
-        if job is None:
+    async def backtranslate_some(self) -> bool:
+        """Back-translate a batch of imported writing. True if a batch was handled."""
+        if not self._llm_available():
             return False
-        row, existing = job
-        await self.label(row, existing=existing)
+        async with self.db.execute(PENDING_WRITING_SQL, (WRITING_BATCH,)) as cur:
+            rows = await cur.fetchall()
+        if not rows:
+            return False
+        async with self.db.execute(CALIBRATION_SQL) as cur:
+            calibration = [row["raw_text"] for row in await cur.fetchall()]
+        items = [bt.Item(row["content_hash"][:12], row["written_text"]) for row in rows]
+        assert self.llm is not None
+        try:
+            reply = await self.llm.json_reply(bt.SYSTEM, bt.build_prompt(items, calibration))
+        except LlmError as exc:
+            self._note_llm_failure(str(exc)[:500])
+            return False
+        self._llm_failures = 0
+        pairs = {pair.id: pair for pair in bt.parse_reply(reply, items)}
+        now = utcnow()
+        for row in rows:
+            pair = pairs.get(row["content_hash"][:12])
+            if pair is None:
+                # the LLM botched this one; mark it so it isn't asked about forever
+                await self.db.execute(
+                    "UPDATE style_corpus SET generator_model = 'unusable', updated_at = ? "
+                    "WHERE id = ?",
+                    (now, row["id"]),
+                )
+                continue
+            await self.db.execute(
+                """UPDATE style_corpus SET target_text = ?, spoken_text = ?, generator_model = ?,
+                   updated_at = ? WHERE id = ?""",
+                (pair.target, pair.spoken, self.cfg.llm_model, now, row["id"]),
+            )
+        await self.db.commit()
+        log.info("teacher: back-translated %d/%d pieces of writing", len(pairs), len(rows))
         return True
+
+    async def tick(self) -> bool:
+        """Do one unit of work: a dictation first, else a batch of writing. True if any."""
+        job = await self.next_job()
+        if job is not None:
+            row, existing = job
+            await self.label(row, existing=existing)
+            return True
+        if self.llm is not None:
+            return await self.backtranslate_some()
+        return False
 
     async def pending(self) -> int:
         async with self.db.execute(

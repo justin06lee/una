@@ -34,6 +34,8 @@ export interface DictationDetail extends DictationSummary {
   raw_text: string;
   cleaned_text: string | null;
   cleanup_applied: boolean;
+  /** The pasted cleanup reads like a reply rather than a cleanup. Absent on older servers. */
+  cleanup_diverged?: boolean;
   asr_model: string | null;
   llm_model: string | null;
   language: string | null;
@@ -45,6 +47,29 @@ export interface DictationDetail extends DictationSummary {
   /** Where the correction came from: 'auto' | 'popup' | 'review'. Absent on older servers. */
   correction_source?: string | null;
   eval_holdout: boolean;
+  /** The teacher's second opinion, when it is on and has labeled this one. */
+  teacher?: TeacherLabel | null;
+}
+
+/** Characters [start, end) of raw_text the second listen heard as `alt`, at t0–t1 s. */
+export interface DisagreementSpan {
+  start: number;
+  end: number;
+  alt: string;
+  t0: number | null;
+  t1: number | null;
+}
+
+export interface TeacherLabel {
+  status: 'done' | 'partial' | 'failed';
+  second_text: string | null;
+  second_model: string | null;
+  disagreements: DisagreementSpan[];
+  literal_guess: string | null;
+  polished_guess: string | null;
+  llm_model: string | null;
+  llm_error: string | null;
+  needs_review: boolean;
 }
 
 export interface DictationList {
