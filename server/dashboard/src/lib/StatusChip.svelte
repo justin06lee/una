@@ -3,30 +3,30 @@
 
   let { status, label, title }: { status: string; label?: string; title?: string } = $props();
 
+  /** Colour only where it carries meaning; everything else stays neutral. */
   const tone = $derived.by(() => {
-    if (ACTIVE_RUN_STATUSES.includes(status)) return status === 'queued' ? 'muted' : 'accent';
+    if (ACTIVE_RUN_STATUSES.includes(status)) return status === 'queued' ? '' : 'dot-fg';
     switch (status) {
       case 'promoted':
       case 'accepted':
       case 'eligible':
-        return 'ok';
-      case 'edited':
       case 'active':
-        return 'accent';
+        return 'dot-ok';
       case 'rejected':
       case 'ineligible':
-        return 'warn';
+        return 'dot-warn';
       case 'failed':
       case 'excluded':
-        return 'danger';
+        return 'dot-danger';
       default:
-        return 'muted';
+        return '';
     }
   });
 
-  const pulsing = $derived(ACTIVE_RUN_STATUSES.includes(status) && status !== 'queued');
+  const live = $derived(ACTIVE_RUN_STATUSES.includes(status) && status !== 'queued');
+  const text = $derived(label ?? status.charAt(0).toUpperCase() + status.slice(1));
 </script>
 
-<span class="chip chip-{tone}" {title}>
-  <span class="chip-dot" class:animate-pulse={pulsing}></span>{label ?? status}
+<span class="chip" {title}>
+  <span class="dot {tone}" class:dot-live={live}></span>{text}
 </span>

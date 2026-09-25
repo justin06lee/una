@@ -2,7 +2,11 @@
   import { onMount } from 'svelte';
 
   import { api, errMsg, type DictionaryEntry } from '../api';
+  import Banner from '../lib/Banner.svelte';
   import EmptyState from '../lib/EmptyState.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import PageHeader from '../lib/PageHeader.svelte';
+  import SearchInput from '../lib/SearchInput.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import Toggle from '../lib/Toggle.svelte';
 
@@ -147,18 +151,15 @@
   ];
 </script>
 
-<div class="mx-auto max-w-3xl px-8 py-10">
-  <header class="mb-7">
-    <h1 class="text-[20px] font-semibold tracking-tight">Dictionary</h1>
-    <p class="mt-1 text-[13px] text-muted">
-      Names, jargon and acronyms una should always get right. These take effect on your very next
-      dictation — no training required.
-    </p>
-  </header>
+<div class="mx-auto max-w-[46rem] px-10 py-12">
+  <PageHeader
+    title="Dictionary"
+    sub="Names, jargon and acronyms una should always get right. They apply from your very next dictation, no training needed."
+  />
 
   <!-- Add ---------------------------------------------------------------- -->
-  <form class="card mb-6 p-5" onsubmit={add}>
-    <div class="grid gap-3 sm:grid-cols-[1fr_1fr]">
+  <form class="panel mb-10 p-4" onsubmit={add}>
+    <div class="grid gap-3 sm:grid-cols-[1.25fr_1fr_1fr_auto] sm:items-end">
       <label class="block">
         <span class="label">Word or phrase</span>
         <input
@@ -170,45 +171,30 @@
         />
       </label>
       <label class="block">
-        <span class="label">Often misheard as <span class="normal-case">(optional)</span></span>
+        <span class="label">Often heard as</span>
         <input class="input mt-1.5" bind:value={soundsLike} placeholder="figment, sigma" />
       </label>
-    </div>
-    <label class="mt-3 block">
-      <span class="label">Note <span class="normal-case">(optional)</span></span>
-      <input class="input mt-1.5" bind:value={notes} placeholder="design tool we use" />
-    </label>
-    {#if addError}
-      <p class="mt-2.5 text-[12px]" style="color: var(--c-danger)">{addError}</p>
-    {/if}
-    <div class="mt-4 flex items-center justify-between gap-4">
-      <p class="text-[11px] text-faint">
-        The phrase biases transcription; the misheard spelling helps the cleanup pass fix it.
-      </p>
+      <label class="block">
+        <span class="label">Note</span>
+        <input class="input mt-1.5" bind:value={notes} placeholder="Design tool" />
+      </label>
       <button class="btn btn-primary" type="submit" disabled={!phrase.trim() || adding}>
-        {adding ? 'Adding…' : 'Add word'}
+        <Icon name="plus" size={14} />
+        {adding ? 'Adding…' : 'Add'}
       </button>
     </div>
+    {#if addError}
+      <p class="mt-3 text-[12.5px] text-danger">{addError}</p>
+    {/if}
+    <p class="mt-3 text-[12px] text-faint">
+      The phrase steers transcription toward the right spelling; the misheard version helps the
+      cleanup pass catch it when it slips through.
+    </p>
   </form>
 
   <!-- Filters ------------------------------------------------------------ -->
-  <div class="mb-3 flex flex-wrap items-center gap-2">
-    <div class="relative min-w-48 flex-1">
-      <svg
-        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        aria-hidden="true"
-      >
-        <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-      </svg>
-      <input class="input pl-9" placeholder="Search words…" bind:value={query} aria-label="Search dictionary" />
-    </div>
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <SearchInput bind:value={query} placeholder="Search words…" label="Search dictionary" />
     <div class="seg">
       {#each SORTS as s (s.k)}
         <button type="button" class="seg-item" class:active={sort === s.k} onclick={() => (sort = s.k)}>
@@ -219,12 +205,7 @@
   </div>
 
   {#if error}
-    <div
-      class="mb-4 rounded-xl border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
-    >
-      {error}
-    </div>
+    <Banner message={error} onretry={() => void load()} />
   {/if}
 
   <!-- List --------------------------------------------------------------- -->
@@ -233,7 +214,7 @@
       {#each [0, 1, 2] as i (i)}<Skeleton class="h-14 w-full" />{/each}
     </div>
   {:else if visible.length === 0}
-    <div class="card">
+    <div class="panel">
       <EmptyState
         title={query ? 'No matches' : 'No words yet'}
         sub={query
@@ -242,75 +223,77 @@
       />
     </div>
   {:else}
-    <div class="card divide-y divide-border overflow-hidden">
+    <div class="panel divide-y divide-line overflow-hidden">
       {#each visible as entry (entry.id)}
-        <div class="px-5 py-3.5" class:opacity-55={!entry.active}>
+        <div class="group px-4 py-3">
           {#if editingId === entry.id}
-            <div class="grid gap-2.5 sm:grid-cols-2">
+            <div class="grid gap-2 py-0.5 sm:grid-cols-3">
               <input class="input" bind:value={editPhrase} aria-label="Phrase" />
-              <input class="input" bind:value={editSounds} placeholder="often misheard as…" aria-label="Sounds like" />
+              <input class="input" bind:value={editSounds} placeholder="Often heard as" aria-label="Often heard as" />
+              <input class="input" bind:value={editNotes} placeholder="Note" aria-label="Note" />
             </div>
-            <input class="input mt-2.5" bind:value={editNotes} placeholder="note" aria-label="Note" />
-            <div class="mt-3 flex gap-2">
+            <div class="mt-2.5 flex justify-end gap-1.5">
+              <button class="btn btn-ghost btn-sm" onclick={() => (editingId = null)}>Cancel</button>
               <button class="btn btn-primary btn-sm" onclick={saveEdit} disabled={saving || !editPhrase.trim()}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
-              <button class="btn btn-ghost btn-sm" onclick={() => (editingId = null)}>Cancel</button>
             </div>
           {:else}
-            <div class="flex items-start gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-baseline gap-2">
-                  <span class="text-[14px] font-semibold">{entry.phrase}</span>
+            <div class="flex items-center gap-4">
+              <div class="min-w-0 flex-1" class:opacity-45={!entry.active}>
+                <div class="flex flex-wrap items-baseline gap-x-2">
+                  <span class="text-[14px] font-medium">{entry.phrase}</span>
                   {#if entry.sounds_like}
-                    <span class="text-[12px] text-faint">
-                      often heard as <span class="italic">{entry.sounds_like}</span>
-                    </span>
+                    <span class="text-[12.5px] text-faint">heard as {entry.sounds_like}</span>
                   {/if}
                 </div>
                 {#if entry.notes}
-                  <p class="mt-0.5 text-[12px] text-muted">{entry.notes}</p>
+                  <p class="mt-0.5 truncate text-[12.5px] text-muted">{entry.notes}</p>
                 {/if}
               </div>
 
-              <div class="flex flex-none items-center gap-2">
-                <span
-                  class="chip tabular-nums"
-                  title="Times this phrase appeared in a transcript"
-                  class:chip-accent={entry.hit_count > 0}
-                >
-                  {entry.hit_count}×
-                </span>
-                <Toggle
-                  checked={entry.active}
-                  onchange={(v) => void setActive(entry, v)}
-                  label="Active"
-                />
-                <button class="btn btn-ghost btn-sm" onclick={() => startEdit(entry)}>Edit</button>
+              <div class="flex flex-none items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
                 {#if confirmDelete === entry.id}
-                  <button class="btn btn-danger btn-sm" onclick={() => void remove(entry.id)}>
-                    Delete
-                  </button>
-                  <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = null)}>
-                    Cancel
-                  </button>
+                  <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = null)}>Cancel</button>
+                  <button class="btn btn-danger btn-sm" onclick={() => void remove(entry.id)}>Delete</button>
                 {:else}
-                  <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = entry.id)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-                      <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
-                    </svg>
-                    <span class="sr-only">Delete {entry.phrase}</span>
+                  <button
+                    class="btn btn-ghost btn-sm btn-icon"
+                    onclick={() => startEdit(entry)}
+                    title="Edit"
+                    aria-label="Edit {entry.phrase}"
+                  >
+                    <Icon name="pencil" size={13} />
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-sm btn-icon hover:!text-danger"
+                    onclick={() => (confirmDelete = entry.id)}
+                    title="Delete"
+                    aria-label="Delete {entry.phrase}"
+                  >
+                    <Icon name="trash" size={13} />
                   </button>
                 {/if}
               </div>
+              <span
+                class="w-10 text-right text-[12px] tabular-nums {entry.hit_count > 0 ? 'text-muted' : 'text-faint'}"
+                title="Times this phrase appeared in a transcript"
+              >
+                {entry.hit_count}×
+              </span>
+              <Toggle
+                checked={entry.active}
+                onchange={(v) => void setActive(entry, v)}
+                label={entry.active ? `Turn off ${entry.phrase}` : `Turn on ${entry.phrase}`}
+              />
             </div>
           {/if}
         </div>
       {/each}
     </div>
-    <p class="mt-3 text-center text-[11px] text-faint">
+    <p class="mt-4 text-center text-[12px] text-faint">
       {visible.length} word{visible.length === 1 ? '' : 's'}
-      {#if entries.some((e) => !e.active)}· inactive words are kept but ignored{/if}
+      {#if entries.some((e) => !e.active)}· switched-off words are kept but ignored{/if}
     </p>
   {/if}
 </div>

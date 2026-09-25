@@ -101,8 +101,8 @@ Turning **Learn from my edits** off stops all of it; the dashboard's Review page
 | Learn from my edits | on | Master switch. |
 | Count untouched dictations as correct | on | Files `accepted` when nothing is typed. |
 | Ask when the text can't be read | on | The correction window in terminals etc. |
-| Watch for edits for | 25 s | How long after a paste edits still count. |
-| Consider an edit finished after | 1200 ms | Typing silence that ends an edit. |
+| Watch for edits | 25 s | How long after a paste edits still count. |
+| Edit is finished after | 1200 ms | Typing silence that ends an edit. |
 
 In `config.toml`:
 

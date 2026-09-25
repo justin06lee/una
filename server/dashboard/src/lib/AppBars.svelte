@@ -6,36 +6,27 @@
 
   const total = $derived(rows.reduce((sum, r) => sum + r.words, 0));
   const max = $derived(Math.max(1, ...rows.map((r) => r.words)));
-
-  /** Light / Moderate / Power, matching how much of your dictation lands here. */
-  function intensity(words: number): string {
-    const share = total > 0 ? words / total : 0;
-    if (share >= 0.35) return 'Power';
-    if (share >= 0.12) return 'Moderate';
-    return 'Light';
-  }
 </script>
 
-<div class="space-y-2.5">
+<div class="space-y-3">
   {#each rows as row (row.app)}
     {@const share = total > 0 ? row.words / total : 0}
     <div
-      class="group grid grid-cols-[9rem_1fr_auto] items-center gap-3"
+      class="grid grid-cols-[8.5rem_1fr_5.5rem] items-center gap-4"
       title="{row.app} — {fmtNum(row.words)} words over {row.n} dictation{row.n === 1
         ? ''
-        : 's'} ({fmtSpan(row.ms)}) · {intensity(row.words)}"
+        : 's'} ({fmtSpan(row.ms)})"
     >
-      <span class="truncate text-[13px] font-medium">{row.app}</span>
-      <div class="h-2 overflow-hidden rounded-full bg-raised">
+      <span class="truncate text-[13px]">{row.app}</span>
+      <div class="h-1.5 overflow-hidden rounded-full bg-hover">
         <div
-          class="h-full rounded-full transition-[width] duration-500"
-          style="width: {(row.words / max) * 100}%; background: var(--c-accent); opacity: {0.45 +
-            0.55 * (row.words / max)}"
+          class="h-full rounded-full bg-fg transition-[width] duration-500"
+          style="width: {(row.words / max) * 100}%"
         ></div>
       </div>
-      <span class="w-24 text-right text-[12px] text-muted tabular-nums">
+      <span class="text-right text-[12px] text-muted tabular-nums">
         {fmtNum(row.words)}
-        <span class="text-faint">· {(share * 100).toFixed(0)}%</span>
+        <span class="ml-1 inline-block w-8 text-faint">{(share * 100).toFixed(0)}%</span>
       </span>
     </div>
   {/each}

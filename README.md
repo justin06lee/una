@@ -103,7 +103,7 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    the two transcripts into a guess at what you literally said and how it should read.
    Review shows both guesses filled in, with the words the two passes disagreed on marked,
    and asks about the dictations where something disagrees first. The **Review** page is
-   where the literal transcript and the *Final text* get confirmed. See
+   where the literal transcript and *How you'd have written it* get confirmed. See
    [docs/personal-model.md](docs/personal-model.md).
 4. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
    are auto-excluded as content rewrites. Accepted-as-is dictations count as gold pairs for
@@ -118,7 +118,7 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click
    rollback from the model registry, always.
 
-7. The same loop learns your **style**. The optional *Final text* field in Review collects
+7. The same loop learns your **style**. The optional *How you'd have written it* field in Review collects
    (raw transcript → how you actually wanted it written) pairs; once enough accumulate
    (`training.style_threshold_pairs`, default 50), the Training page can QLoRA-fine-tune the
    cleanup LLM on them. The adapter is layered onto the Ollama base model, both models are

@@ -12,7 +12,7 @@ PREFIX    := $(shell if [ -w /usr/local/bin ]; then echo /usr/local/bin; else ec
 UI_DIR    := apps/desktop/ui
 UNAME_S   := $(shell uname -s)
 
-.PHONY: all build install update ui tauri-cli reset-permissions stop launch clean
+.PHONY: all build install update ui tauri-cli reset-permissions stop launch clean icons
 
 all: build
 ifeq ($(UNAME_S),Darwin)
@@ -88,6 +88,24 @@ ifeq ($(UNAME_S),Darwin)
 else
 	@echo "run: una-desktop (or set up an autostart entry)"
 endif
+
+# Rasterise the icon SVGs into every PNG/ICNS the bundle and tray load. The
+# outputs are committed, so this only needs running after editing an SVG.
+# Needs rsvg-convert (brew install librsvg) and, for the .icns, macOS iconutil.
+ICON_DIR := apps/desktop/src-tauri/icons
+icons:
+	@command -v rsvg-convert >/dev/null || { echo "icons: needs rsvg-convert (brew install librsvg)" >&2; exit 1; }
+	for s in 32 64 128 256; do rsvg-convert -w $$s -h $$s $(ICON_DIR)/icon.svg -o $(ICON_DIR)/$${s}x$${s}.png; done
+	cp $(ICON_DIR)/256x256.png $(ICON_DIR)/128x128@2x.png
+	rsvg-convert -w 512 -h 512 $(ICON_DIR)/icon.svg -o $(ICON_DIR)/icon.png
+	rsvg-convert -w 44 -h 44 $(ICON_DIR)/tray.svg -o $(ICON_DIR)/tray.png
+	rm -rf $(ICON_DIR)/una.iconset && mkdir $(ICON_DIR)/una.iconset
+	for s in 16 32 128 256 512; do \
+		rsvg-convert -w $$s -h $$s $(ICON_DIR)/icon.svg -o $(ICON_DIR)/una.iconset/icon_$${s}x$${s}.png; \
+		rsvg-convert -w $$((s*2)) -h $$((s*2)) $(ICON_DIR)/icon.svg -o $(ICON_DIR)/una.iconset/icon_$${s}x$${s}@2x.png; \
+	done
+	iconutil -c icns $(ICON_DIR)/una.iconset -o $(ICON_DIR)/icon.icns
+	rm -rf $(ICON_DIR)/una.iconset
 
 clean:
 	cargo clean

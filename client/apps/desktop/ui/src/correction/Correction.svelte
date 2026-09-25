@@ -12,6 +12,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
+  import Mark from "../lib/Mark.svelte";
 
   type Pending = {
     text: string;
@@ -23,6 +24,9 @@
   let text = $state("");
   let busy = $state(false);
   let editor: HTMLTextAreaElement | undefined = $state();
+
+  /** macOS draws the traffic lights over the top of the window (overlay title bar). */
+  const isMac = navigator.userAgent.includes("Mac");
 
   /** Whether the user actually changed anything. */
   const dirty = $derived(pending !== null && text !== pending.text);
@@ -74,46 +78,51 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} />
 
-<main>
-  <header>
-    <h1>Fix this dictation</h1>
-    <p class="sub">
-      {#if pending?.app_name}
-        Correcting the text una pasted into <strong>{pending.app_name}</strong>.
-      {:else}
-        Correcting the text una just pasted.
-      {/if}
-      Your edit trains the model on this recording.
-    </p>
-  </header>
+<main class:mac={isMac}>
+  {#if isMac}
+    <div class="titlebar" data-tauri-drag-region>
+      <Mark size={14} />
+      <span data-tauri-drag-region>Fix dictation</span>
+    </div>
+  {/if}
+
+  <p class="sub">
+    {#if pending?.app_name}
+      Correct what una pasted into <strong>{pending.app_name}</strong>.
+    {:else}
+      Correct what una just pasted.
+    {/if}
+    Your fix teaches it how you'd have written it.
+  </p>
 
   <textarea
     bind:this={editor}
     bind:value={text}
     spellcheck="false"
     autocapitalize="off"
-    autocorrect="off"
+    {...{ autocorrect: "off" }}
     placeholder="What you actually said…"
+    aria-label="Corrected text"
   ></textarea>
 
   <footer>
     <span class="hint">
       {#if pending && !pending.can_write_back}
-        Records the correction only — the caret moved, so the text won't be replaced.
+        Saves the correction only — the cursor moved, so the text in the app stays as it is.
       {:else if dirty}
-        Replaces the text in place.
+        Replaces the text in the app.
       {:else}
-        Unchanged — submitting confirms the transcription was right.
+        Unchanged — submitting confirms it was right.
       {/if}
     </span>
     <div class="actions">
-      <button class="ghost" onclick={dismiss} disabled={busy}>
-        Cancel <kbd>esc</kbd>
+      <button class="btn btn-ghost" onclick={dismiss} disabled={busy}>
+        Cancel <span class="kbd">esc</span>
       </button>
-      <button class="primary" onclick={submit} disabled={busy || !text.trim()}>
-        Submit <kbd>⌘↩</kbd>
+      <button class="btn btn-primary" onclick={submit} disabled={busy || !text.trim()}>
+        Submit <span class="kbd">⌘↵</span>
       </button>
     </div>
   </footer>
@@ -123,35 +132,40 @@
   main {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     height: 100%;
-    padding: 16px 18px 14px;
-    box-sizing: border-box;
+    padding: 14px 16px 14px;
   }
 
-  header {
+  main.mac {
+    padding-top: 0;
+  }
+
+  /* Sits level with the traffic lights; the whole strip drags the window. */
+  .titlebar {
+    height: 34px;
+    flex: none;
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 -16px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 4px;
   }
 
   .sub {
-    margin: 0;
     color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 12.5px;
+    line-height: 1.5;
   }
 
   .sub strong {
-    color: var(--text);
-    font-weight: 600;
+    color: var(--fg);
+    font-weight: 500;
   }
 
   textarea {
@@ -159,21 +173,28 @@
     min-height: 0;
     resize: none;
     padding: 10px 12px;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--line-strong);
     border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text);
+    background: var(--panel);
+    color: var(--fg);
     font: inherit;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
     user-select: text;
     -webkit-user-select: text;
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease;
   }
 
   textarea:focus {
     outline: none;
-    border-color: color-mix(in oklab, var(--accent) 55%, var(--edge));
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
+    border-color: var(--muted);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg) 8%, transparent);
+  }
+
+  textarea::placeholder {
+    color: var(--faint);
   }
 
   footer {
@@ -185,56 +206,13 @@
 
   .hint {
     color: var(--faint);
-    font-size: 11.5px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .actions {
     display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  button {
-    display: inline-flex;
-    align-items: center;
     gap: 6px;
-    padding: 6px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--edge);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  button:hover:not(:disabled) {
-    background: var(--hover);
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  .primary {
-    background: var(--accent);
-    border-color: transparent;
-    color: var(--on-accent);
-  }
-
-  .primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .ghost {
-    background: transparent;
-  }
-
-  kbd {
-    font: inherit;
-    font-size: 11px;
-    opacity: 0.7;
+    flex-shrink: 0;
   }
 </style>

@@ -11,7 +11,10 @@
     type RunKind,
     type TrainingRun,
   } from '../api';
+  import Banner from '../lib/Banner.svelte';
   import EmptyState from '../lib/EmptyState.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import PageHeader from '../lib/PageHeader.svelte';
   import ProgressBar from '../lib/ProgressBar.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import StatusChip from '../lib/StatusChip.svelte';
@@ -149,45 +152,44 @@
   }
 </script>
 
-<div class="mx-auto max-w-5xl px-8 py-10">
-  <header class="mb-7">
-    <h1 class="text-[20px] font-semibold tracking-tight">Training</h1>
-    <p class="mt-1 text-[13px] text-muted">
-      Fine-tune una on your own voice and your own writing style. A candidate only replaces the
-      model you're using if it measurably beats it.
-    </p>
-  </header>
+<div class="mx-auto max-w-[58rem] px-10 py-12">
+  <PageHeader
+    title="Training"
+    sub="Fine-tune una on your voice and your writing. A new model only replaces the one you're using if it measurably beats it."
+  />
 
   {#if error}
-    <div
-      class="mb-4 rounded-xl border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
-    >
-      {error}
-    </div>
+    <Banner message={error} onretry={() => void refreshAll()} />
   {/if}
 
   <!-- Readiness ---------------------------------------------------------- -->
-  <div class="card mb-4 grid gap-6 p-6 md:grid-cols-2">
+  <div class="mb-6 grid gap-px overflow-hidden rounded-xl border border-line bg-line md:grid-cols-2">
     {#if loading}
-      <Skeleton class="h-24 w-full" />
-      <Skeleton class="h-24 w-full" />
+      <div class="bg-panel p-6"><Skeleton class="h-28 w-full" /></div>
+      <div class="bg-panel p-6"><Skeleton class="h-28 w-full" /></div>
     {:else if elig}
       <!-- Voice -->
-      <div>
-        <div class="mb-2 flex items-baseline justify-between gap-3">
-          <div>
-            <h2 class="text-[14px] font-semibold">Your voice</h2>
-            <p class="mt-0.5 text-[12px] text-muted">Whisper, fine-tuned on your corrections.</p>
-          </div>
-          <span class="text-[13px] tabular-nums whitespace-nowrap">
-            <span class="font-semibold">{elig.eligible_minutes.toFixed(1)}</span>
-            <span class="text-faint">/ {elig.threshold_minutes.toFixed(0)} min</span>
-          </span>
+      <div class="flex flex-col bg-panel p-6">
+        <div class="flex items-center gap-2">
+          <Icon name="mic" size={15} class="text-muted" />
+          <h2 class="text-[14px] font-medium">Your voice</h2>
+          {#if elig.ready}<span class="chip ml-auto"><span class="dot dot-ok"></span>Ready</span>{/if}
         </div>
-        <ProgressBar value={elig.eligible_minutes / Math.max(1e-9, elig.threshold_minutes)} />
-        <div class="mt-2 flex items-center justify-between gap-3">
-          <span class="text-[11px] text-faint tabular-nums">{elig.eligible_pairs} pairs ready</span>
+        <p class="mt-1 text-[13px] text-muted">Whisper, fine-tuned on the dictations you've reviewed.</p>
+        <div class="mt-6 flex items-baseline gap-1.5">
+          <span class="text-[28px] leading-none font-semibold tracking-[-0.03em] tabular-nums">
+            {elig.eligible_minutes.toFixed(1)}
+          </span>
+          <span class="text-[13px] text-muted">of {elig.threshold_minutes.toFixed(0)} minutes</span>
+        </div>
+        <div class="mt-3">
+          <ProgressBar
+            value={elig.eligible_minutes / Math.max(1e-9, elig.threshold_minutes)}
+            label="Voice training data"
+          />
+        </div>
+        <div class="mt-auto flex items-center justify-between gap-3 pt-5">
+          <span class="text-[12px] text-faint tabular-nums">{elig.eligible_pairs} pairs collected</span>
           <button
             class="btn btn-sm {elig.ready ? 'btn-primary' : ''}"
             onclick={() => void start('asr')}
@@ -200,23 +202,28 @@
       </div>
 
       <!-- Style -->
-      <div class="md:border-l md:border-border md:pl-6">
-        <div class="mb-2 flex items-baseline justify-between gap-3">
-          <div>
-            <h2 class="text-[14px] font-semibold">Your style</h2>
-            <p class="mt-0.5 text-[12px] text-muted">
-              The cleanup model, tuned on your <em>Final text</em>.
-            </p>
-          </div>
-          <span class="text-[13px] tabular-nums whitespace-nowrap">
-            <span class="font-semibold">{elig.style_pairs}</span>
-            <span class="text-faint">/ {elig.style_threshold_pairs}</span>
-          </span>
+      <div class="flex flex-col bg-panel p-6">
+        <div class="flex items-center gap-2">
+          <Icon name="pencil" size={14} class="text-muted" />
+          <h2 class="text-[14px] font-medium">Your style</h2>
+          {#if elig.style_ready}<span class="chip ml-auto"><span class="dot dot-ok"></span>Ready</span>{/if}
         </div>
-        <ProgressBar value={elig.style_pairs / Math.max(1, elig.style_threshold_pairs)} />
-        <div class="mt-2 flex items-center justify-between gap-3">
-          <span class="text-[11px] text-faint">
-            {elig.style_pairs === 0 ? 'Add Final text while reviewing' : 'polished pairs collected'}
+        <p class="mt-1 text-[13px] text-muted">The cleanup model, tuned on how you'd have written it.</p>
+        <div class="mt-6 flex items-baseline gap-1.5">
+          <span class="text-[28px] leading-none font-semibold tracking-[-0.03em] tabular-nums">
+            {elig.style_pairs}
+          </span>
+          <span class="text-[13px] text-muted">of {elig.style_threshold_pairs} pairs</span>
+        </div>
+        <div class="mt-3">
+          <ProgressBar
+            value={elig.style_pairs / Math.max(1, elig.style_threshold_pairs)}
+            label="Style training data"
+          />
+        </div>
+        <div class="mt-auto flex items-center justify-between gap-3 pt-5">
+          <span class="text-[12px] text-faint">
+            {elig.style_pairs === 0 ? 'Fix pasted text, or rewrite in Review' : 'From your edits and Review'}
           </span>
           <button
             class="btn btn-sm {elig.style_ready ? 'btn-primary' : ''}"
@@ -225,34 +232,34 @@
             title={hasActive
               ? 'A run is already going'
               : elig.style_pairs === 0
-                ? 'Add Final text in Review to collect style pairs'
-                : 'Fine-tune the cleanup model on your polished texts'}
+                ? 'Fix a few pasted dictations, or rewrite them in Review, to collect style pairs'
+                : 'Fine-tune the cleanup model on your edits and rewrites'}
           >
             Train my style
           </button>
         </div>
       </div>
-
-      {#if startError}
-        <p class="text-[12px] md:col-span-2" style="color: var(--c-warn)">{startError}</p>
-      {/if}
     {/if}
   </div>
 
+  {#if startError}
+    <p class="-mt-3 mb-6 text-[12.5px] text-warn">{startError}</p>
+  {/if}
+
   <!-- Active run ---------------------------------------------------------- -->
   {#if activeRun}
-    <div
-      class="card mb-4 overflow-hidden rise-in"
-      style="border-color: color-mix(in oklab, var(--c-accent) 40%, var(--c-border))"
-    >
-      <div class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <div class="panel mb-6 overflow-hidden shadow-[var(--shadow-sm)] rise-in">
+      <div class="flex flex-wrap items-center gap-3 px-5 pt-4 pb-3.5">
         <StatusChip status={activeRun.status} />
-        <span class="text-[13.5px] font-semibold">run {shortId(activeRun.id)}</span>
-        {#if activeRun.kind === 'style'}<span class="chip chip-accent">style</span>{/if}
-        <span class="text-[11px] text-faint">started {fmtDate(activeRun.started_at)}</span>
-        <div class="ml-auto flex items-center gap-2">
-          <button class="btn btn-sm" onclick={() => void toggleLog()} aria-expanded={logOpen}>
-            {logOpen ? 'Hide log' : 'Live log'}
+        <span class="text-[14px] font-medium">
+          {activeRun.kind === 'style' ? 'Style' : 'Voice'} run
+          <span class="font-mono text-[12.5px] text-faint">{shortId(activeRun.id)}</span>
+        </span>
+        <span class="text-[12px] text-faint">started {fmtDate(activeRun.started_at)}</span>
+        <div class="ml-auto flex items-center gap-1.5">
+          <button class="btn btn-sm btn-ghost" onclick={() => void toggleLog()} aria-expanded={logOpen}>
+            <Icon name="terminal" size={13} />
+            {logOpen ? 'Hide log' : 'Log'}
           </button>
           <button
             class="btn btn-sm btn-danger"
@@ -264,24 +271,24 @@
         </div>
       </div>
       <div class="flex items-center gap-3 px-5 pb-4">
-        <div class="flex-1"><ProgressBar value={activeRun.progress} /></div>
-        <span class="w-10 text-right text-[12px] text-muted tabular-nums">
+        <div class="flex-1"><ProgressBar value={activeRun.progress} label="Run progress" /></div>
+        <span class="w-10 text-right text-[12.5px] text-muted tabular-nums">
           {Math.round(activeRun.progress * 100)}%
         </span>
       </div>
       {#if logOpen}
         <pre
           bind:this={logEl}
-          class="max-h-64 overflow-y-auto border-t border-border bg-canvas px-5 py-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted">{log ||
+          class="max-h-72 overflow-y-auto border-t border-line bg-subtle px-5 py-3.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-muted">{log ||
             'Waiting for log output…'}</pre>
       {/if}
     </div>
   {/if}
 
   <!-- Runs ---------------------------------------------------------------- -->
-  <section class="mb-6">
-    <h2 class="mb-2 px-1 text-[12px] font-semibold text-muted">Runs</h2>
-    <div class="card overflow-x-auto">
+  <section class="mb-10">
+    <h2 class="mb-3 text-[14px] font-medium">Runs</h2>
+    <div class="panel overflow-x-auto">
       {#if loading}
         <div class="space-y-2 p-5"><Skeleton class="h-5 w-full" /><Skeleton class="h-5 w-full" /></div>
       {:else if runs.length === 0}
@@ -292,59 +299,53 @@
       {:else}
         <table class="w-full min-w-[680px] text-[13px]">
           <thead>
-            <tr class="border-b border-border">
+            <tr class="border-b border-line">
               <th class="th">Run</th>
               <th class="th">Status</th>
               <th class="th">Result</th>
               <th class="th !text-right">Train / eval</th>
-              <th class="th">Finished</th>
+              <th class="th !text-right">Finished</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-border">
+          <tbody class="divide-y divide-line">
             {#each runs as run (run.id)}
-              <tr class="transition-colors duration-150 hover:bg-raised/60">
-                <td class="px-3 py-3">
-                  <span class="font-mono text-[12px]">{shortId(run.id)}</span>
-                  {#if run.kind === 'style'}<span class="chip chip-accent ml-1.5">style</span>{/if}
-                  <span class="ml-2 text-[11px] text-faint">{fmtDate(run.started_at)}</span>
+              <tr class="transition-colors duration-150 hover:bg-subtle">
+                <td class="td">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13px]">{run.kind === 'style' ? 'Style' : 'Voice'}</span>
+                    <span class="font-mono text-[12px] text-faint">{shortId(run.id)}</span>
+                  </div>
                 </td>
-                <td class="px-3 py-3">
+                <td class="td">
                   <StatusChip status={run.status} />
                   {#if run.error}
-                    <div
-                      class="mt-1 max-w-64 truncate text-[11px]"
-                      style="color: var(--c-danger)"
-                      title={run.error}
-                    >
+                    <div class="mt-1 max-w-64 truncate text-[12px] text-danger" title={run.error}>
                       {run.error}
                     </div>
                   {/if}
                 </td>
-                <td class="px-3 py-3 tabular-nums">
+                <td class="td text-[13px] tabular-nums">
                   {#if run.wer_baseline !== null && run.wer_candidate !== null}
+                    {@const better = run.wer_candidate <= run.wer_baseline}
                     {#if run.kind === 'style'}
                       <!-- style metric: mean edit distance to the polished target -->
-                      <span class="text-muted">{run.wer_baseline.toFixed(3)}</span>
-                      <span class="text-faint">→</span>
-                      <span>{run.wer_candidate.toFixed(3)}</span>
                       <span
-                        class="ml-1 text-[11px]"
-                        style="color: var(--c-{run.wer_candidate <= run.wer_baseline
-                          ? 'accent'
-                          : 'danger'})"
-                        title="mean edit distance to your polished targets (lower is better)"
+                        class="text-muted"
+                        title="Mean edit distance to your rewrites (lower is better)"
                       >
-                        dist
+                        {run.wer_baseline.toFixed(3)} → <span class="text-fg">{run.wer_candidate.toFixed(3)}</span>
                       </span>
                     {:else}
-                      <span class="text-muted">{fmtWer(run.wer_baseline)}</span>
-                      <span class="text-faint">→</span>
-                      <span>{fmtWer(run.wer_candidate)}</span>
+                      <span class="text-muted">
+                        {fmtWer(run.wer_baseline)} → <span class="text-fg">{fmtWer(run.wer_candidate)}</span>
+                      </span>
+                      <!-- green only when the gain was real enough to promote -->
                       <span
-                        class="ml-1 text-[11px]"
-                        style="color: var(--c-{run.wer_candidate <= run.wer_baseline
-                          ? 'accent'
-                          : 'danger'})"
+                        class="ml-1.5 text-[12px] {!better
+                          ? 'text-danger'
+                          : run.status === 'promoted'
+                            ? 'text-ok'
+                            : 'text-faint'}"
                       >
                         {fmtWerDelta(run.wer_baseline, run.wer_candidate)}
                       </span>
@@ -353,10 +354,10 @@
                     <span class="text-faint">—</span>
                   {/if}
                 </td>
-                <td class="px-3 py-3 text-right text-muted tabular-nums">
+                <td class="td text-right text-[13px] text-muted tabular-nums">
                   {run.n_train ?? '—'} / {run.n_eval ?? '—'}
                 </td>
-                <td class="px-3 py-3 text-[11px] text-muted">
+                <td class="td text-right text-[12.5px] text-muted">
                   {run.finished_at ? fmtDate(run.finished_at) : '—'}
                 </td>
               </tr>
@@ -369,55 +370,51 @@
 
   <!-- Models --------------------------------------------------------------- -->
   <section>
-    <h2 class="mb-2 px-1 text-[12px] font-semibold text-muted">Models</h2>
-    <div class="card overflow-x-auto">
+    <h2 class="mb-3 text-[14px] font-medium">Models</h2>
+    <div class="panel overflow-x-auto">
       {#if loading}
         <div class="space-y-2 p-5"><Skeleton class="h-5 w-full" /><Skeleton class="h-5 w-full" /></div>
       {:else if models.length === 0}
-        <EmptyState title="No models registered" sub="The base model appears after first launch." />
+        <EmptyState title="No models yet" sub="The base model appears after the server's first launch." />
       {:else}
         <table class="w-full min-w-[680px] text-[13px]">
           <thead>
-            <tr class="border-b border-border">
+            <tr class="border-b border-line">
               <th class="th">Model</th>
               <th class="th">Kind</th>
-              <th class="th">Accuracy</th>
+              <th class="th">Error rate</th>
               <th class="th">Created</th>
-              <th class="th w-48 !text-right"><span class="sr-only">Actions</span></th>
+              <th class="th w-52 !text-right"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-border">
+          <tbody class="divide-y divide-line">
             {#each models as model (model.id)}
-              <tr
-                class="transition-colors duration-150 hover:bg-raised/60"
-                class:bg-accent-soft={model.is_active}
-              >
-                <td class="max-w-64 truncate px-3 py-3 font-mono text-[12px]" title={model.id}>
+              <tr class="transition-colors duration-150 hover:bg-subtle">
+                <td class="td max-w-72 truncate font-mono text-[12px]" title={model.id}>
                   {model.id}
                 </td>
-                <td class="px-3 py-3"><span class="chip">{model.kind}</span></td>
-                <td class="px-3 py-3 tabular-nums" title="Word error rate on held-out audio">
+                <td class="td text-muted">{model.kind}</td>
+                <td class="td text-[13px] tabular-nums" title="Word error rate on held-out audio">
                   {fmtWer(model.eval_wer)}
                 </td>
-                <td class="px-3 py-3 text-[11px] text-muted">{fmtDate(model.created_at)}</td>
-                <td class="px-3 py-3 text-right whitespace-nowrap">
+                <td class="td text-[12.5px] text-muted">{fmtDate(model.created_at)}</td>
+                <td class="td text-right whitespace-nowrap">
                   {#if model.is_active}
-                    <StatusChip status="active" label="in use" />
+                    <span class="chip"><span class="dot dot-ok"></span>In use</span>
                   {:else if confirmActivate === model.id}
-                    <span class="mr-1.5 text-[11px] text-muted">Switch to this model?</span>
+                    <button class="btn btn-sm btn-ghost" onclick={() => (confirmActivate = null)}>
+                      Cancel
+                    </button>
                     <button
                       class="btn btn-sm btn-primary"
                       onclick={() => void activate(model.id)}
                       disabled={activating}
                     >
-                      {activating ? 'Switching…' : 'Switch'}
-                    </button>
-                    <button class="btn btn-sm btn-ghost" onclick={() => (confirmActivate = null)}>
-                      Cancel
+                      {activating ? 'Switching…' : 'Switch to this'}
                     </button>
                   {:else}
                     <button class="btn btn-sm" onclick={() => (confirmActivate = model.id)}>
-                      Use this one
+                      Use this model
                     </button>
                   {/if}
                 </td>

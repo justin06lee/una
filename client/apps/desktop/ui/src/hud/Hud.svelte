@@ -4,7 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import type { LevelFrame, Snapshot } from "../lib/types";
 
-  const BAR_COUNT = 28;
+  const BAR_COUNT = 34;
 
   let snapshot = $state<Snapshot>({ state: "idle" });
   let canvas = $state<HTMLCanvasElement | null>(null);
@@ -140,6 +140,7 @@
     title={snapshot.state === "error" ? snapshot.message : undefined}
   >
     {#if phase === "recording"}
+      <span class="live" aria-hidden="true"></span>
       <canvas bind:this={canvas} class="bars"></canvas>
       <span class="timer">{elapsed}</span>
     {:else if phase === "busy"}
@@ -192,14 +193,14 @@
     gap: 8px;
     overflow: hidden;
     border-radius: 9999px;
-    background: rgba(20, 19, 17, 0.8);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    backdrop-filter: blur(18px) saturate(1.4);
-    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    background: rgba(14, 14, 14, 0.82);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    backdrop-filter: blur(20px) saturate(1.5);
+    border: 0.5px solid rgba(255, 255, 255, 0.14);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.35),
       inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.92);
+    color: rgba(255, 255, 255, 0.94);
     /* Settle/shrink: quick, no overshoot. Grow states override with a
        spring below. */
     transition:
@@ -236,8 +237,9 @@
   }
 
   /* -------------------------------------------------------------- Idle */
+  /* The resting pill carries the app icon's three bars: short, tall, mid. */
   .pill.idle {
-    width: 64px;
+    width: 56px;
     height: 14px;
     opacity: 0.9;
   }
@@ -245,30 +247,47 @@
   .mini {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2.5px;
   }
 
   .mini i {
-    width: 2.5px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.42);
+    width: 2px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.5);
   }
 
   .mini i:nth-child(1) {
-    height: 4px;
+    height: 3.5px;
   }
   .mini i:nth-child(2) {
     height: 7px;
   }
   .mini i:nth-child(3) {
-    height: 4px;
+    height: 5px;
   }
 
   /* --------------------------------------------------------- Recording */
   .pill.recording {
     width: 300px;
     height: 40px;
-    padding: 0 14px;
+    padding: 0 14px 0 15px;
+  }
+
+  /* The one spot of colour while listening: a steady red "on air" dot. */
+  .live {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: #ff453a;
+    box-shadow: 0 0 8px rgba(255, 69, 58, 0.55);
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    50% {
+      opacity: 0.55;
+    }
   }
 
   .bars {
@@ -283,7 +302,7 @@
     font-size: 11.5px;
     font-weight: 550;
     font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.62);
+    color: rgba(255, 255, 255, 0.55);
   }
 
   /* -------------------------------------------- Transcribing/Inserting */
@@ -295,8 +314,8 @@
 
   .shimmer {
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
+    height: 4px;
+    border-radius: 2px;
     background:
       linear-gradient(
           90deg,
@@ -325,17 +344,17 @@
 
   /* -------------------------------------------------------------- Done */
   .pill.done {
-    width: 84px;
+    width: 80px;
     height: 32px;
-    border-color: rgba(79, 191, 139, 0.5);
+    border-color: rgba(74, 222, 128, 0.4);
     animation: pulse 0.7s ease-out;
   }
 
   .check {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     flex: none;
-    color: #4fbf8b;
+    color: #4ade80;
   }
 
   .check path {
@@ -354,12 +373,12 @@
     0% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 0 rgba(79, 191, 139, 0.5);
+        0 0 0 0 rgba(74, 222, 128, 0.45);
     }
     100% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 14px rgba(79, 191, 139, 0);
+        0 0 0 14px rgba(74, 222, 128, 0);
     }
   }
 
@@ -368,8 +387,8 @@
     width: 356px;
     height: 44px;
     padding: 0 10px 0 16px;
-    background: rgba(46, 22, 20, 0.86);
-    border-color: rgba(224, 115, 106, 0.55);
+    background: rgba(38, 14, 14, 0.88);
+    border-color: rgba(248, 113, 113, 0.45);
     animation: shake 0.35s ease;
   }
 
@@ -377,7 +396,7 @@
     width: 17px;
     height: 17px;
     flex: none;
-    color: #e0736a;
+    color: #f87171;
   }
 
   .msg {
@@ -432,6 +451,7 @@
       animation: none;
     }
     .shimmer,
+    .live,
     .check path {
       animation: none;
     }

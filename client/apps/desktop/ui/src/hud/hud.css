@@ -1,7 +1,8 @@
 /* The HUD floats over whatever app you're dictating into, so it stays a dark
    translucent pill in both OS themes — it has no background of its own to
-   match. Only the typeface and accent are shared with the rest of una. */
-@import "@fontsource-variable/figtree";
+   match. Only the typeface and the status colours are shared with the rest
+   of una. */
+@import "@fontsource-variable/geist";
 
 * {
   margin: 0;
@@ -18,7 +19,7 @@ body {
   user-select: none;
   -webkit-user-select: none;
   cursor: default;
-  font-family: "Figtree Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+  font-family: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
     sans-serif;
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
