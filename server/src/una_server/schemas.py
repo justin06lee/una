@@ -58,7 +58,11 @@ class DictationList(BaseModel):
 
 class CorrectionRequest(BaseModel):
     corrected_text: str | None = None
-    action: Literal["accepted", "edited", "skipped", "excluded"]
+    # accepted/edited/skipped/excluded judge the literal transcript (the ASR pair).
+    # "polished" carries only the final text and says nothing about what was said:
+    # it is what an edit to the pasted text means, since what got pasted was the
+    # cleaned version, not the transcript.
+    action: Literal["accepted", "edited", "skipped", "excluded", "polished"]
     polished_text: str | None = None  # preferred final rendering -> style-LLM training pair
     source: Literal["review", "auto", "popup"] = "review"
 

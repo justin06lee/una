@@ -169,13 +169,15 @@ impl EditCounter {
 }
 
 /// The action to report for a captured correction, mirroring the server's
-/// `corrections.action` values.
+/// correction actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     /// The paste survived untouched.
     Accepted,
-    /// The user changed it; the new text is the training target.
-    Edited,
+    /// The user changed it. What was pasted is the cleaned text, so the new text
+    /// is a target for the cleanup model only — it says nothing about what was
+    /// literally said, which stays in the server's review queue.
+    Polished,
     /// The user deleted it outright — don't train on this utterance.
     Excluded,
 }
@@ -184,7 +186,7 @@ impl Action {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Accepted => "accepted",
-            Self::Edited => "edited",
+            Self::Polished => "polished",
             Self::Excluded => "excluded",
         }
     }
@@ -197,7 +199,7 @@ pub fn classify(inserted: &str, current: &str) -> Action {
     } else if current == inserted {
         Action::Accepted
     } else {
-        Action::Edited
+        Action::Polished
     }
 }
 
@@ -332,7 +334,7 @@ mod tests {
     #[test]
     fn classify_covers_the_three_outcomes() {
         assert_eq!(classify("hello", "hello"), Action::Accepted);
-        assert_eq!(classify("hello", "hullo"), Action::Edited);
+        assert_eq!(classify("hello", "hullo"), Action::Polished);
         assert_eq!(classify("hello", "   "), Action::Excluded);
     }
 }

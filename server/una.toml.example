@@ -21,6 +21,7 @@ enabled = true
 ollama_url = "http://localhost:11434"
 model = "qwen3:8b"           # any instruct model; use a 3-4B model on small GPUs
 timeout_s = 3.0              # cleanup slower than this -> raw transcript is returned instead
+max_divergence = 0.65        # output this far from the transcript is a reply, not a cleanup -> raw
 
 # app-name substring -> tone hint (first match wins)
 [cleanup.tone_map]

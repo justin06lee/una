@@ -49,17 +49,74 @@ def test_correction_source_defaults_and_round_trips(client):
 
     auto = client.put(
         f"/v1/dictations/{dictation_id}/correction",
-        json={
-            "action": "edited",
-            "corrected_text": "um so this is a test dictation okay",
-            "source": "auto",
-        },
+        json={"action": "accepted", "source": "auto"},
     ).json()
     assert auto["source"] == "auto"
     assert auto["training_eligible"] is True
 
     detail = client.get(f"/v1/dictations/{dictation_id}").json()
     assert detail["correction_source"] == "auto"
+
+
+def test_in_app_edit_is_a_style_target_only(client):
+    """What gets pasted is the cleaned text, so fixing it says nothing about what was
+    literally said: it trains the cleanup model and leaves the transcript for review."""
+    dictation_id = post_dictation(client).json()["id"]
+
+    saved = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={"action": "polished", "polished_text": "so this is a test dictation", "source": "auto"},
+    ).json()
+    assert saved["polished_text"] == "so this is a test dictation"
+    assert saved["action"] == "skipped"
+    assert saved["training_eligible"] is False
+    assert "transcript not reviewed" in saved["eligibility_reason"]
+
+    detail = client.get(f"/v1/dictations/{dictation_id}").json()
+    assert detail["corrected_text"] is None
+    assert detail["reviewed"] is False
+    # the transcript still waits in the review queue
+    assert client.get("/v1/review/next").json()["id"] == dictation_id
+    assert client.get("/v1/training/eligibility").json()["style_pairs"] == 1
+
+
+def test_older_clients_in_app_edits_are_read_as_polish(client):
+    """Clients before the "polished" action sent the edit as both targets."""
+    dictation_id = post_dictation(client).json()["id"]
+    resp = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={
+            "action": "edited",
+            "corrected_text": "so this is a test dictation",
+            "polished_text": "so this is a test dictation",
+            "source": "popup",
+        },
+    ).json()
+    assert resp["training_eligible"] is False
+    assert resp["polished_text"] == "so this is a test dictation"
+    assert client.get(f"/v1/dictations/{dictation_id}").json()["corrected_text"] is None
+
+
+def test_polish_after_review_keeps_the_transcript_verdict(client):
+    dictation_id = post_dictation(client).json()["id"]
+    client.put(f"/v1/dictations/{dictation_id}/correction", json={"action": "accepted"})
+    resp = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={"action": "polished", "polished_text": "This is a test.", "source": "popup"},
+    ).json()
+    assert resp["action"] == "accepted"
+    assert resp["training_eligible"] is True
+    assert resp["source"] == "review"
+    assert resp["polished_text"] == "This is a test."
+
+
+def test_polish_requires_text(client):
+    dictation_id = post_dictation(client).json()["id"]
+    resp = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={"action": "polished", "polished_text": "  "},
+    )
+    assert resp.status_code == 400
 
 
 def test_correction_flow(client):

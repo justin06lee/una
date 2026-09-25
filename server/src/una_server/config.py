@@ -46,6 +46,10 @@ class CleanupConfig(BaseModel):
         "iterm": "verbatim; do not alter punctuation inside commands",
     }
     default_tone: str = "neutral"
+    # Cleanup output further than this (normalized edit distance) from the transcript
+    # is a reply, not a cleanup — the model answered the dictation instead of cleaning
+    # it — and is thrown away in favour of the raw transcript.
+    max_divergence: float = 0.65
 
 
 class TrainingConfig(BaseModel):

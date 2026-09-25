@@ -321,11 +321,67 @@ def _guard_unseen_transcript(
     )
 
 
+LITERAL_UNREVIEWED = (
+    "transcript not reviewed: an edit to the pasted text only trains the cleanup model"
+)
+
+
+def _is_polish_only(body: CorrectionRequest) -> bool:
+    """An edit made to the text una pasted is a verdict on the cleanup, not on the ASR.
+
+    What got pasted was the cleaned rendering, so the user's fix is a style target and
+    says nothing about what was literally said — using it as the ASR target would
+    teach Whisper to drop fillers and self-corrections. Clients before the
+    "polished" action sent these as `edited` with the source `auto` or `popup`;
+    those are read the same way.
+    """
+    if body.action == "polished":
+        return True
+    return body.action == "edited" and body.source in ("auto", "popup")
+
+
+async def _save_polish_only(
+    state: AppState, row, body: CorrectionRequest
+) -> CorrectionResponse:
+    polished = (body.polished_text or body.corrected_text or "").strip()
+    if not polished:
+        raise BadRequest("action 'polished' requires polished_text")
+    now = utcnow()
+    # A new row starts with the transcript unreviewed, so it stays in the review
+    # queue; an existing one keeps whatever verdict its transcript already has.
+    await state.db.execute(
+        """INSERT INTO corrections
+           (id, dictation_id, corrected_text, polished_text, action, norm_edit_distance,
+            training_eligible, eligibility_reason, source, created_at, updated_at)
+           VALUES (?, ?, NULL, ?, 'skipped', NULL, 0, ?, ?, ?, ?)
+           ON CONFLICT(dictation_id) DO UPDATE SET
+             polished_text = excluded.polished_text,
+             updated_at = excluded.updated_at""",
+        (str(ULID()), row["id"], polished, LITERAL_UNREVIEWED, body.source, now, now),
+    )
+    await state.db.commit()
+    async with state.db.execute(
+        "SELECT * FROM corrections WHERE dictation_id = ?", (row["id"],)
+    ) as cur:
+        stored = await cur.fetchone()
+    return CorrectionResponse(
+        dictation_id=row["id"],
+        action=stored["action"],
+        norm_edit_distance=stored["norm_edit_distance"],
+        training_eligible=bool(stored["training_eligible"]),
+        eligibility_reason=stored["eligibility_reason"],
+        polished_text=stored["polished_text"],
+        source=stored["source"],
+    )
+
+
 @router.put("/dictations/{dictation_id}/correction", response_model=CorrectionResponse)
 async def put_correction(
     state: State, dictation_id: str, body: CorrectionRequest
 ) -> CorrectionResponse:
     row = await _fetch_detail_row(state, dictation_id)
+    if _is_polish_only(body):
+        return await _save_polish_only(state, row, body)
     if body.action == "edited" and not (body.corrected_text or "").strip():
         raise BadRequest("action 'edited' requires corrected_text")
 
