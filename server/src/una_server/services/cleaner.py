@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import httpx
 
 from ..config import CleanupConfig
+from ..training.filters import norm_edit_distance
 from .prompts import build_system_prompt
 
 log = logging.getLogger(__name__)
@@ -73,7 +74,12 @@ class Cleaner:
         if not cleaned.strip():
             return False
         ratio = len(cleaned) / max(len(raw), 1)
-        return 0.4 <= ratio <= 2.5
+        if not 0.4 <= ratio <= 2.5:
+            return False
+        # A small model handed a question or an instruction sometimes answers it
+        # ("I think there may be some confusion — this is a text cleaning service…").
+        # The length can look fine; the words won't.
+        return norm_edit_distance(raw, cleaned) <= self.cfg.max_divergence
 
     async def clean(self, raw_text: str, phrases: list[str], app_name: str | None) -> CleanupResult:
         start = time.monotonic()

@@ -13,9 +13,14 @@ Every paste ends in exactly one of these:
 | What you do | What is filed | Where the pair goes |
 |---|---|---|
 | Nothing — you keep working | `accepted` | Confirms the transcript. ASR pair only. |
-| Fix a word or two | `edited` | Your text becomes the ASR + style target. |
+| Fix a word or two | `polished` | Your text becomes the style (cleanup-LLM) target. The transcript stays in Review. |
 | Delete the whole thing | `excluded` | Marks the utterance as not worth training on. |
 | Edit text una *didn't* paste | nothing | Not a correction; ignored. |
+
+An edit never becomes the ASR target. What una pasted was the *cleaned* text, so your fix
+says how it should have read, not what you literally said — train Whisper on it and it learns
+to drop your fillers and self-corrections instead of hearing them. The transcript is judged
+separately, in Review.
 
 Untouched dictations are the bulk of it, and they are the reason this matters: corrections
 alone are a small, self-selecting sample of only the model's mistakes. Turn that off with
@@ -26,7 +31,7 @@ normalized edit distance from the raw transcript exceeds `training.max_edit_dist
 is stored but marked ineligible, because rewriting the content of a sentence would teach the
 model to paraphrase rather than to hear.
 
-Accepting is treated carefully for the same reason. What you approved by not touching it is
+Accepting is treated carefully for a related reason. What you approved by not touching it is
 the *cleaned* text, but the ASR pair targets the raw transcript, which you never saw — and
 cleanup can quietly repair a mishearing, especially when a dictionary hint points at it.
 So when cleanup rewrote more than `max_edit_distance` of the transcript, the accept is

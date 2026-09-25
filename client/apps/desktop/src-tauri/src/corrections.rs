@@ -351,9 +351,11 @@ pub async fn submit_with_source(
             polished_text: None,
             source: source.into(),
         },
-        Action::Edited => CorrectionRequest {
+        // What was pasted is the cleaned text, so the fix is how it should have
+        // read — a style target. What was literally said is left for review.
+        Action::Polished => CorrectionRequest {
             action: action.as_str().into(),
-            corrected_text: Some(text.clone()),
+            corrected_text: None,
             polished_text: Some(text),
             source: source.into(),
         },
