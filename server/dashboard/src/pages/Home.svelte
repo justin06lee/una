@@ -9,8 +9,11 @@
     type Stats,
   } from '../api';
   import AudioPlayer from '../lib/AudioPlayer.svelte';
+  import Banner from '../lib/Banner.svelte';
   import EmptyState from '../lib/EmptyState.svelte';
-  import Kbd from '../lib/Kbd.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import Metric from '../lib/Metric.svelte';
+  import SearchInput from '../lib/SearchInput.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import { fmtClock, fmtDayHeading, fmtDur, fmtNum, fmtSpan, localDay } from '../lib/format';
 
@@ -155,108 +158,105 @@
   );
 </script>
 
-<div class="mx-auto max-w-4xl px-8 py-10">
+<div class="mx-auto max-w-[52rem] px-10 py-12">
   <!-- Hero -------------------------------------------------------------- -->
-  <header class="mb-8 rise-in">
+  <header class="mb-9 rise-in">
     {#if stats}
-      <div class="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 class="display text-[2.75rem] leading-none tracking-tight">
+      <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+        <h1 class="flex items-baseline gap-2.5 leading-none">
+          <span class="text-[48px] font-semibold tracking-[-0.045em] tabular-nums">
             {fmtNum(stats.totals.words)}
-            <span class="text-[1.75rem] text-muted">words</span>
-          </h1>
-          <p class="mt-2 text-[13px] text-muted">
-            across {fmtNum(stats.totals.dictations)} dictations · {fmtSpan(stats.totals.ms)} of audio
-            {#if savedMinutes > 1}
-              · roughly <span class="font-semibold text-text">{fmtSpan(savedMinutes * 60_000)}</span>
-              saved against typing
-            {/if}
-          </p>
-        </div>
-        <div class="flex items-center gap-1.5 text-[12px] text-faint">
-          <span>Hold</span>
-          <Kbd>Ctrl</Kbd><Kbd>Alt</Kbd><Kbd>Space</Kbd>
-          <span>anywhere to dictate</span>
-        </div>
+          </span>
+          <span class="text-[17px] text-muted">words dictated</span>
+        </h1>
+        <p class="flex items-center gap-1.5 pb-1 text-[12.5px] text-faint">
+          <Icon name="mic" size={13} />
+          Hold your hotkey anywhere to dictate
+        </p>
       </div>
+      <p class="mt-3 text-[13.5px] text-muted">
+        {fmtNum(stats.totals.dictations)} dictations · {fmtSpan(stats.totals.ms)} of audio
+        {#if savedMinutes > 1}
+          · about <span class="text-fg">{fmtSpan(savedMinutes * 60_000)}</span> saved against typing
+        {/if}
+      </p>
     {:else}
-      <Skeleton class="h-14 w-80" />
+      <Skeleton class="h-12 w-72" />
+      <Skeleton class="mt-3 h-4 w-96" />
     {/if}
   </header>
 
-  <!-- Stats card -------------------------------------------------------- -->
-  <div class="card mb-8 grid grid-cols-2 divide-border sm:grid-cols-4 sm:divide-x">
+  <!-- Stats ------------------------------------------------------------- -->
+  <div class="mb-12 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4">
     {#if stats}
-      {@const cells = [
-        {
-          label: 'Streak',
-          value: `${stats.streak.current}`,
-          unit: stats.streak.current === 1 ? 'day' : 'days',
-          hint: `longest ${stats.streak.longest}`,
-        },
-        {
-          label: 'Speed',
-          value: `${Math.round(stats.totals.avg_wpm)}`,
-          unit: 'wpm',
-          hint: `~${Math.round(stats.totals.avg_wpm / TYPING_WPM)}× typing`,
-        },
-        {
-          label: 'Cleaned up',
-          value: fmtNum(stats.cleanup.words_removed),
-          unit: 'words',
-          hint: 'filler removed',
-        },
-        {
-          label: 'To review',
-          value: `${stats.review.backlog}`,
-          unit: '',
-          hint: `${stats.review.eligible} training pairs`,
-        },
-      ]}
-      {#each cells as cell (cell.label)}
-        <div class="px-5 py-4">
-          <div class="label">{cell.label}</div>
-          <div class="mt-1.5 flex items-baseline gap-1.5">
-            <span class="display text-[1.75rem] leading-none tabular-nums">{cell.value}</span>
-            {#if cell.unit}<span class="text-[13px] text-muted">{cell.unit}</span>{/if}
-          </div>
-          <div class="mt-1 text-[11px] text-faint">{cell.hint}</div>
-        </div>
-      {/each}
+      <div class="bg-panel p-5">
+        <Metric
+          label="Streak"
+          value={`${stats.streak.current}`}
+          unit={stats.streak.current === 1 ? 'day' : 'days'}
+          hint={`Longest ${stats.streak.longest}`}
+        />
+      </div>
+      <div class="bg-panel p-5">
+        <Metric
+          label="Speed"
+          value={`${Math.round(stats.totals.avg_wpm)}`}
+          unit="wpm"
+          hint={`${(stats.totals.avg_wpm / TYPING_WPM).toFixed(1)}× your typing`}
+        />
+      </div>
+      <div class="bg-panel p-5">
+        <Metric
+          label="Cleaned up"
+          value={fmtNum(stats.cleanup.words_removed)}
+          unit="words"
+          hint="Filler removed"
+        />
+      </div>
+      <div class="bg-panel p-5">
+        <Metric label="To review" value={`${stats.review.backlog}`}>
+          {#if stats.review.backlog > 0}
+            <a href="#/review" class="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted hover:text-fg">
+              Start reviewing <Icon name="arrowRight" size={12} />
+            </a>
+          {:else}
+            <div class="mt-1.5 text-[12px] text-faint">All caught up</div>
+          {/if}
+        </Metric>
+      </div>
     {:else}
       {#each [0, 1, 2, 3] as i (i)}
-        <div class="px-5 py-4"><Skeleton class="h-14 w-full" /></div>
+        <div class="bg-panel p-5"><Skeleton class="h-16 w-full" /></div>
       {/each}
     {/if}
   </div>
 
   <!-- Search + filters --------------------------------------------------- -->
-  <div class="mb-4 flex flex-wrap items-center gap-2">
-    <div class="relative min-w-56 flex-1">
-      <svg
-        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        aria-hidden="true"
+  <div class="mb-6 flex flex-wrap items-center gap-2">
+    <SearchInput
+      bind:value={query}
+      oninput={refilter}
+      placeholder="Search your dictations…"
+      label="Search transcripts"
+    />
+
+    {#if appFilter}
+      <button
+        type="button"
+        class="btn btn-sm"
+        onclick={() => {
+          appFilter = null;
+          refilter();
+        }}
+        title="Clear app filter"
       >
-        <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-      </svg>
-      <input
-        class="input pl-9"
-        placeholder="Search your transcripts…"
-        bind:value={query}
-        oninput={refilter}
-        aria-label="Search transcripts"
-      />
-    </div>
+        {appFilter}
+        <Icon name="x" size={12} class="text-muted" />
+      </button>
+    {/if}
 
     <div class="seg">
-      {#each [{ k: 'all', l: 'All' }, { k: 'pending', l: 'To review' }, { k: 'reviewed', l: 'Reviewed' }] as f (f.k)}
+      {#each [{ k: 'all', l: 'All' }, { k: 'pending', l: 'Unreviewed' }, { k: 'reviewed', l: 'Reviewed' }] as f (f.k)}
         <button
           type="button"
           class="seg-item"
@@ -270,33 +270,10 @@
         </button>
       {/each}
     </div>
-
-    {#if appFilter}
-      <button
-        type="button"
-        class="chip chip-accent"
-        onclick={() => {
-          appFilter = null;
-          refilter();
-        }}
-        title="Clear app filter"
-      >
-        {appFilter}
-        <svg width="10" height="10" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
-          <path d="m6 6 12 12M18 6 6 18" />
-        </svg>
-      </button>
-    {/if}
   </div>
 
   {#if error}
-    <div
-      class="mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
-    >
-      <span>{error}</span>
-      <button class="btn btn-sm" onclick={() => void load()}>Retry</button>
-    </div>
+    <Banner message={error} onretry={() => void load()} />
   {/if}
 
   <!-- Feed --------------------------------------------------------------- -->
@@ -307,26 +284,29 @@
       {/each}
     </div>
   {:else if items.length === 0}
-    <div class="card">
+    <div class="panel">
       <EmptyState
         title={filtering ? 'Nothing matches' : 'No dictations yet'}
         sub={filtering
           ? 'Try a different search, or clear the filters.'
-          : 'Hold your hotkey anywhere and start talking — everything you dictate shows up here.'}
+          : 'Hold your hotkey anywhere and start talking. Everything you dictate shows up here.'}
       />
     </div>
   {:else}
-    <div class="space-y-6">
+    <div class="space-y-8">
       {#each groups as group (group.day)}
         <section>
-          <h2 class="mb-1.5 px-1 text-[12px] font-semibold text-muted">
-            {fmtDayHeading(group.day)}
+          <h2 class="mb-2.5 flex items-baseline justify-between px-0.5 text-[12.5px]">
+            <span class="font-medium">{fmtDayHeading(group.day)}</span>
+            <span class="text-faint tabular-nums">
+              {group.rows.length} dictation{group.rows.length === 1 ? '' : 's'}
+            </span>
           </h2>
-          <div class="card divide-y divide-border overflow-hidden !rounded-xl">
+          <div class="panel divide-y divide-line overflow-hidden">
             {#each group.rows as item (item.id)}
               <div>
                 <div
-                  class="feed-row !rounded-none"
+                  class="feed-row px-4 py-3.5"
                   role="button"
                   tabindex="0"
                   aria-expanded={expanded === item.id}
@@ -338,43 +318,40 @@
                     }
                   }}
                 >
-                  <div class="flex items-start gap-3">
-                    <p class="min-w-0 flex-1 text-[13.5px] leading-relaxed">
-                      {item.text || '(nothing was transcribed)'}
+                  <div class="flex items-start gap-4">
+                    <p class="min-w-0 flex-1 text-[14px] leading-relaxed" class:text-faint={!item.text}>
+                      {item.text || 'Nothing was transcribed'}
                     </p>
-                    <div class="row-actions flex flex-none items-center gap-0.5">
-                      <button
-                        class="btn btn-ghost btn-icon"
-                        title={copied === item.id ? 'Copied' : 'Copy transcript'}
-                        aria-label="Copy transcript"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          void copy(item.text, item.id);
-                        }}
-                      >
-                        {#if copied === item.id}
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        {:else}
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="9" y="9" width="11" height="11" rx="2.5" />
-                            <path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" />
-                          </svg>
-                        {/if}
-                      </button>
+                    <div class="flex flex-none items-center gap-1">
+                      <div class="row-actions">
+                        <button
+                          class="btn btn-ghost btn-sm btn-icon"
+                          title={copied === item.id ? 'Copied' : 'Copy text'}
+                          aria-label="Copy text"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            void copy(item.text, item.id);
+                          }}
+                        >
+                          {#if copied === item.id}
+                            <Icon name="check" size={14} class="text-ok" />
+                          {:else}
+                            <Icon name="copy" size={14} />
+                          {/if}
+                        </button>
+                      </div>
+                      <span class="w-10 text-right text-[12px] text-faint tabular-nums">
+                        {fmtClock(item.created_at)}
+                      </span>
                     </div>
                   </div>
 
-                  <div class="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-faint">
-                    <span class="tabular-nums">{fmtClock(item.created_at)}</span>
-                    <span>·</span>
-                    <span class="tabular-nums">{fmtDur(item.duration_ms)}</span>
+                  <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-faint">
                     {#if item.app_name}
                       <button
                         type="button"
-                        class="chip cursor-pointer hover:text-text"
-                        title="Filter by {item.app_name}"
+                        class="hover:text-fg"
+                        title="Show only {item.app_name}"
                         onclick={(e) => {
                           e.stopPropagation();
                           appFilter = item.app_name;
@@ -383,77 +360,89 @@
                       >
                         {item.app_name}
                       </button>
+                      <span aria-hidden="true">·</span>
                     {/if}
+                    <span class="tabular-nums">{fmtDur(item.duration_ms)}</span>
                     {#if !item.reviewed}
-                      <span class="chip chip-warn">to review</span>
+                      <span aria-hidden="true">·</span>
+                      <span>Unreviewed</span>
                     {/if}
                   </div>
                 </div>
 
                 {#if expanded === item.id}
-                  <div class="border-t border-border bg-raised/40 px-4 py-4 fade-in">
+                  <div class="border-t border-line bg-subtle px-4 py-4 fade-in">
                     {#if detailLoading}
                       <Skeleton class="h-20 w-full" />
                     {:else if detail}
                       <AudioPlayer src={api.audioUrl(detail.id)} />
 
-                      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div class="mt-5 grid gap-5 sm:grid-cols-2">
                         <div>
-                          <div class="label mb-1">Raw transcript</div>
+                          <div class="label mb-1.5">What una heard</div>
                           <p class="text-[13px] leading-relaxed">{detail.raw_text || '—'}</p>
                         </div>
                         {#if detail.cleaned_text}
                           <div>
-                            <div class="label mb-1">After cleanup</div>
+                            <div class="label mb-1.5">What una pasted</div>
                             <p class="text-[13px] leading-relaxed">{detail.cleaned_text}</p>
                           </div>
                         {/if}
                       </div>
 
                       {#if detail.corrected_text}
-                        <div class="mt-4">
-                          <div class="label mb-1">Your correction</div>
+                        <div class="mt-5">
+                          <div class="label mb-1.5">Your correction</div>
                           <p class="text-[13px] leading-relaxed">{detail.corrected_text}</p>
                         </div>
                       {/if}
 
-                      <div class="mt-4 flex flex-wrap items-center gap-2 hairline-t pt-3">
-                        {#if detail.eval_holdout}
-                          <span class="chip chip-warn" title="Held out of training to measure WER">
-                            holdout
-                          </span>
-                        {/if}
+                      <div class="mt-5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
                         {#if detail.training_eligible}
-                          <span class="chip chip-ok">training pair</span>
+                          <span class="chip"><span class="dot dot-ok"></span>Training pair</span>
                         {:else if detail.eligibility_reason}
                           <span class="chip" title={detail.eligibility_reason}>
-                            not eligible
+                            <span class="dot"></span>Not used for training
+                          </span>
+                        {/if}
+                        {#if detail.eval_holdout}
+                          <span class="chip" title="Held out of training to measure accuracy">
+                            Held out
                           </span>
                         {/if}
                         {#if detail.asr_model}
-                          <span class="chip" title="ASR model">{detail.asr_model}</span>
+                          <span class="chip font-mono !text-[10.5px]" title="Speech model">
+                            {detail.asr_model}
+                          </span>
                         {/if}
                         {#if detail.llm_model}
-                          <span class="chip" title="Cleanup model">{detail.llm_model}</span>
+                          <span class="chip font-mono !text-[10.5px]" title="Cleanup model">
+                            {detail.llm_model}
+                          </span>
                         {/if}
 
-                        <div class="ml-auto flex items-center gap-2">
+                        <div class="ml-auto flex items-center gap-1.5">
                           {#if !item.reviewed}
-                            <a href="#/review" class="btn btn-sm">Review this</a>
+                            <a href="#/review" class="btn btn-sm">Review</a>
                           {/if}
                           {#if confirmDelete === item.id}
-                            <button class="btn btn-sm btn-danger" onclick={() => void remove(item.id)}>
-                              Delete for good
-                            </button>
                             <button class="btn btn-sm btn-ghost" onclick={() => (confirmDelete = null)}>
                               Cancel
                             </button>
+                            <button
+                              class="btn btn-sm !border-transparent !bg-[var(--danger)] !text-white"
+                              onclick={() => void remove(item.id)}
+                            >
+                              Delete for good
+                            </button>
                           {:else}
                             <button
-                              class="btn btn-sm btn-danger"
+                              class="btn btn-sm btn-danger btn-icon"
+                              title="Delete"
+                              aria-label="Delete dictation"
                               onclick={() => (confirmDelete = item.id)}
                             >
-                              Delete
+                              <Icon name="trash" size={14} />
                             </button>
                           {/if}
                         </div>
@@ -469,7 +458,7 @@
     </div>
 
     {#if nextCursor}
-      <div class="mt-6 flex justify-center">
+      <div class="mt-8 flex justify-center">
         <button class="btn" disabled={loadingMore} onclick={() => void load(nextCursor ?? undefined)}>
           {loadingMore ? 'Loading…' : 'Load older'}
         </button>
