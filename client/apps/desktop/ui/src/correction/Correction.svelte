@@ -94,7 +94,7 @@
     {:else}
       Correct what una just pasted.
     {/if}
-    Your edit teaches it this recording.
+    Your fix teaches it how you'd have written it.
   </p>
 
   <textarea

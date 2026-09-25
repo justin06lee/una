@@ -9,9 +9,9 @@
 
 <h1 class="page-title">Learning</h1>
 <p class="page-sub">
-  una gets better by comparing what it heard with what you meant. Each correction becomes a
-  training pair: the recording teaches the speech model your voice, and your final wording
-  teaches the cleanup model your style. Both fine-tunes run on your own server.
+  una gets better the more you use it. Dictations you leave alone confirm what it heard, which
+  teaches the speech model your voice; fixes you make to the text it pasted show how you'd have
+  written it, which teaches the cleanup model your style. Both fine-tunes run on your own server.
 </p>
 
 <div class="section">

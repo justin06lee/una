@@ -223,7 +223,7 @@
         </div>
         <div class="mt-auto flex items-center justify-between gap-3 pt-5">
           <span class="text-[12px] text-faint">
-            {elig.style_pairs === 0 ? 'Add rewrites while reviewing' : 'Rewrites from Review'}
+            {elig.style_pairs === 0 ? 'Fix pasted text, or rewrite in Review' : 'From your edits and Review'}
           </span>
           <button
             class="btn btn-sm {elig.style_ready ? 'btn-primary' : ''}"
@@ -232,8 +232,8 @@
             title={hasActive
               ? 'A run is already going'
               : elig.style_pairs === 0
-                ? 'Rewrite a few dictations in Review to collect style pairs'
-                : 'Fine-tune the cleanup model on your rewrites'}
+                ? 'Fix a few pasted dictations, or rewrite them in Review, to collect style pairs'
+                : 'Fine-tune the cleanup model on your edits and rewrites'}
           >
             Train my style
           </button>
