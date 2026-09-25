@@ -2,10 +2,14 @@
 
 Spawned by services.jobs.JobManager (same single GPU slot as ASR runs); owns its
 training_runs row via sync sqlite3. Mirrors runner.py's stage order:
-building -> training -> converting (ollama create) -> evaluating -> promoted|rejected.
+building -> training (SFT, then DPO) -> converting (ollama create) -> evaluating ->
+promoted|rejected.
 
 wer_baseline / wer_candidate store the style metric — mean normalized edit
-distance in [0, 1] between model output and polished target (lower is better).
+distance in [0, 1] between model output and polished target (lower is better) — on
+confirmed dictations when there are enough, else on the holdout of the user's own
+writing (eval_set says which). A candidate must also not answer more of the reply
+probes than the current model. `notes` records what went into the run.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import random
 import shutil
 import sqlite3
 import sys
@@ -29,21 +34,14 @@ log = logging.getLogger("una_server.training.style_runner")
 
 
 def _hyperparams(row: sqlite3.Row, cfg: Config) -> dict:
-    training = cfg.training
-    defaults = {
-        "style_base_hf_model": training.style_base_hf_model,
-        "style_ollama_base": training.style_ollama_base,
-        "style_lora_r": training.style_lora_r,
-        "style_lora_alpha": training.style_lora_alpha,
-        "style_lora_dropout": training.style_lora_dropout,
-        "style_learning_rate": training.style_learning_rate,
-        "style_epochs": training.style_epochs,
-        "style_batch_size": training.style_batch_size,
-        "style_grad_accum": training.style_grad_accum,
-        "style_max_seq_len": training.style_max_seq_len,
-    }
+    """The run's stored style_* settings over the current config's (older runs lack some)."""
+    defaults = style_settings(cfg.training)
     stored = json.loads(row["hyperparams_json"]) if row["hyperparams_json"] else {}
     return {**defaults, **stored}
+
+
+def style_settings(training) -> dict:
+    return {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
 
 
 def _unload_ollama_models(cfg: Config) -> None:
@@ -66,18 +64,75 @@ def _cleanup(run_dir: Path) -> None:
         shutil.rmtree(checkpoint, ignore_errors=True)
 
 
+def _choose_eval(split: style_dataset.StyleSplit, min_samples: int):
+    """Judge on confirmed dictations when there are enough; else the writing holdout."""
+    if len(split.eval) >= min_samples:
+        return "confirmed", split.eval
+    if len(split.writing_eval) >= min_samples:
+        return "writing", split.writing_eval
+    raise RuntimeError(
+        f"not enough held-out pairs to judge a candidate: {len(split.eval)} confirmed, "
+        f"{len(split.writing_eval)} from your writing (need {min_samples})"
+    )
+
+
+def _on_policy_preferences(
+    cfg: Config, model: str, split: style_dataset.StyleSplit, limit: int
+) -> list[style_dataset.PreferencePair]:
+    """Your writing preferred over what the current model makes of its spoken version.
+
+    Shows the model its own habits — formal capitals where you'd write lowercase, fillers
+    left in, answers instead of cleanups — next to what you would have written.
+    """
+    pool = [s for s in split.train if s.origin == "writing"]
+    random.Random(0).shuffle(pool)
+    pool = pool[:limit]
+    if not pool:
+        return []
+    produced = style_eval.outputs(cfg.cleanup.ollama_url, model, pool, cfg.cleanup)
+    return [
+        style_dataset.PreferencePair(s.raw_text, s.polished_text, out, s.app_name, "on-policy")
+        for s, out in zip(pool, produced, strict=True)
+        if out.strip() and style_dataset.differs(s.polished_text, out)
+    ]
+
+
 def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> None:
     from . import train_style_lora  # heavy deps live behind this module
 
     hp = _hyperparams(row, cfg)
     log.info("style run %s starting with hyperparams %s", run.run_id, hp)
+    baseline_model = row["base_model_id"] or cfg.cleanup.model
+    notes: list[str] = []
 
     # -- building -------------------------------------------------------------
     run.update(status="building", progress=0.02)
-    split = style_dataset.build_style_datasets(run.conn)
+    split = style_dataset.build_style_datasets(
+        run.conn,
+        use_writing=bool(hp["style_use_writing"]),
+        use_silver=bool(hp["style_use_silver"]),
+        gold_repeat=int(hp["style_gold_repeat"]),
+    )
     if not split.train:
-        raise RuntimeError("no style training pairs (add Final text in Review)")
-    run.update(n_train=len(split.train), n_eval=len(split.eval))
+        raise RuntimeError("no style training pairs (confirm some in Review, or import your writing)")
+    eval_set, eval_samples = _choose_eval(split, int(hp["style_min_eval_samples"]))
+    counts = split.counts()
+    notes.append("train: " + ", ".join(f"{n} {origin}" for origin, n in sorted(counts.items())))
+    notes.append(f"eval: {len(eval_samples)} {eval_set}")
+    run.update(n_train=len(split.train), n_eval=len(eval_samples), eval_set=eval_set,
+               notes="; ".join(notes))
+
+    preferences: list[style_dataset.PreferencePair] = []
+    if hp["style_dpo"]:
+        preferences = list(split.preferences)
+        if int(hp["style_dpo_synthetic"]) > 0:
+            run.update(progress=0.04)
+            preferences += _on_policy_preferences(
+                cfg, baseline_model, split, int(hp["style_dpo_synthetic"])
+            )
+        if len(preferences) < int(hp["style_dpo_min_pairs"]):
+            notes.append(f"dpo: skipped ({len(preferences)} preference pairs)")
+            preferences = []
 
     # -- training -------------------------------------------------------------
     _unload_ollama_models(cfg)
@@ -91,10 +146,19 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
             last_progress = progress
             run.update(progress=round(progress, 4))
 
-    adapter_dir = train_style_lora.train_style_adapter(
+    adapter_dir, dpo_stats = train_style_lora.train_style_adapter(
         split.train, run_dir, hp, cfg.cleanup,
-        device=cfg.asr.device, on_progress=on_progress,
+        device=cfg.asr.device, on_progress=on_progress, preferences=preferences,
     )
+    if dpo_stats:
+        origins: dict[str, int] = {}
+        for pair in preferences:
+            origins[pair.origin] = origins.get(pair.origin, 0) + 1
+        notes.append(
+            "dpo: " + ", ".join(f"{n} {o}" for o, n in sorted(origins.items()))
+            + f" (preferred {dpo_stats.get('preferred_rate')}, loss {dpo_stats.get('final_loss')})"
+        )
+    run.update(notes="; ".join(notes))
 
     # -- converting: layer the adapter into an ollama model -------------------
     run.update(status="converting", progress=0.75)
@@ -108,39 +172,40 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
 
     # -- evaluating (both models through ollama, the real serving path) -------
     run.update(status="evaluating", progress=0.85)
-    baseline_model = row["base_model_id"] or cfg.cleanup.model
-    dist_baseline = dist_candidate = None
-    if split.eval:
-        dist_baseline = style_eval.mean_distance(
-            cfg.cleanup.ollama_url, baseline_model, split.eval, cfg.cleanup
-        )
-        dist_candidate = style_eval.mean_distance(
-            cfg.cleanup.ollama_url, model_name, split.eval, cfg.cleanup
-        )
-        run.update(
-            wer_baseline=round(dist_baseline, 4), wer_candidate=round(dist_candidate, 4)
-        )
+    dist_baseline = style_eval.mean_distance(
+        cfg.cleanup.ollama_url, baseline_model, eval_samples, cfg.cleanup
+    )
+    probes_baseline = style_eval.reply_failures(cfg.cleanup.ollama_url, baseline_model, cfg.cleanup)
+    dist_candidate = style_eval.mean_distance(
+        cfg.cleanup.ollama_url, model_name, eval_samples, cfg.cleanup
+    )
+    probes_candidate = style_eval.reply_failures(cfg.cleanup.ollama_url, model_name, cfg.cleanup)
+    run.update(wer_baseline=round(dist_baseline, 4), wer_candidate=round(dist_candidate, 4))
 
     # -- promotion gate -------------------------------------------------------
     ok, reason = style_promote.should_promote_style(
-        dist_baseline if dist_baseline is not None else 0.0,
-        dist_candidate if dist_candidate is not None else 0.0,
-        len(split.eval),
-        cfg.training.style_promotion_margin,
-        cfg.training.style_min_eval_samples,
+        dist_baseline, dist_candidate, len(eval_samples),
+        cfg.training.style_promotion_margin, cfg.training.style_min_eval_samples,
     )
+    probes_ok, probes_reason = style_promote.probe_gate(
+        len(probes_baseline), len(probes_candidate)
+    )
+    notes.append(probes_reason)
+    if ok and not probes_ok:
+        ok, reason = False, probes_reason
     log.info("style promotion decision: %s — %s", "promote" if ok else "reject", reason)
+    notes.append(("promoted: " if ok else "rejected: ") + reason)
     if ok:
         run.update(
             status="promoted", produced_model_id=model_name, progress=1.0,
-            finished_at=utcnow(),
+            finished_at=utcnow(), notes="; ".join(notes),
         )
         style_promote.switch_cleanup_model(cfg.server.port, model_name)
     else:
         # keep the ollama model + adapter for inspection; the cleaner is untouched
         run.update(
             status="rejected", produced_model_id=model_name, progress=1.0,
-            finished_at=utcnow(),
+            finished_at=utcnow(), notes="; ".join(notes),
         )
 
     _cleanup(run_dir)

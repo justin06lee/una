@@ -28,6 +28,16 @@ def should_promote_style(
     return False, f"distance improved by only {delta:.4f} (< {margin})"
 
 
+def probe_gate(baseline_failures: int, candidate_failures: int) -> tuple[bool, str]:
+    """A candidate may not answer more of the reply probes than the model it replaces."""
+    if candidate_failures > baseline_failures:
+        return False, (
+            f"answers {candidate_failures} reply probes instead of cleaning them "
+            f"(current model: {baseline_failures})"
+        )
+    return True, f"reply probes: {candidate_failures} answered (current model: {baseline_failures})"
+
+
 def new_style_model_name(run_id: str) -> str:
     return f"una-style-{run_id[-4:].lower()}"
 

@@ -67,7 +67,9 @@ def create_app(config: Config | None = None, *, load_model: bool = True) -> Fast
             await state.models.load_active()
         warm_task = None
         if load_model and cfg.cleanup.enabled:
-            warm_task = asyncio.create_task(state.cleaner.keep_warm())
+            warm_task = asyncio.create_task(
+                state.cleaner.keep_warm(paused=lambda: state.jobs.active)
+            )
         auto_task = None
         if load_model:
             auto_task = asyncio.create_task(autotrain.loop(state))

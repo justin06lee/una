@@ -118,12 +118,16 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click
    rollback from the model registry, always.
 
-7. The same loop learns your **style**. The optional *How you'd have written it* field in Review collects
-   (raw transcript → how you actually wanted it written) pairs; once enough accumulate
-   (`training.style_threshold_pairs`, default 50), the Training page can QLoRA-fine-tune the
-   cleanup LLM on them. The adapter is layered onto the Ollama base model, both models are
-   evaluated through Ollama itself by mean edit distance to your polished targets, and the
-   candidate is promoted by switching `cleanup.model` — same gate, same one-click rollback.
+7. The same loop learns your **style**. The cleanup LLM is trained on (transcript → how you'd
+   have written it) pairs: dictations you confirmed, the teacher's guesses, and — so it
+   knows your style from day one — **your own writing**: `make import-writing` takes what
+   you've typed to Claude Code and Codex, has an LLM work out what Whisper would have heard
+   had you said it, and trains on (that → what you actually typed), casual shorthand and
+   all. A QLoRA pass on those pairs is followed by DPO on your edits and on your writing
+   versus what the current model makes of it. Both models are then evaluated through Ollama
+   by edit distance to your text, and the candidate must also not *answer* dictated
+   questions instead of cleaning them; it's promoted by switching `cleanup.model` — same
+   one-click rollback. See [docs/personal-model.md](docs/personal-model.md).
 
 Quick wins arrive before any training: add names and jargon to the **Dictionary** and they are
 injected into Whisper's decoding prompt and the cleanup prompt immediately.

@@ -42,6 +42,9 @@ style_threshold_pairs = 50   # polished pairs collected before style training is
 # style_base_hf_model = "unsloth/Llama-3.2-3B-Instruct"  # HF weights to train (ungated Llama mirror)
 # style_ollama_base = "llama3.2:3b"                      # ollama model the adapter layers onto
 # style_promotion_margin = 0.02  # mean edit distance to your targets must improve by this
+# style_use_writing = true       # train on your own writing (make import-writing), back-translated
+# style_use_silver = true        # and on the teacher's unconfirmed polished guesses
+# style_dpo = true               # then DPO on your edits + your writing vs the current model
 
 # Teacher: a background second opinion that pre-fills review (docs/personal-model.md).
 [teacher]

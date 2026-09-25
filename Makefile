@@ -1,6 +1,6 @@
 # una — golden paths
 
-.PHONY: all build install update dmg server-dev server-test dashboard-dev dashboard-build client-check client-test ui-build client-dev docker
+.PHONY: all build install update dmg server-dev server-test dashboard-dev dashboard-build client-check client-test ui-build client-dev docker import-writing
 
 # ---- the golden path: build the client, reset stale TCC grants, install, launch ----
 all:
@@ -30,6 +30,15 @@ server-dev:
 
 server-test:
 	cd server && uv run pytest -q
+
+# ---- your writing -> cleanup-model training pairs (docs/personal-model.md) ----
+# Reads your Claude Code / Codex prompts on this machine, back-translates them through a
+# local yagami (started and stopped here if it isn't running), and uploads them.
+UNA_SERVER ?= http://tenet.local:8100
+import-writing:
+	@started=""; if ! yagami status >/dev/null 2>&1; then yagami start --daemon >/dev/null && started=1; fi; \
+	cd server && UNA_SERVER=$(UNA_SERVER) uv run python -m una_server.tools.writing --llm http://127.0.0.1:8787; \
+	status=$$?; if [ -n "$$started" ]; then yagami stop >/dev/null; fi; exit $$status
 
 # ---- dashboard ----
 dashboard-dev:

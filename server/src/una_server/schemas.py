@@ -151,6 +151,9 @@ class Eligibility(BaseModel):
     style_pairs: int = 0
     style_threshold_pairs: int = 0
     style_ready: bool = False
+    # back-translated pieces of the user's own writing, and how many make a run worthwhile
+    style_writing_pairs: int = 0
+    style_writing_threshold: int = 0
 
 
 class StartRunRequest(BaseModel):
@@ -171,6 +174,8 @@ class TrainingRun(BaseModel):
     wer_candidate: float | None
     error: str | None
     progress: float
+    eval_set: str | None = None  # style runs: 'confirmed' dictations, or the 'writing' holdout
+    notes: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -251,3 +256,42 @@ class Stats(BaseModel):
     cleanup: StatsCleanup
     review: StatsReview
     wer_series: list[WerPoint]
+
+
+class CorpusItem(BaseModel):
+    """A piece of the user's own writing, optionally already back-translated."""
+
+    source: str
+    app_name: str | None = None
+    written_text: str
+    target_text: str | None = None
+    spoken_text: str | None = None
+    generator_model: str | None = None
+
+
+class CorpusUpload(BaseModel):
+    items: list[CorpusItem]
+
+
+class CorpusUploadResult(BaseModel):
+    added: int = 0
+    updated: int = 0
+    unchanged: int = 0
+
+
+class CorpusKnownRequest(BaseModel):
+    hashes: list[str]
+
+
+class CorpusKnown(BaseModel):
+    finished: list[str]  # hashes the server already holds with a back-translation
+
+
+class Calibration(BaseModel):
+    transcripts: list[str]
+
+
+class CorpusStats(BaseModel):
+    samples: int
+    finished: int
+    holdout: int

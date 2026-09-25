@@ -19,6 +19,10 @@ SELECT COUNT(*) AS n FROM corrections c JOIN dictations d ON d.id = c.dictation_
 WHERE c.polished_text IS NOT NULL AND d.deleted = 0
 """
 
+WRITING_SQL = """
+SELECT COUNT(*) AS n FROM style_corpus WHERE spoken_text IS NOT NULL AND target_text IS NOT NULL
+"""
+
 # Eligible pairs whose correction is newer than the last run attempt (any outcome).
 # Auto-training only fires when this is non-zero, so it neither retrains in a loop
 # on unchanged data nor hammers the GPU retrying a persistently failing run.
@@ -52,18 +56,7 @@ RUNNER_MODULES = {
 def _hyperparams(state: AppState, kind: str) -> dict:
     training = state.config.training
     if kind == "style":
-        return {
-            "style_base_hf_model": training.style_base_hf_model,
-            "style_ollama_base": training.style_ollama_base,
-            "style_lora_r": training.style_lora_r,
-            "style_lora_alpha": training.style_lora_alpha,
-            "style_lora_dropout": training.style_lora_dropout,
-            "style_learning_rate": training.style_learning_rate,
-            "style_epochs": training.style_epochs,
-            "style_batch_size": training.style_batch_size,
-            "style_grad_accum": training.style_grad_accum,
-            "style_max_seq_len": training.style_max_seq_len,
-        }
+        return {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
     return {
         "base_hf_model": training.base_hf_model,
         "lora_r": training.lora_r,

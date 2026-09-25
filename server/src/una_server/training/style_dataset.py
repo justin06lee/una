@@ -1,8 +1,20 @@
-"""Style dataset assembly: (raw transcript -> polished text) chat pairs.
+"""Style dataset assembly: (transcript -> how it should read) chat pairs for the cleanup LLM.
 
 Pure stdlib so the runner (and tests) can build datasets without torch installed.
-Each sample carries the dictation's app_name so training reconstructs the same
-system prompt the cleaner uses at inference time.
+Each sample carries an app_name so training reconstructs the same system prompt the
+cleaner uses at inference time.
+
+Pairs come from three places, in decreasing order of trust:
+
+- confirmed: a dictation's polished text as the user gave or confirmed it. The only
+  source of held-out eval pairs once there are enough of them, and repeated in training.
+- writing:   the user's own writing, back-translated into what Whisper would have heard
+  (training/backtranslate.py). Its frozen holdout stands in as the eval set until there
+  are enough confirmed pairs.
+- silver:    the teacher's polished guess for dictations nobody has confirmed. Train only.
+
+Preference pairs for DPO come from confirmed polished texts that differ from what was
+pasted: the user's version is preferred over the model's.
 """
 
 from __future__ import annotations
@@ -10,6 +22,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass, field
+
+from rapidfuzz.distance import Levenshtein
 
 from ..config import CleanupConfig
 from ..services.prompts import build_system_prompt
@@ -19,23 +33,66 @@ log = logging.getLogger(__name__)
 STYLE_PAIRS_SQL = """
 SELECT d.raw_text, c.polished_text, d.app_name, d.eval_holdout
 FROM corrections c JOIN dictations d ON d.id = c.dictation_id
-WHERE c.polished_text IS NOT NULL AND d.deleted = 0
+WHERE c.polished_text IS NOT NULL AND d.deleted = 0 AND c.action != 'excluded'
 """
+
+SILVER_SQL = """
+SELECT d.raw_text, t.polished_guess, d.app_name
+FROM teacher_labels t JOIN dictations d ON d.id = t.dictation_id
+LEFT JOIN corrections c ON c.dictation_id = d.id
+WHERE t.polished_guess IS NOT NULL AND d.deleted = 0 AND d.eval_holdout = 0
+  AND c.polished_text IS NULL AND COALESCE(c.action, '') != 'excluded'
+"""
+
+WRITING_SQL = """
+SELECT spoken_text, target_text, app_name, eval_holdout FROM style_corpus
+WHERE spoken_text IS NOT NULL AND target_text IS NOT NULL
+"""
+
+PREFERENCE_SQL = """
+SELECT d.raw_text, c.polished_text, d.cleaned_text, d.app_name
+FROM corrections c JOIN dictations d ON d.id = c.dictation_id
+WHERE c.polished_text IS NOT NULL AND d.cleanup_applied = 1 AND d.cleaned_text IS NOT NULL
+  AND d.deleted = 0 AND d.eval_holdout = 0 AND c.action != 'excluded'
+"""
+
+# Below this (case- and punctuation-sensitive) difference, two outputs are the same answer.
+MIN_PREFERENCE_GAP = 0.02
 
 
 @dataclass
 class StyleSample:
-    """One (raw dictation, polished output) pair plus its prompt context."""
+    """One (transcript, polished output) pair plus its prompt context."""
 
     raw_text: str
     polished_text: str
     app_name: str | None
+    origin: str = "confirmed"  # confirmed | writing | silver
+
+
+@dataclass
+class PreferencePair:
+    """For one transcript: an output to prefer over another."""
+
+    raw_text: str
+    chosen: str
+    rejected: str
+    app_name: str | None
+    origin: str  # edit (the user's fix vs what was pasted) | on-policy (writing vs the model)
 
 
 @dataclass
 class StyleSplit:
     train: list[StyleSample] = field(default_factory=list)
-    eval: list[StyleSample] = field(default_factory=list)
+    eval: list[StyleSample] = field(default_factory=list)  # confirmed holdout
+    writing_eval: list[StyleSample] = field(default_factory=list)  # back-translated holdout
+    preferences: list[PreferencePair] = field(default_factory=list)
+
+    def counts(self) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for sample in self.train:
+            out[sample.origin] = out.get(sample.origin, 0) + 1
+        return out
 
 
 def messages_for(cleanup_cfg: CleanupConfig, raw_text: str, app_name: str | None) -> list[dict]:
@@ -46,20 +103,53 @@ def messages_for(cleanup_cfg: CleanupConfig, raw_text: str, app_name: str | None
     ]
 
 
-def build_style_datasets(db: sqlite3.Connection) -> StyleSplit:
-    """Split polished pairs on the frozen eval_holdout flag.
+def differs(a: str, b: str) -> bool:
+    return Levenshtein.normalized_distance(a.strip(), b.strip()) >= MIN_PREFERENCE_GAP
 
-    The connection must have row_factory = sqlite3.Row.
-    """
+
+def build_style_datasets(
+    db: sqlite3.Connection,
+    *,
+    use_writing: bool = True,
+    use_silver: bool = True,
+    gold_repeat: int = 1,
+) -> StyleSplit:
+    """Assemble every source. The connection must have row_factory = sqlite3.Row."""
     split = StyleSplit()
     for row in db.execute(STYLE_PAIRS_SQL):
         raw = (row["raw_text"] or "").strip()
         polished = (row["polished_text"] or "").strip()
         if not raw or not polished:
             continue
-        sample = StyleSample(
-            raw_text=raw, polished_text=polished, app_name=row["app_name"]
-        )
-        (split.eval if row["eval_holdout"] else split.train).append(sample)
-    log.info("style dataset: %d train / %d eval pairs", len(split.train), len(split.eval))
+        sample = StyleSample(raw, polished, row["app_name"], "confirmed")
+        if row["eval_holdout"]:
+            split.eval.append(sample)
+        else:
+            split.train += [sample] * max(1, gold_repeat)
+
+    if use_writing:
+        for row in db.execute(WRITING_SQL):
+            sample = StyleSample(
+                row["spoken_text"].strip(), row["target_text"].strip(), row["app_name"], "writing"
+            )
+            (split.writing_eval if row["eval_holdout"] else split.train).append(sample)
+
+    if use_silver:
+        for row in db.execute(SILVER_SQL):
+            raw = (row["raw_text"] or "").strip()
+            if raw:
+                split.train.append(
+                    StyleSample(raw, row["polished_guess"].strip(), row["app_name"], "silver")
+                )
+
+    for row in db.execute(PREFERENCE_SQL):
+        raw = (row["raw_text"] or "").strip()
+        chosen, rejected = row["polished_text"].strip(), row["cleaned_text"].strip()
+        if raw and chosen and differs(chosen, rejected):
+            split.preferences.append(PreferencePair(raw, chosen, rejected, row["app_name"], "edit"))
+
+    log.info(
+        "style dataset: train %s / eval %d confirmed + %d writing / %d preference pairs",
+        split.counts(), len(split.eval), len(split.writing_eval), len(split.preferences),
+    )
     return split
