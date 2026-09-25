@@ -114,7 +114,7 @@ class TrainingConfig(BaseModel):
     style_dpo_min_pairs: int = 20
     style_dpo_synthetic: int = 150
     style_dpo_beta: float = 0.1
-    style_dpo_learning_rate: float = 2e-5
+    style_dpo_learning_rate: float = 5e-5  # runs are short: ~13 optimizer steps per 100 pairs
     style_dpo_epochs: float = 1.0
 
 
