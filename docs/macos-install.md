@@ -62,7 +62,7 @@ not quarantined and open normally.
 ## Permissions walkthrough
 
 una needs two TCC grants. It lives in the menu bar (no dock icon) — look for
-the small star-badge icon.
+the small three-bar icon.
 
 ### 1. Microphone
 
@@ -77,7 +77,7 @@ If you dismissed it, or dictations record silence:
 
 Pasting the transcript into the focused app synthesizes a Cmd+V keystroke,
 which requires Accessibility. Open the una settings (tray → Settings… →
-Insertion tab) and click **Grant…**, or add it manually:
+Pasting tab) and click **Grant…**, or add it manually:
 **System Settings → Privacy & Security → Accessibility** → enable **Una**.
 
 Without this grant una still works, but ends each dictation with the text on
@@ -107,13 +107,13 @@ resets the grants of every app on the system.
 
 ## First run checklist
 
-1. Launch Una; the star badge appears in the menu bar.
+1. Launch Una; its three-bar icon appears in the menu bar.
 2. Tray → **Settings… → Server**: add your server's address, or click
-   **Discover** to find `_una._tcp` servers on the LAN. The dot next to each
+   **Scan** under *On this network* to find `_una._tcp` servers on the LAN. The dot next to each
    address turns green when `/v1/health` answers. Add a VPN address too if you
    want to dictate away from home — see
    [remote-access.md](remote-access.md).
-3. Settings → **Audio** → **Test**: speak; the meter should move.
+3. Settings → **Audio** → **Test microphone**: speak; the meter should move.
 4. Hold `Ctrl+Alt+Space`, speak, release. The HUD shows live level bars,
    then a shimmer while transcribing, then the text is pasted where your
    cursor is.

@@ -1,9 +1,14 @@
 {
   "identifier": "default",
-  "description": "Capabilities for the una HUD and settings windows",
-  "windows": ["hud", "settings"],
+  "description": "Capabilities for the una HUD, settings and correction windows",
+  "windows": [
+    "hud",
+    "settings",
+    "correction"
+  ],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
     "global-shortcut:default",
     "autostart:default",
     "opener:default"

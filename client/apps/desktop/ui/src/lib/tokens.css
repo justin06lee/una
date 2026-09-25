@@ -1,71 +1,75 @@
 /**
- * Shared design tokens for the desktop client, matching the server dashboard:
- * warm neutrals, a calm green accent, soft corners.
+ * Shared design tokens for the desktop client. The names and values mirror
+ * the server dashboard's app.css: true neutrals with no brand hue, colour
+ * reserved for meaning (green ok, amber attention, red errors), and primary
+ * actions drawn as the inverse of the canvas.
  *
  * The client follows the operating system's colour scheme rather than offering
  * its own picker — a menu-bar utility should look native to whatever the rest
  * of the desktop is doing.
  *
- * Figtree is bundled rather than linked, so the window renders correctly with
- * no network access.
+ * Geist is bundled rather than linked, so windows render with no network.
  */
-@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 :root {
-  --canvas: #faf9f7;
-  --surface: #ffffff;
-  --raised: #f4f2ee;
-  --hover: #ece9e3;
-  --border: #e9e5de;
-  --edge: #dad5cc;
-  --text: #191815;
-  --muted: #6e6a62;
-  --faint: #9a958c;
+  --canvas: #ffffff;
+  --sidebar: #fafafa;
+  --panel: #ffffff;
+  --subtle: #f5f5f5;
+  --hover: #f0f0f0;
+  --line: #ebebeb;
+  --line-strong: #dcdcdc;
+  --fg: #0a0a0a;
+  --muted: #6b6b6b;
+  --faint: #a3a3a3;
+  --inverse: #0a0a0a;
+  --on-inverse: #ffffff;
+  --knob: #ffffff;
 
-  --accent: #2e8b63;
-  --accent-hover: #277754;
-  --accent-soft: #e9f3ed;
-  --on-accent: #ffffff;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
 
-  --warn: #a96f22;
-  --warn-soft: #fbf1e2;
-  --danger: #bd463c;
-  --danger-soft: #fbecea;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
 
-  --radius-sm: 7px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
 
-  --shadow-card: 0 1px 2px rgb(25 24 21 / 0.04), 0 1px 3px rgb(25 24 21 / 0.03);
-  --shadow-pop: 0 4px 10px rgb(25 24 21 / 0.07), 0 20px 40px -18px rgb(25 24 21 / 0.22);
+  --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #121110;
-    --surface: #191817;
-    --raised: #201e1c;
-    --hover: #272522;
-    --border: #2b2825;
-    --edge: #3a3631;
-    --text: #f2efea;
-    --muted: #a39d94;
-    --faint: #6e6960;
+    --canvas: #0a0a0a;
+    --sidebar: #0f0f0f;
+    --panel: #111111;
+    --subtle: #171717;
+    --hover: #1d1d1d;
+    --line: #232323;
+    --line-strong: #2f2f2f;
+    --fg: #ededed;
+    --muted: #a1a1a1;
+    --faint: #666666;
+    --inverse: #ededed;
+    --on-inverse: #0a0a0a;
+    --knob: #a1a1a1;
 
-    --accent: #4fbf8b;
-    --accent-hover: #63cd9c;
-    --accent-soft: #16281f;
-    --on-accent: #0d1a13;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --warn-soft: #231c0b;
+    --danger: #f87171;
+    --danger-soft: #2a1515;
 
-    --warn: #d69a4e;
-    --warn-soft: #2a2115;
-    --danger: #e0736a;
-    --danger-soft: #2c1917;
-
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.2);
-    --shadow-pop: 0 4px 10px rgb(0 0 0 / 0.35), 0 20px 40px -18px rgb(0 0 0 / 0.7);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
 
     color-scheme: dark;
   }

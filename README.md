@@ -98,7 +98,7 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    happens silently; in terminals and canvas editors it asks with a small editor window.
    See [docs/learning.md](docs/learning.md).
 3. The dashboard's **Review** page is still there for deliberate passes over the backlog
-   (~5 s per utterance), and is the place to add the *Final text* style targets.
+   (~5 s per utterance), and is the place to add *How you'd have written it* style targets.
 4. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
    are auto-excluded as content rewrites. Accepted-as-is dictations count as gold pairs for
    free — which, with automatic capture on, is most of them.
@@ -112,7 +112,7 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    a smoke-test transcription — then hot-swapped into serving with zero restart. One-click
    rollback from the model registry, always.
 
-7. The same loop learns your **style**. The optional *Final text* field in Review collects
+7. The same loop learns your **style**. The optional *How you'd have written it* field in Review collects
    (raw transcript → how you actually wanted it written) pairs; once enough accumulate
    (`training.style_threshold_pairs`, default 50), the Training page can QLoRA-fine-tune the
    cleanup LLM on them. The adapter is layered onto the Ollama base model, both models are

@@ -28,7 +28,7 @@ pub const CORRECTION_LABEL: &str = "correction";
 /// The correction window is a small centered panel, sized for a sentence or
 /// two of dictated text plus its buttons.
 const CORRECTION_WIDTH: f64 = 520.0;
-const CORRECTION_HEIGHT: f64 = 260.0;
+const CORRECTION_HEIGHT: f64 = 280.0;
 
 /// Fixed outer window size; the visual pill (max ~360x44) floats inside.
 pub const HUD_WIDTH: f64 = 400.0;
@@ -73,13 +73,19 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
 }
 
 pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    let window =
+    let builder =
         WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("settings.html".into()))
             .title("Una Settings")
-            .inner_size(760.0, 520.0)
-            .min_inner_size(640.0, 420.0)
-            .visible(false)
-            .build()?;
+            .inner_size(780.0, 560.0)
+            .min_inner_size(660.0, 440.0)
+            .visible(false);
+    // The sidebar runs to the top edge with the traffic lights drawn over it;
+    // the page leaves room for them and marks a drag region.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder.build()?;
 
     // Hide instead of destroy on close, so the window can be reopened
     // instantly from the tray.
@@ -181,7 +187,7 @@ fn position_hud(app: &AppHandle, window: &WebviewWindow) {
 /// webview per correction would add a visible delay to something that has to
 /// appear the instant an edit starts.
 pub fn create_correction(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    let window = WebviewWindowBuilder::new(
+    let builder = WebviewWindowBuilder::new(
         app,
         CORRECTION_LABEL,
         WebviewUrl::App("correction.html".into()),
@@ -192,8 +198,13 @@ pub fn create_correction(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .always_on_top(true)
     .skip_taskbar(true)
     .visible(false)
-    .center()
-    .build()?;
+    .center();
+    // Same chrome as settings: the page draws its own title strip.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder.build()?;
 
     // Closing the window is "never mind": drop the pending correction so a
     // later dictation can't be filed against it.

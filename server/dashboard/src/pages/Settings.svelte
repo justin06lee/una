@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
 
   import { api, errMsg, type Settings } from '../api';
+  import Banner from '../lib/Banner.svelte';
+  import PageHeader from '../lib/PageHeader.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import ThemeToggle from '../lib/ThemeToggle.svelte';
   import Toggle from '../lib/Toggle.svelte';
@@ -84,34 +86,33 @@
   }
 </script>
 
-<div class="mx-auto max-w-2xl px-8 py-10 pb-24">
-  <header class="mb-7">
-    <h1 class="text-[20px] font-semibold tracking-tight">Settings</h1>
-    <p class="mt-1 text-[13px] text-muted">
-      Applied the moment you save, and kept across restarts.
-    </p>
-  </header>
+{#snippet heading(title: string, sub: string)}
+  <div class="mb-3">
+    <h2 class="text-[14px] font-medium">{title}</h2>
+    <p class="mt-1 text-[13px] text-muted">{sub}</p>
+  </div>
+{/snippet}
+
+{#snippet copy(title: string, sub: string)}
+  <div class="min-w-0">
+    <div class="text-[13.5px]">{title}</div>
+    <div class="mt-0.5 text-[12.5px] leading-relaxed text-muted">{sub}</div>
+  </div>
+{/snippet}
+
+<div class="mx-auto max-w-[42rem] px-10 py-12 pb-28">
+  <PageHeader title="Settings" sub="Saved on the server, applied the moment you save, and kept across restarts." />
 
   {#if error}
-    <div
-      class="mb-4 rounded-xl border px-4 py-2.5 text-[13px]"
-      style="border-color: color-mix(in oklab, var(--c-danger) 28%, transparent); background: var(--c-danger-soft); color: var(--c-danger)"
-    >
-      {error}
-    </div>
+    <Banner message={error} />
   {/if}
 
   <!-- Appearance ---------------------------------------------------------- -->
-  <section class="card mb-4">
-    <div class="px-5 pt-4 pb-1"><h2 class="text-[14px] font-semibold">Appearance</h2></div>
-    <div class="flex items-center justify-between gap-6 px-5 py-4">
-      <div>
-        <div class="text-[13.5px]">Theme</div>
-        <div class="mt-0.5 text-[12px] text-muted">
-          Auto follows your operating system.
-        </div>
-      </div>
-      <div class="w-44 flex-none"><ThemeToggle /></div>
+  <section class="mb-10">
+    {@render heading('Appearance', 'How this dashboard looks. The desktop app follows your system.')}
+    <div class="panel flex items-center justify-between gap-6 px-5 py-4">
+      {@render copy('Theme', 'System follows your operating system.')}
+      <ThemeToggle />
     </div>
   </section>
 
@@ -122,139 +123,125 @@
     </div>
   {:else if stored}
     <!-- Cleanup ----------------------------------------------------------- -->
-    <section class="card mb-4 divide-y divide-border">
-      <div class="px-5 pt-4 pb-3">
-        <h2 class="text-[14px] font-semibold">Cleanup</h2>
-        <p class="mt-0.5 text-[12px] text-muted">
-          The local LLM that strips filler words and punctuates before the text reaches your app.
-        </p>
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Clean up transcripts</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            With this off, you get the raw transcript exactly as heard.
+    <section class="mb-10">
+      {@render heading(
+        'Cleanup',
+        'The local language model that strips filler words and punctuates before text reaches your app.',
+      )}
+      <div class="panel divide-y divide-line">
+        <div class="flex items-center justify-between gap-6 px-5 py-4">
+          {@render copy('Clean up transcripts', 'With this off, you get exactly what was heard.')}
+          <Toggle checked={cleanupEnabled} onchange={(v) => (cleanupEnabled = v)} label="Clean up transcripts" />
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-4" class:opacity-50={!cleanupEnabled}>
+          {@render copy('Model', 'Any Ollama model. A 3–4B instruct model is plenty on a small GPU.')}
+          <input
+            class="input w-48 flex-none font-mono !text-[12.5px]"
+            bind:value={cleanupModel}
+            disabled={!cleanupEnabled}
+            aria-label="Cleanup model"
+          />
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-4" class:opacity-50={!cleanupEnabled}>
+          {@render copy('Timeout', 'How long to wait before falling back to the raw transcript.')}
+          <div class="flex flex-none items-center gap-2">
+            <input
+              class="input w-20 text-right tabular-nums"
+              type="number"
+              min="0.5"
+              step="0.5"
+              bind:value={cleanupTimeout}
+              disabled={!cleanupEnabled}
+              aria-label="Cleanup timeout in seconds"
+            />
+            <span class="w-6 text-[12.5px] text-faint">sec</span>
           </div>
         </div>
-        <Toggle checked={cleanupEnabled} onchange={(v) => (cleanupEnabled = v)} label="Enable cleanup" />
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Model</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            Any Ollama model — a 3–4B instruct model is plenty on a small GPU.
-          </div>
-        </div>
-        <input class="input max-w-48" bind:value={cleanupModel} aria-label="Cleanup model" />
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Timeout</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            Seconds to wait before giving up and using the raw transcript.
-          </div>
-        </div>
-        <input
-          class="input max-w-24 text-right tabular-nums"
-          type="number"
-          min="0.5"
-          step="0.5"
-          bind:value={cleanupTimeout}
-          aria-label="Cleanup timeout in seconds"
-        />
       </div>
     </section>
 
     <!-- Training ---------------------------------------------------------- -->
-    <section class="card mb-6 divide-y divide-border">
-      <div class="px-5 pt-4 pb-3">
-        <h2 class="text-[14px] font-semibold">Training</h2>
-        <p class="mt-0.5 text-[12px] text-muted">
-          When and how una fine-tunes itself on the dictations you've reviewed.
-        </p>
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Train after</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            Minutes of reviewed, eligible audio before a run is worth starting.
+    <section class="mb-10">
+      {@render heading('Training', 'When and how una fine-tunes itself on the dictations you review.')}
+      <div class="panel divide-y divide-line">
+        <div class="flex items-center justify-between gap-6 px-5 py-4">
+          {@render copy('Train after', 'Minutes of reviewed audio before a voice run is worth starting.')}
+          <div class="flex flex-none items-center gap-2">
+            <input
+              class="input w-20 text-right tabular-nums"
+              type="number"
+              min="1"
+              step="1"
+              bind:value={thresholdMinutes}
+              aria-label="Training threshold in minutes"
+            />
+            <span class="w-6 text-[12.5px] text-faint">min</span>
           </div>
         </div>
-        <div class="flex flex-none items-center gap-2">
-          <input
-            class="input w-24 text-right tabular-nums"
-            type="number"
-            min="1"
-            step="1"
-            bind:value={thresholdMinutes}
-            aria-label="Training threshold in minutes"
-          />
-          <span class="text-[12px] text-faint">min</span>
+        <div class="flex items-center justify-between gap-6 px-5 py-4">
+          {@render copy(
+            'Train automatically',
+            "Start a run by itself once there's new reviewed data and the machine is idle.",
+          )}
+          <Toggle checked={trainingAuto} onchange={(v) => (trainingAuto = v)} label="Train automatically" />
         </div>
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Train automatically</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            Start a run on its own once there's new reviewed data and the machine is idle.
+        <div class="flex items-center justify-between gap-6 px-5 py-4" class:opacity-50={!trainingAuto}>
+          {@render copy('Idle time first', 'How long dictation has to be quiet, since training takes the GPU.')}
+          <div class="flex flex-none items-center gap-2">
+            <input
+              class="input w-20 text-right tabular-nums"
+              type="number"
+              min="1"
+              step="5"
+              bind:value={autoIdleMinutes}
+              disabled={!trainingAuto}
+              aria-label="Idle minutes before auto-training"
+            />
+            <span class="w-6 text-[12.5px] text-faint">min</span>
           </div>
         </div>
-        <Toggle checked={trainingAuto} onchange={(v) => (trainingAuto = v)} label="Auto-train" />
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4" class:opacity-55={!trainingAuto}>
-        <div>
-          <div class="text-[13.5px]">Idle before auto-training</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            How long dictation must be quiet first — training takes the GPU.
+        <div class="flex items-center justify-between gap-6 px-5 py-4">
+          {@render copy(
+            'Correction strictness',
+            'Corrections that stray further than this from what was heard count as rewrites and are left out of voice training (0–1).',
+          )}
+          <div class="flex flex-none items-center gap-2">
+            <input
+              class="input w-20 text-right tabular-nums"
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              bind:value={maxEditDistance}
+              aria-label="Maximum normalized edit distance"
+            />
+            <span class="w-6"></span>
           </div>
         </div>
-        <div class="flex flex-none items-center gap-2">
-          <input
-            class="input w-24 text-right tabular-nums"
-            type="number"
-            min="1"
-            step="5"
-            bind:value={autoIdleMinutes}
-            disabled={!trainingAuto}
-            aria-label="Auto-train idle minutes"
-          />
-          <span class="text-[12px] text-faint">min</span>
-        </div>
-      </div>
-      <div class="flex items-center justify-between gap-6 px-5 py-4">
-        <div>
-          <div class="text-[13.5px]">Correction strictness</div>
-          <div class="mt-0.5 text-[12px] text-muted">
-            Corrections that stray further than this from the raw transcript are treated as
-            rewrites and left out of training (0–1).
-          </div>
-        </div>
-        <input
-          class="input max-w-24 text-right tabular-nums"
-          type="number"
-          min="0"
-          max="1"
-          step="0.05"
-          bind:value={maxEditDistance}
-          aria-label="Maximum normalized edit distance"
-        />
       </div>
     </section>
 
-    <!-- Save bar ---------------------------------------------------------- -->
-    <div
-      class="sticky bottom-4 flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 shadow-[var(--shadow-raised)]"
-    >
-      <button class="btn btn-primary" onclick={() => void save()} disabled={saving || !dirty}>
-        {saving ? 'Saving…' : 'Save changes'}
-      </button>
-      {#if saved}
-        <span class="chip chip-ok fade-in"><span class="chip-dot"></span>Saved</span>
-      {:else if dirty}
-        <span class="text-[12px] text-faint">You have unsaved changes</span>
-      {:else}
-        <span class="text-[12px] text-faint">Everything is up to date</span>
-      {/if}
-    </div>
+    <!-- Save bar: only there when there's something to save ---------------- -->
+    {#if dirty || saved}
+      <div
+        class="sticky bottom-5 flex items-center gap-3 rounded-xl border border-line bg-panel py-2.5 pr-2.5 pl-4 shadow-[var(--shadow-pop)] rise-in"
+      >
+        <span class="flex-1 text-[13px]">
+          {#if dirty}
+            You have unsaved changes
+          {:else}
+            <span class="inline-flex items-center gap-2"><span class="dot dot-ok"></span>Saved</span>
+          {/if}
+        </span>
+        {#if dirty}
+          <button class="btn btn-ghost" onclick={() => stored && fill(stored)} disabled={saving}>
+            Discard
+          </button>
+          <button class="btn btn-primary" onclick={() => void save()} disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>

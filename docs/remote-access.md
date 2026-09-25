@@ -117,4 +117,4 @@ systemctl is-enabled una tailscaled     # both should say "enabled"
 | Nothing is reachable | Is the VPN connected on *this* device? `tailscale status` should list the server as online. |
 | Server missing from the tailnet | Its node key probably expired — see step 4 above. |
 | Reachable but slow | `tailscale ping <server>`; if it says DERP you are being relayed. |
-| Reachable, dictation still fails | The dashboard's status card shows whether the ASR model is loaded and whether a training run has the GPU. |
+| Reachable, dictation still fails | The status line at the bottom of the dashboard's sidebar shows whether the ASR model is loaded and whether a training run has the GPU. |

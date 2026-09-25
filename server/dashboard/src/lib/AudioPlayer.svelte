@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
 
   import { fmtTime } from './format';
+  import Icon from './Icon.svelte';
 
   let { src, autoplay = false }: { src: string; autoplay?: boolean } = $props();
 
@@ -93,24 +94,15 @@
 <div class="flex items-center gap-3">
   <button
     type="button"
-    class="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-edge bg-raised text-text transition-colors duration-150 hover:bg-hover"
+    class="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-inverse text-on-inverse transition-opacity duration-150 hover:opacity-85"
     onclick={toggle}
     aria-label={playing ? 'Pause' : 'Play'}
     tabindex="-1"
   >
-    {#if playing}
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <rect x="5" y="4" width="5" height="16" rx="1" />
-        <rect x="14" y="4" width="5" height="16" rx="1" />
-      </svg>
-    {:else}
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M7 4.5v15a1 1 0 0 0 1.5.87l13-7.5a1 1 0 0 0 0-1.74l-13-7.5A1 1 0 0 0 7 4.5Z" />
-      </svg>
-    {/if}
+    <Icon name={playing ? 'pause' : 'play'} size={13} class={playing ? '' : 'translate-x-px'} />
   </button>
 
-  <span class="w-9 text-right text-xs text-muted tabular-nums">{fmtTime(current)}</span>
+  <span class="w-8 text-right text-[12px] text-muted tabular-nums">{fmtTime(current)}</span>
 
   <div
     bind:this={track}
@@ -127,22 +119,23 @@
     onpointerup={onPointerUp}
     onkeydown={onTrackKeydown}
   >
-    <div class="relative h-1.5 w-full overflow-hidden rounded-full bg-edge">
+    <div class="relative h-1 w-full rounded-full bg-line-strong">
+      <div class="absolute inset-y-0 left-0 rounded-full bg-fg" style="width: {frac * 100}%"></div>
       <div
-        class="absolute inset-y-0 left-0 rounded-full bg-accent"
-        style="width: {frac * 100}%"
+        class="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        style="left: {frac * 100}%"
       ></div>
     </div>
   </div>
 
-  <span class="w-9 text-xs text-faint tabular-nums">{fmtTime(duration)}</span>
+  <span class="w-8 text-[12px] text-faint tabular-nums">{fmtTime(duration)}</span>
 
-  <div class="flex flex-none gap-0.5 rounded-md border border-edge bg-raised p-0.5">
+  <div class="seg !p-0.5">
     {#each [1, 1.5, 2] as r (r)}
       <button
         type="button"
-        class="rounded px-1.5 py-0.5 text-[11px] tabular-nums transition-colors duration-150
-          {rate === r ? 'bg-hover text-text' : 'text-faint hover:text-muted'}"
+        class="seg-item !h-5 !px-1.5 !text-[11px] tabular-nums"
+        class:active={rate === r}
         onclick={() => setRate(r)}
         tabindex="-1"
         aria-pressed={rate === r}
