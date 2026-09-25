@@ -45,6 +45,17 @@ A dictation where every opinion agrees with what was pasted is marked as not nee
 review, and sorts to the back of the queue. Guesses are never training data until you
 confirm them.
 
+### Reviewing
+
+The desktop app's tray → **Review Dictations…** (and the dashboard's Review page) shows
+one dictation at a time, flagged ones first: the audio, **What you said** pre-filled with
+the literal guess, and **How you'd have written it** pre-filled with your own earlier fix
+if you made one, else the polished guess. The words the second listen heard differently
+sit above the transcript as chips — `LAMA 3.2b → Llama 3.2B ▶` — and clicking one plays
+just that moment. ⌘↵ confirms both: the literal becomes the Whisper target (subject to
+the usual edit-distance filter) and the polished text the style target. S skips for now,
+X excludes the dictation from training.
+
 ### Using Claude without an API key
 
 The LLM part speaks the Anthropic Messages API, so it works with an API key or with

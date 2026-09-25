@@ -1,4 +1,4 @@
-//! Tauri commands invoked by the settings, HUD, and correction webviews.
+//! Tauri commands invoked by the settings, HUD, correction, and review webviews.
 
 use std::time::Duration;
 
@@ -385,4 +385,78 @@ pub async fn correction_submit(app: AppHandle, text: String) -> Result<bool, Str
 pub fn correction_dismiss(app: AppHandle, state: State<'_, AppState>) {
     state.pending_correction.lock().unwrap().take();
     windows::hide_correction(&app);
+}
+
+// ---------------------------------------------------------------------------
+// Review window
+// ---------------------------------------------------------------------------
+
+/// Whichever configured server address is live right now.
+async fn live_server(state: &AppState) -> Result<String, String> {
+    let (urls, autodiscover) = {
+        let cfg = state.config.read().unwrap();
+        (cfg.server.urls.clone(), cfg.server.autodiscover)
+    };
+    state
+        .endpoints
+        .resolve(&urls, autodiscover)
+        .await
+        .ok_or_else(|| "Can't reach the una server".to_string())
+}
+
+/// Unreviewed dictations with the teacher's guesses, flagged ones first.
+/// Passed through as the server's JSON — the window reads it directly.
+#[tauri::command]
+pub async fn review_queue(
+    state: State<'_, AppState>,
+    limit: Option<u32>,
+) -> Result<serde_json::Value, String> {
+    let base = live_server(&state).await?;
+    let path = format!("/v1/review/queue?limit={}", limit.unwrap_or(20).clamp(1, 100));
+    state.api.get_json(&base, &path).await.map_err(|e| e.to_string())
+}
+
+/// A dictation's audio (WAV), as raw bytes: the webview turns it into a blob
+/// for its player, so the server never has to be reachable from the webview.
+#[tauri::command]
+pub async fn review_audio(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<tauri::ipc::Response, String> {
+    let base = live_server(&state).await?;
+    let bytes = state
+        .api
+        .get_bytes(&base, &format!("/v1/dictations/{id}/audio"))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// File the review of one dictation: the literal transcript's verdict and, when
+/// given, how it should read.
+#[tauri::command]
+pub async fn review_submit(
+    state: State<'_, AppState>,
+    id: String,
+    action: String,
+    corrected_text: Option<String>,
+    polished_text: Option<String>,
+) -> Result<una_core::net::CorrectionResponse, String> {
+    let base = live_server(&state).await?;
+    let body = una_core::net::CorrectionRequest {
+        action,
+        corrected_text,
+        polished_text,
+        source: "review".into(),
+    };
+    state
+        .api
+        .put_correction(&base, &id, &body)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn review_close(app: AppHandle) {
+    windows::hide_review(&app);
 }

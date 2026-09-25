@@ -112,6 +112,10 @@ fn main() {
             commands::correction_pending,
             commands::correction_submit,
             commands::correction_dismiss,
+            commands::review_queue,
+            commands::review_audio,
+            commands::review_submit,
+            commands::review_close,
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -125,6 +129,7 @@ fn main() {
             windows::create_hud(&handle, pill)?;
             windows::create_settings(&handle)?;
             windows::create_correction(&handle)?;
+            windows::create_review(&handle)?;
 
             // One resolver shared by the dictation path and the settings
             // window, so both agree on which endpoint is live.

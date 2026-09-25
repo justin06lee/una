@@ -1,4 +1,4 @@
-//! HUD, settings, and correction window management.
+//! HUD, settings, correction, and review window management.
 //!
 //! The HUD is a fixed-size, frameless, transparent, always-on-top,
 //! click-through window anchored bottom-center of the display that holds the
@@ -11,10 +11,10 @@
 //! - "flash": the previous behavior — hidden while idle, shown by the FSM's
 //!   ShowHud/HideHud effects.
 //!
-//! The correction window is the opposite of the HUD: it deliberately takes
-//! focus, because it exists to be typed into. Showing it flips the app out of
-//! accessory mode for as long as it is up (a menu-bar app's windows cannot
-//! take keyboard focus otherwise) and back afterwards.
+//! The correction and review windows are the opposite of the HUD: they
+//! deliberately take focus, because they exist to be typed into. Showing one
+//! flips the app out of accessory mode for as long as it is up (a menu-bar
+//! app's windows cannot take keyboard focus otherwise) and back afterwards.
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use una_core::state::Snapshot;
@@ -24,6 +24,7 @@ use crate::app_state::AppState;
 pub const HUD_LABEL: &str = "hud";
 pub const SETTINGS_LABEL: &str = "settings";
 pub const CORRECTION_LABEL: &str = "correction";
+pub const REVIEW_LABEL: &str = "review";
 
 /// The correction window is a small centered panel, sized for a sentence or
 /// two of dictated text plus its buttons.
@@ -246,14 +247,74 @@ pub fn show_correction(app: &AppHandle) {
 /// Hide the correction window and give the menu-bar app its accessory status
 /// back, so it stops showing up in the Dock and ⌘-Tab.
 pub fn hide_correction(app: &AppHandle) {
+    hide_focus_window(app, CORRECTION_LABEL);
+}
+
+/// Hide one of the focus-taking windows; drop back to accessory mode unless
+/// the other is still up and being typed into.
+fn hide_focus_window(app: &AppHandle, label: &'static str) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        if let Some(window) = handle.get_webview_window(CORRECTION_LABEL) {
+        if let Some(window) = handle.get_webview_window(label) {
             let _ = window.hide();
         }
+        let other_open = [CORRECTION_LABEL, REVIEW_LABEL]
+            .into_iter()
+            .filter(|l| *l != label)
+            .filter_map(|l| handle.get_webview_window(l))
+            .any(|w| w.is_visible().unwrap_or(false));
         #[cfg(target_os = "macos")]
-        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
+        if !other_open {
+            let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = other_open;
     });
+}
+
+/// Create the review window: a regular window for going through recent
+/// dictations with the teacher's guesses. Kept alive and hidden between uses.
+pub fn create_review(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let builder =
+        WebviewWindowBuilder::new(app, REVIEW_LABEL, WebviewUrl::App("review.html".into()))
+            .title("Review dictations")
+            .inner_size(640.0, 660.0)
+            .min_inner_size(520.0, 520.0)
+            .visible(false)
+            .center();
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder.build()?;
+
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            hide_review(&handle);
+        }
+    });
+    Ok(window)
+}
+
+/// Bring up the review window, focused, and tell it to fetch the queue.
+pub fn show_review(app: &AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(window) = handle.get_webview_window(REVIEW_LABEL) else {
+            return;
+        };
+        #[cfg(target_os = "macos")]
+        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Regular);
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("review-opened", ());
+    });
+}
+
+pub fn hide_review(app: &AppHandle) {
+    hide_focus_window(app, REVIEW_LABEL);
 }
 
 pub fn show_settings(app: &AppHandle) {
