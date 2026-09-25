@@ -36,6 +36,32 @@ class DictationSummary(BaseModel):
     review_action: str | None = None
 
 
+class DisagreementSpan(BaseModel):
+    """Characters [start, end) of raw_text the teacher's second ASR pass heard as `alt`;
+    t0/t1 are where that is in the audio, in seconds."""
+
+    start: int
+    end: int
+    alt: str
+    t0: float | None = None
+    t1: float | None = None
+
+
+class TeacherLabel(BaseModel):
+    """The teacher's second opinion on a dictation, for pre-filling review."""
+
+    status: Literal["done", "partial", "failed"]
+    second_text: str | None = None
+    second_model: str | None = None
+    disagreements: list[DisagreementSpan] = []
+    literal_guess: str | None = None
+    polished_guess: str | None = None
+    llm_model: str | None = None
+    llm_error: str | None = None
+    needs_review: bool = True
+    error: str | None = None
+
+
 class DictationDetail(DictationSummary):
     raw_text: str
     cleaned_text: str | None
@@ -49,6 +75,24 @@ class DictationDetail(DictationSummary):
     eligibility_reason: str | None = None
     correction_source: str | None = None
     eval_holdout: bool
+    teacher: TeacherLabel | None = None
+
+
+class ReviewQueue(BaseModel):
+    """Unreviewed dictations, the ones worth a look first."""
+
+    items: list[DictationDetail]
+    pending: int  # unreviewed dictations in total
+    needs_review: int  # of those, how many the teacher flagged
+
+
+class TeacherStatus(BaseModel):
+    enabled: bool
+    second_asr_model: str | None = None
+    llm_model: str | None = None
+    unlabeled: int = 0
+    partial: int = 0
+    last_error: str | None = None
 
 
 class DictationList(BaseModel):

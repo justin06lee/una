@@ -19,6 +19,7 @@ from ..schemas import (
     StatsReview,
     StatsStreak,
     StatsTotals,
+    TeacherStatus,
     WerPoint,
 )
 from ..state import AppState
@@ -192,4 +193,23 @@ async def stats(state: State) -> Stats:
             eligible=review_row["eligible"] or 0,
         ),
         wer_series=wer_series,
+    )
+
+
+@router.get("/teacher", response_model=TeacherStatus)
+async def teacher_status(state: State) -> TeacherStatus:
+    teacher = state.teacher
+    if teacher is None:
+        return TeacherStatus(enabled=False)
+    async with state.db.execute(
+        "SELECT COUNT(*) AS n FROM teacher_labels WHERE status = 'partial'"
+    ) as cur:
+        partial = (await cur.fetchone())["n"]
+    return TeacherStatus(
+        enabled=True,
+        second_asr_model=teacher.cfg.second_asr_model if teacher.second else None,
+        llm_model=teacher.cfg.llm_model if teacher.llm else None,
+        unlabeled=await teacher.pending(),
+        partial=partial,
+        last_error=teacher.last_error,
     )
