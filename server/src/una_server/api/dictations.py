@@ -263,7 +263,7 @@ async def review_queue(state: State, limit: int = 20) -> ReviewQueue:
     ) as cur:
         counts = await cur.fetchone()
     return ReviewQueue(
-        items=[_detail(row) for row in rows],
+        items=[_detail(row, state) for row in rows],
         pending=counts["pending"],
         needs_review=counts["flagged"],
     )
@@ -279,15 +279,20 @@ async def review_next(state: State, after: str | None = None):
     sql += " ORDER BY d.id ASC LIMIT 1"
     async with state.db.execute(sql, params) as cur:
         row = await cur.fetchone()
-    return _detail(row) if row else None
+    return _detail(row, state) if row else None
 
 
-def _detail(row) -> DictationDetail:
+def _detail(row, state: AppState) -> DictationDetail:
+    cleaned = row["cleaned_text"] if row["cleanup_applied"] else None
     return DictationDetail(
         **_summary(row).model_dump(),
         raw_text=row["raw_text"],
         cleaned_text=row["cleaned_text"],
         cleanup_applied=bool(row["cleanup_applied"]),
+        # Rows from before the divergence guard can hold a reply instead of a cleanup;
+        # review must not offer one as the draft of how it should read.
+        cleanup_diverged=cleaned is not None
+        and norm_edit_distance(row["raw_text"], cleaned) > state.config.cleanup.max_divergence,
         asr_model=row["asr_model_id"],
         llm_model=row["llm_model"],
         language=row["language"],
@@ -328,7 +333,7 @@ async def _fetch_detail_row(state: AppState, dictation_id: str):
 
 @router.get("/dictations/{dictation_id}", response_model=DictationDetail)
 async def get_dictation(state: State, dictation_id: str) -> DictationDetail:
-    return _detail(await _fetch_detail_row(state, dictation_id))
+    return _detail(await _fetch_detail_row(state, dictation_id), state)
 
 
 @router.get("/dictations/{dictation_id}/audio")

@@ -56,7 +56,10 @@
       // The teacher's guesses, when there are any, are the drafts to confirm.
       editor = item?.teacher?.literal_guess ?? item?.raw_text ?? '';
       polishEditor = item
-        ? (item.polished_text ?? item.teacher?.polished_guess ?? item.cleaned_text ?? item.raw_text)
+        ? (item.polished_text ??
+          item.teacher?.polished_guess ??
+          (item.cleanup_diverged ? null : item.cleaned_text) ??
+          item.raw_text)
         : '';
       if (item === null) eligibility = await api.trainingEligibility();
     } catch (e) {

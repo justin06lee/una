@@ -35,6 +35,7 @@
     duration_ms: number;
     raw_text: string;
     cleaned_text: string | null;
+    cleanup_diverged?: boolean;
     polished_text: string | null;
     correction_source: string | null;
     teacher: Teacher | null;
@@ -68,6 +69,11 @@
     !!item?.teacher?.literal_guess && item.teacher.literal_guess.trim() !== item.raw_text.trim(),
   );
   const pasted = $derived(item ? (item.cleaned_text ?? item.raw_text) : "");
+
+  /** What una pasted, unless that was a reply rather than a cleanup. */
+  function usableCleanup(i: Item): string | null {
+    return i.cleanup_diverged ? null : i.cleaned_text;
+  }
 
   // -- audio ------------------------------------------------------------------
   let audio: HTMLAudioElement | undefined = $state();
@@ -147,7 +153,7 @@
   function prime(next: Item | null) {
     literal = next ? (next.teacher?.literal_guess ?? next.raw_text) : "";
     polished = next
-      ? (next.polished_text ?? next.teacher?.polished_guess ?? next.cleaned_text ?? next.raw_text)
+      ? (next.polished_text ?? next.teacher?.polished_guess ?? usableCleanup(next) ?? next.raw_text)
       : "";
     if (next) void loadAudio(next.id);
   }
@@ -273,14 +279,20 @@
     event.preventDefault();
   }
 
+  // The window is created hidden at launch and lives for the whole session:
+  // it loads (and starts playing) only when opened, and falls silent when closed.
   onMount(() => {
-    void load();
     const opened = listen("review-opened", () => {
       skipped.clear();
       void load();
     });
+    const closed = listen("review-closed", () => {
+      stopAt = null;
+      audio?.pause();
+    });
     return () => {
       void opened.then((un) => un());
+      void closed.then((un) => un());
       clearTimeout(flashTimer);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };

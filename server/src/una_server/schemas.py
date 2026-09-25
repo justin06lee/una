@@ -66,6 +66,8 @@ class DictationDetail(DictationSummary):
     raw_text: str
     cleaned_text: str | None
     cleanup_applied: bool
+    # The pasted cleanup reads like a reply to the dictation rather than a cleanup of it.
+    cleanup_diverged: bool = False
     asr_model: str | None
     llm_model: str | None
     language: str | None

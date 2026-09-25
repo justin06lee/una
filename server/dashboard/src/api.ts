@@ -34,6 +34,8 @@ export interface DictationDetail extends DictationSummary {
   raw_text: string;
   cleaned_text: string | null;
   cleanup_applied: boolean;
+  /** The pasted cleanup reads like a reply rather than a cleanup. Absent on older servers. */
+  cleanup_diverged?: boolean;
   asr_model: string | null;
   llm_model: string | null;
   language: string | null;

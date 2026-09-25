@@ -314,6 +314,10 @@ pub fn show_review(app: &AppHandle) {
 }
 
 pub fn hide_review(app: &AppHandle) {
+    // Hidden, not destroyed: tell the page, or its audio would play on unseen.
+    if let Some(window) = app.get_webview_window(REVIEW_LABEL) {
+        let _ = window.emit("review-closed", ());
+    }
     hide_focus_window(app, REVIEW_LABEL);
 }
 
