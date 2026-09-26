@@ -56,7 +56,12 @@ RUNNER_MODULES = {
 def _hyperparams(state: AppState, kind: str) -> dict:
     training = state.config.training
     if kind == "style":
-        return {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
+        hp = {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
+        # The model serving cleanup right now — a promoted style model lives only in the
+        # server's stored settings, which the runner subprocess never loads, so without
+        # this a new candidate would be judged against the stock model it replaced.
+        hp["style_baseline_model"] = state.config.cleanup.model
+        return hp
     return {
         "base_hf_model": training.base_hf_model,
         "lora_r": training.lora_r,
