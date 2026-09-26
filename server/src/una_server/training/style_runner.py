@@ -112,6 +112,7 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
         use_writing=bool(hp["style_use_writing"]),
         use_silver=bool(hp["style_use_silver"]),
         gold_repeat=int(hp["style_gold_repeat"]),
+        augment=bool(hp.get("style_augment_disfluency", False)),
     )
     if not split.train:
         raise RuntimeError("no style training pairs (confirm some in Review, or import your writing)")
@@ -150,7 +151,9 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
         split.train, run_dir, hp, cfg.cleanup,
         device=cfg.asr.device, on_progress=on_progress, preferences=preferences,
     )
-    if dpo_stats:
+    if dpo_stats.get("error"):
+        notes.append(f"dpo: failed, kept the supervised adapter ({dpo_stats['error']})")
+    elif dpo_stats:
         origins: dict[str, int] = {}
         for pair in preferences:
             origins[pair.origin] = origins.get(pair.origin, 0) + 1

@@ -20,7 +20,9 @@ pasted: the user's version is preferred over the model's.
 from __future__ import annotations
 
 import logging
+import random
 import sqlite3
+import zlib
 from dataclasses import dataclass, field
 
 from rapidfuzz.distance import Levenshtein
@@ -45,7 +47,7 @@ WHERE t.polished_guess IS NOT NULL AND d.deleted = 0 AND d.eval_holdout = 0
 """
 
 WRITING_SQL = """
-SELECT spoken_text, target_text, app_name, eval_holdout FROM style_corpus
+SELECT id, spoken_text, target_text, app_name, eval_holdout FROM style_corpus
 WHERE spoken_text IS NOT NULL AND target_text IS NOT NULL
 """
 
@@ -103,6 +105,34 @@ def messages_for(cleanup_cfg: CleanupConfig, raw_text: str, app_name: str | None
     ]
 
 
+def disfluent(spoken: str, key: str) -> str:
+    """The spoken side of a writing pair with the stumbles real dictation has.
+
+    Whisper writes down this user's "um"s, "uh"s and doubled words, and the cleanup
+    model has to learn to drop them — but a back-translation doesn't always put enough
+    in. So some are added here, deterministically per pair (same text every run), and
+    about a quarter of pairs are left as they are.
+    """
+    rng = random.Random(zlib.crc32(key.encode()))
+    words = spoken.split()
+    if len(words) < 4 or rng.random() < 0.25:
+        return spoken
+    out: list[str] = []
+    for word in words:
+        roll = rng.random()
+        if roll < 0.05:
+            out.append(rng.choice(("um,", "uh,", "um", "uh")))
+        out.append(word)
+        if roll > 0.97 and word.isalpha() and len(word) <= 5:
+            out.append(word)  # "the the"
+    if rng.random() < 0.35:
+        first = out[0]
+        if first != "I" and not first.isupper():
+            out[0] = first[:1].lower() + first[1:]
+        out.insert(0, rng.choice(("Um,", "Uh,", "So, um,", "Um, so")))
+    return " ".join(out)
+
+
 def differs(a: str, b: str) -> bool:
     return Levenshtein.normalized_distance(a.strip(), b.strip()) >= MIN_PREFERENCE_GAP
 
@@ -113,6 +143,7 @@ def build_style_datasets(
     use_writing: bool = True,
     use_silver: bool = True,
     gold_repeat: int = 1,
+    augment: bool = False,
 ) -> StyleSplit:
     """Assemble every source. The connection must have row_factory = sqlite3.Row."""
     split = StyleSplit()
@@ -129,9 +160,10 @@ def build_style_datasets(
 
     if use_writing:
         for row in db.execute(WRITING_SQL):
-            sample = StyleSample(
-                row["spoken_text"].strip(), row["target_text"].strip(), row["app_name"], "writing"
-            )
+            spoken = row["spoken_text"].strip()
+            if augment:
+                spoken = disfluent(spoken, row["id"])
+            sample = StyleSample(spoken, row["target_text"].strip(), row["app_name"], "writing")
             (split.writing_eval if row["eval_holdout"] else split.train).append(sample)
 
     if use_silver:

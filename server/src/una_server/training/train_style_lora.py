@@ -27,6 +27,7 @@ from .style_dataset import PreferencePair, StyleSample, messages_for
 log = logging.getLogger(__name__)
 
 TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj"]
+MAX_DPO_REPLY_TOKENS = 256
 
 
 def chat_ids(tokenizer, messages: list[dict]) -> list[int]:
@@ -57,7 +58,7 @@ def train_style_adapter(
     DPO runs after SFT when `preferences` is non-empty.
     """
     import torch
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, get_peft_model
     from torch.utils.data import Dataset
     from transformers import (
         AutoModelForCausalLM,
@@ -86,12 +87,19 @@ def train_style_adapter(
             bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
         )
+        # fp16, not the checkpoint's bf16: Turing cards have no fast bf16.
         model = AutoModelForCausalLM.from_pretrained(
-            base, quantization_config=quant, device_map={"": 0}
+            base, quantization_config=quant, device_map={"": 0}, dtype=torch.float16
         )
-        model = prepare_model_for_kbit_training(
-            model, gradient_checkpointing_kwargs={"use_reentrant": False}
+        # prepare_model_for_kbit_training would also upcast every unquantized weight to
+        # fp32 — on Llama 3.2 that includes the 128k-token embedding tied to the output
+        # head, ~1.6 GB a 6 GB card cannot spare. Everything it does besides that:
+        for param in model.parameters():
+            param.requires_grad = False
+        model.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
         )
+        model.enable_input_require_grads()
     else:
         model = AutoModelForCausalLM.from_pretrained(base, dtype=torch.float32)
         model.gradient_checkpointing_enable(
@@ -175,6 +183,14 @@ def train_style_adapter(
     trainer.train()
     del trainer
     gc.collect()
+    if use_cuda:
+        torch.cuda.empty_cache()
+
+    # Saved before DPO, so stage 2 failing — it is the one that pushes a 6 GB card
+    # hardest — costs the refinement, not the hour of supervised training.
+    adapter_dir = run_dir / "adapter"
+    model.save_pretrained(str(adapter_dir))
+    log.info("saved supervised style adapter to %s", adapter_dir)
 
     dpo_stats: dict = {}
     if preferences:
@@ -182,12 +198,15 @@ def train_style_adapter(
             if on_progress is not None:
                 on_progress(sft_share + (1 - sft_share) * fraction)
 
-        dpo_stats = dpo(model, tokenizer, preferences, hp, cleanup_cfg, use_cuda=use_cuda,
-                        on_progress=dpo_progress)
-
-    adapter_dir = run_dir / "adapter"
-    model.save_pretrained(str(adapter_dir))
-    log.info("saved style LoRA adapter to %s", adapter_dir)
+        try:
+            dpo_stats = dpo(model, tokenizer, preferences, hp, cleanup_cfg, use_cuda=use_cuda,
+                            on_progress=dpo_progress)
+        except Exception as exc:  # OOM above all; keep the supervised adapter
+            log.exception("dpo failed; keeping the supervised adapter")
+            dpo_stats = {"error": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        else:
+            model.save_pretrained(str(adapter_dir))
+            log.info("saved preference-tuned style adapter to %s", adapter_dir)
 
     del model
     gc.collect()
@@ -222,8 +241,10 @@ def dpo(
 
     def encode(pair: PreferencePair, response: str):
         prompt = chat_ids(tokenizer, messages_for(cleanup_cfg, pair.raw_text, pair.app_name))
-        reply = tokenizer(response, add_special_tokens=False).input_ids + [tokenizer.eos_token_id]
-        ids = (prompt + reply)[:max_len]
+        # A rambling rejected output (a reply rather than a cleanup) needs no more than
+        # its start to be told apart; capping it keeps the step's memory bounded.
+        reply = tokenizer(response, add_special_tokens=False).input_ids[:MAX_DPO_REPLY_TOKENS]
+        ids = (prompt + reply + [tokenizer.eos_token_id])[:max_len]
         return torch.tensor(ids, device=device), len(prompt)
 
     encoded = []
@@ -237,8 +258,11 @@ def dpo(
         return {"pairs": 0}
 
     def logprob(ids, start: int):
+        # Only the response's positions need vocabulary logits: with a 128k vocabulary,
+        # logits for the whole prompt are most of the memory a step would use.
+        keep = len(ids) - start + 1
         with torch.autocast("cuda", dtype=torch.float16, enabled=use_cuda):
-            logits = model(input_ids=ids.unsqueeze(0)).logits[0, start - 1:-1]
+            logits = model(input_ids=ids.unsqueeze(0), logits_to_keep=keep).logits[0, :-1]
         logp = torch.log_softmax(logits.float(), dim=-1)
         return logp.gather(-1, ids[start:].unsqueeze(-1)).sum()
 
@@ -262,13 +286,19 @@ def dpo(
     losses, wins = [], 0
     for step, index in enumerate(order):
         (chosen, rejected), (ref_chosen, ref_rejected) = encoded[index], reference[index]
-        margin = beta * (
-            (logprob(*chosen) - ref_chosen) - (logprob(*rejected) - ref_rejected)
-        )
-        loss = -F.logsigmoid(margin)
-        scaler.scale(loss / accum).backward()
-        losses.append(loss.item())
-        wins += int(margin.item() > 0)
+        # Holding both sequences' graphs at once is what a 6 GB card can't do, so the
+        # loss is backpropagated one sequence at a time. With m the margin below,
+        # d loss / d log π(chosen) = -β σ(-m) and d loss / d log π(rejected) = +β σ(-m):
+        # a no-grad pass finds m, then each sequence gets its own weighted backward.
+        with torch.no_grad():
+            margin = beta * (
+                (logprob(*chosen) - ref_chosen) - (logprob(*rejected) - ref_rejected)
+            ).item()
+        weight = beta * float(torch.sigmoid(torch.tensor(-margin)))
+        scaler.scale(-weight * logprob(*chosen) / accum).backward()
+        scaler.scale(weight * logprob(*rejected) / accum).backward()
+        losses.append(float(-F.logsigmoid(torch.tensor(margin))))
+        wins += int(margin > 0)
         if (step + 1) % accum == 0 or step + 1 == steps:
             scaler.step(optimizer)
             scaler.update()

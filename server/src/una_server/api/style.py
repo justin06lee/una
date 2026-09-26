@@ -29,7 +29,8 @@ State = Annotated[AppState, Depends(get_state)]
 @router.post("/corpus", response_model=CorpusUploadResult)
 async def upload_corpus(state: State, body: CorpusUpload) -> CorpusUploadResult:
     """Add writing samples. Idempotent on the text; a later upload may fill in a
-    back-translation for a sample that arrived without one, never overwrite one."""
+    back-translation for a sample that arrived without one, and overwrites a finished
+    one only with `replace`."""
     if len(body.items) > 1000:
         raise BadRequest("at most 1000 items per upload")
     result = CorpusUploadResult()
@@ -59,7 +60,7 @@ async def upload_corpus(state: State, body: CorpusUpload) -> CorpusUploadResult:
                 ),
             )
             result.added += 1
-        elif finished and existing["spoken_text"] is None:
+        elif finished and (existing["spoken_text"] is None or body.replace):
             await state.db.execute(
                 """UPDATE style_corpus SET target_text = ?, spoken_text = ?, generator_model = ?,
                    updated_at = ? WHERE id = ?""",

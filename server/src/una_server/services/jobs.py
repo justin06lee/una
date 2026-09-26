@@ -51,7 +51,9 @@ class JobManager:
             module,
             "--run-id",
             run_id,
-            env={**os.environ},
+            # Small cards fragment: let the allocator grow segments instead of failing
+            # a 300 MB request with 300 MB free in pieces.
+            env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True", **os.environ},
         )
         await self.db.execute(
             "UPDATE training_runs SET pid = ?, started_at = ? WHERE id = ?",

@@ -180,7 +180,10 @@ async def translate(
     return done
 
 
-def upload(server: str, samples: list[Sample], pairs: dict[str, bt.Pair], model: str | None):
+def upload(
+    server: str, samples: list[Sample], pairs: dict[str, bt.Pair], model: str | None,
+    *, replace: bool = False,
+):
     items = []
     for sample in samples:
         pair = pairs.get(bt.content_hash(sample.text)[:12])
@@ -195,7 +198,9 @@ def upload(server: str, samples: list[Sample], pairs: dict[str, bt.Pair], model:
     totals = collections.Counter()
     with httpx.Client(base_url=server, timeout=60.0) as client:
         for i in range(0, len(items), 100):
-            resp = client.post("/v1/style/corpus", json={"items": items[i:i + 100]})
+            resp = client.post(
+                "/v1/style/corpus", json={"items": items[i:i + 100], "replace": replace}
+            )
             resp.raise_for_status()
             totals.update(resp.json())
     return totals
@@ -220,7 +225,9 @@ async def main_async(args: argparse.Namespace) -> int:
         known.raise_for_status()
         finished = set(known.json()["finished"])
         calibration = client.get("/v1/style/calibration").json()["transcripts"]
-    todo = [s for s in samples if bt.content_hash(s.text) not in finished]
+    todo = samples if args.refresh else [
+        s for s in samples if bt.content_hash(s.text) not in finished
+    ]
     print(f"{len(samples) - len(todo)} already on the server; {len(todo)} to go")
     if not todo:
         return 0
@@ -232,7 +239,9 @@ async def main_async(args: argparse.Namespace) -> int:
             pairs = await translate(llm, todo, calibration, batch=args.batch, parallel=args.parallel)
         finally:
             await llm.aclose()
-    totals = upload(args.server, todo, pairs, args.llm_model if args.llm else None)
+    totals = upload(
+        args.server, todo, pairs, args.llm_model if args.llm else None, replace=args.refresh
+    )
     print(f"uploaded: {dict(totals)}")
     return 0
 
@@ -253,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--parallel", type=int, default=3, help="LLM calls in flight")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true", help="show what would be imported")
+    parser.add_argument(
+        "--refresh", action="store_true",
+        help="back-translate everything again and replace what the server has",
+    )
     args = parser.parse_args(argv)
     args.source = args.source or sorted(SOURCES)
     return asyncio.run(main_async(args))

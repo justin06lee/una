@@ -273,6 +273,8 @@ class CorpusItem(BaseModel):
 
 class CorpusUpload(BaseModel):
     items: list[CorpusItem]
+    # Replace finished back-translations too (after the method improves).
+    replace: bool = False
 
 
 class CorpusUploadResult(BaseModel):

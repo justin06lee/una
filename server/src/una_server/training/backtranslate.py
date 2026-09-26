@@ -19,6 +19,8 @@ import re
 import zlib
 from dataclasses import dataclass
 
+from rapidfuzz.distance import Levenshtein
+
 from .filters import norm_edit_distance, normalize_text
 
 log = logging.getLogger(__name__)
@@ -28,12 +30,12 @@ You make training data for one person's private dictation system. They speak; Wh
 transcribes it; a small model then turns Whisper's transcript into the text they would \
 have typed. You are given things they actually typed. For each item write two things.
 
-"target": their text with accidental typos fixed and nothing else changed. Fix only slips \
-of the keyboard — transposed, missing, doubled or stray letters ("proejcts" -> "projects", \
-"FOr" -> "For"). Keep everything deliberate exactly as it is: lowercase, shorthand and \
-slang (yk, lowk, idk, u, ur, tho, wat, ngl, type shi), fragments, run-ons, missing \
-apostrophes, their punctuation habits, CAPS for emphasis, emoji, file paths, commands and \
-code. Never reword, reorder, add or drop words.
+"fixes": the accidental typos in their text, as [typed, meant] pairs — slips of the \
+keyboard only: transposed, missing, doubled or stray letters ("proejcts" -> "projects", \
+"FOr" -> "For"). Everything deliberate is not a typo: lowercase, shorthand and slang \
+(yk, lowk, idk, u, ur, tho, wat, ngl, type shi), missing apostrophes (dont, im), \
+fragments, run-ons, CAPS for emphasis, emoji, paths, commands and code. Usually the list \
+is empty.
 
 "spoken": what Whisper would output if they had said the same thing out loud instead of \
 typing it.
@@ -42,18 +44,17 @@ typing it.
 - Paths, commands, flags, identifiers and symbols are spoken aloud ("src slash main dot \
 rs", "dash dash force"), and Whisper writes down what it hears — sometimes cleanly, \
 sometimes as ordinary words.
-- Speech is not clean. Add some of what people really say — "um", "uh", "like", "so", \
-"I mean", a repeated word, a restarted phrase — more in long items, none in some short \
-ones. In about one item in four, add a self-correction: invent a plausible wrong first \
-choice that they then take back ("send it Tuesday, no wait, Wednesday"). The target \
-stays exactly their text, with only the final choice.
-- Whisper writes ordinary sentences: capitalized, punctuated, numbers as digits, and it \
-often leaves out "um" and "uh" by itself. It sometimes mishears rare names and jargon as \
-common words ("Tauri" -> "Tory", "Wispr" -> "Whisper", "Llama" -> "LAMA"); do that only \
-where a real recognizer plausibly would.
+- Speech is not clean, and this person's Whisper keeps what they say — the calibration \
+transcripts have "Um", "uh" and repeated words ("the the"). Put some of that in most \
+items: "um", "uh", "like", "so", "I mean", a repeated word, a restarted phrase. In about \
+one item in four, add a self-correction: invent a plausible wrong first choice that they \
+then take back ("send it Tuesday, no wait, Wednesday").
+- Whisper writes ordinary sentences: capitalized, punctuated, numbers as digits. It \
+sometimes mishears rare names and jargon as common words ("Tauri" -> "Tory", "Wispr" -> \
+"Whisper", "Llama" -> "LAMA"); do that only where a real recognizer plausibly would.
 
 Reply with only a JSON array with one object per item, in the same order: \
-[{"id": "...", "target": "...", "spoken": "..."}]"""
+[{"id": "...", "fixes": [["typed", "meant"]], "spoken": "..."}]"""
 
 
 @dataclass
@@ -106,22 +107,45 @@ def parse_reply(reply: object, items: list[Item]) -> list[Pair]:
         if not isinstance(entry, dict):
             continue
         item = by_id.get(str(entry.get("id")))
-        target, spoken = entry.get("target"), entry.get("spoken")
-        if item is None or not isinstance(target, str) or not isinstance(spoken, str):
+        spoken = entry.get("spoken")
+        if item is None or not isinstance(spoken, str) or not spoken.strip():
             continue
-        target, spoken = target.strip(), spoken.strip()
-        if not target or not spoken:
-            continue
-        if norm_edit_distance(item.text, target) > MAX_TARGET_DRIFT or _capitals(target) > _capitals(
-            item.text
-        ):
-            # It rewrote the text, or "fixed" deliberate lowercase — the comparison above
-            # can't see casing, and casing is style. The original is the safer target.
-            target = item.text
+        spoken = spoken.strip()
+        if "fixes" in entry:
+            target = apply_fixes(item.text, entry.get("fixes"))
+        else:  # the older reply shape: a whole rewritten target
+            target = entry.get("target") if isinstance(entry.get("target"), str) else item.text
+            target = target.strip() or item.text
+            if norm_edit_distance(item.text, target) > MAX_TARGET_DRIFT or _capitals(
+                target
+            ) > _capitals(item.text):
+                target = item.text
         if norm_edit_distance(target, spoken) > MAX_SPOKEN_DRIFT or _overlap(target, spoken) < 0.34:
             continue
         pairs.append(Pair(item.id, target, spoken))
     return pairs
+
+
+def apply_fixes(text: str, fixes: object) -> str:
+    """The writing with just its typos corrected, everything else byte for byte.
+
+    Each fix must name a whole word that is really in the text and change it only a
+    little; anything else is a rewrite dressed as a typo and is ignored. Applying fixes
+    to the original — instead of taking a rewritten text back — is what keeps the
+    user's casing, slang and punctuation out of the LLM's hands.
+    """
+    if not isinstance(fixes, list):
+        return text
+    for fix in fixes:
+        if not (isinstance(fix, list | tuple) and len(fix) == 2):
+            continue
+        typed, meant = fix
+        if not (isinstance(typed, str) and isinstance(meant, str)) or not typed.strip():
+            continue
+        if Levenshtein.distance(typed, meant) > max(2, len(typed) // 3):
+            continue
+        text = re.sub(rf"(?<![\w']){re.escape(typed)}(?![\w'])", meant, text)
+    return text
 
 
 def _overlap(target: str, spoken: str) -> float:
