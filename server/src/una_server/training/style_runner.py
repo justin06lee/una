@@ -102,7 +102,7 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
 
     hp = _hyperparams(row, cfg)
     log.info("style run %s starting with hyperparams %s", run.run_id, hp)
-    baseline_model = row["base_model_id"] or cfg.cleanup.model
+    baseline_model = hp.get("style_baseline_model") or cfg.cleanup.model
     notes: list[str] = []
 
     # -- building -------------------------------------------------------------

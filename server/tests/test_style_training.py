@@ -136,3 +136,17 @@ def test_adapter_is_staged_where_ollama_can_see_it(tmp_path, monkeypatch):
     assert (staged / "adapter_config.json").exists()
     assert (tmp_path / "Modelfile").read_text() == f"FROM llama3.2:3b\nADAPTER {staged.resolve()}\n"
     assert calls == [["ollama", "create", "una-style-abcd", "-f", str(tmp_path / "Modelfile")]]
+
+
+def test_style_run_is_judged_against_the_model_serving_now(client, fake_runner):
+    """A promoted style model exists only as a stored setting; the run must record it."""
+    import json
+
+    client.put("/v1/settings", json={"cleanup.model": "una-style-abcd"})
+    run = client.post("/v1/training/runs", json={"kind": "style"}).json()
+    state = client.app.state.una
+    conn = sqlite3.connect(state.config.db_path)
+    (hp_json,) = conn.execute(
+        "SELECT hyperparams_json FROM training_runs WHERE id = ?", (run["id"],)
+    ).fetchone()
+    assert json.loads(hp_json)["style_baseline_model"] == "una-style-abcd"
