@@ -112,6 +112,7 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
         use_writing=bool(hp["style_use_writing"]),
         use_silver=bool(hp["style_use_silver"]),
         gold_repeat=int(hp["style_gold_repeat"]),
+        augment=bool(hp.get("style_augment_disfluency", False)),
     )
     if not split.train:
         raise RuntimeError("no style training pairs (confirm some in Review, or import your writing)")

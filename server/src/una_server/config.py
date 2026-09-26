@@ -103,6 +103,9 @@ class TrainingConfig(BaseModel):
     # once this many are finished. See docs/personal-model.md.
     style_use_writing: bool = True
     style_writing_threshold: int = 200
+    # Add the "um"s, "uh"s and doubled words real transcripts have to the spoken side
+    # of those pairs, so the model learns to drop them.
+    style_augment_disfluency: bool = True
     # The teacher's unconfirmed polished guesses, as extra lower-trust training pairs.
     style_use_silver: bool = True
     # Confirmed pairs are the real thing: repeat them this many times in training.

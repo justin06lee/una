@@ -285,3 +285,53 @@ async def test_teacher_backtranslates_pending_writing(client):
     examples = await teacher.examples("nope", "Alacritty")
     assert [e.wrote for e in examples if e.said is None] == ["make it faster pls"]
     assert await teacher.examples("nope", "Mail") == []
+
+
+# -- the typo-fix reply shape, augmentation, refresh ---------------------------------------
+
+
+def test_apply_fixes_changes_only_the_named_typos():
+    text = "can u fix the proejcts page FOr real, dont touch the projects list"
+    fixed = bt.apply_fixes(text, [["proejcts", "projects"], ["FOr", "For"]])
+    assert fixed == "can u fix the projects page For real, dont touch the projects list"
+    # rewrites dressed as typos, and words that aren't in the text, are ignored
+    assert bt.apply_fixes(text, [["u", "you are"], ["zzz", "z"], "junk", ["dont"]]) == text
+    assert bt.apply_fixes("its a pro", [["pro", "prod"]]) == "its a prod"
+    assert bt.apply_fixes("improve it", [["pro", "prod"]]) == "improve it"  # whole words only
+
+
+def test_parse_reply_builds_targets_from_fixes():
+    items = [bt.Item("a", "lowk the proejcts page is broken"), bt.Item("b", "ship it rn")]
+    reply = [
+        {"id": "a", "fixes": [["proejcts", "projects"]], "spoken": "Lowkey, the projects page is broken."},
+        {"id": "b", "fixes": [], "spoken": "Um, ship it right now."},
+    ]
+    pairs = {p.id: p for p in bt.parse_reply(reply, items)}
+    assert pairs["a"].target == "lowk the projects page is broken"
+    assert pairs["b"].target == "ship it rn"
+
+
+def test_disfluency_is_deterministic_and_keeps_the_words():
+    from una_server.training.style_dataset import disfluent
+
+    spoken = "Can you send me the report by Friday afternoon, please?"
+    once = [disfluent(spoken, f"k{i}") for i in range(40)]
+    assert once == [disfluent(spoken, f"k{i}") for i in range(40)]  # same text every run
+    assert any(s != spoken for s in once) and any(s == spoken for s in once)
+    fillers = {"um", "um,", "uh", "uh,", "so,", "so"}
+    for s in once:
+        kept = [w for w in s.lower().split() if w not in fillers]
+        # nothing but fillers and doubled words is added
+        assert " ".join(dict.fromkeys(kept)) in " ".join(dict.fromkeys(spoken.lower().split()))
+    assert disfluent("too short", "x") == "too short"
+
+
+def test_refresh_replaces_finished_pairs(client):
+    item = {"source": "claude-code", "app_name": "Claude Code", "written_text": "ship it rn",
+            "target_text": "ship it rn", "spoken_text": "Ship it right now.", "generator_model": "m"}
+    client.post("/v1/style/corpus", json={"items": [item]})
+    newer = {**item, "spoken_text": "Um, ship it right now."}
+    assert client.post("/v1/style/corpus", json={"items": [newer]}).json()["unchanged"] == 1
+    assert client.post(
+        "/v1/style/corpus", json={"items": [newer], "replace": True}
+    ).json()["updated"] == 1

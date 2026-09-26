@@ -106,13 +106,19 @@ the occasional self-correction, Whisper's capitalization and its plausible mishe
 jargon. `(spoken → your text)` is then a training pair in your exact style, casual
 shorthand and all.
 
-The target is your text with only accidental typos fixed ("proejcts" → "projects").
-Anything deliberate — lowercase, slang, fragments, CAPS, missing apostrophes — stays, and
-a target that gains capital letters or drifts from the original is replaced by the
-original. A spoken version that shares too few words with the text is dropped.
+The target is your text with only accidental typos fixed ("proejcts" → "projects"). The
+LLM doesn't rewrite it: it names the typos as `[typed, meant]` pairs, and una applies them
+to your original word by word, ignoring any "fix" that changes a word too much. Everything
+deliberate — lowercase, slang, fragments, CAPS, missing apostrophes — is untouched by
+construction. A spoken version that shares too few words with the text is dropped.
+
+Your Whisper writes down "um", "uh" and doubled words ("the the"), and the model has to
+learn to drop them, so at training time some are added to the spoken side of these pairs
+(`style_augment_disfluency`) — the same ones every run, with about a quarter left clean.
 
 ```sh
 make import-writing            # UNA_SERVER=http://<box>:8100 to point elsewhere
+make import-writing REFRESH=1  # back-translate everything again, replacing what's there
 ```
 
 reads what you have typed to Claude Code and Codex on this machine, keeps what looks
@@ -171,6 +177,7 @@ While a run trains, the cleanup model is unloaded and not re-warmed, and with
 | Setting | Default | What it does |
 |---|---|---|
 | `training.style_use_writing` | `true` | Train on your back-translated writing. |
+| `training.style_augment_disfluency` | `true` | Add fillers and doubled words to its spoken side. |
 | `training.style_writing_threshold` | `200` | Finished pieces that make a run worthwhile. |
 | `training.style_use_silver` | `true` | Train on unconfirmed teacher guesses. |
 | `training.style_gold_repeat` | `3` | Weight of confirmed pairs. |
