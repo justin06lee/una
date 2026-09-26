@@ -287,7 +287,7 @@
             {#each item.teacher.disagreements as span, i (i)}
               <button
                 type="button"
-                class="chip cursor-pointer gap-1"
+                class="chip dispute cursor-pointer gap-1"
                 title="Play this moment"
                 onclick={() => span.t0 != null && player?.playRange(span.t0, span.t1 ?? span.t0 + 1)}
               >
@@ -412,3 +412,11 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Disputed words need attention: amber, the palette's colour for that. */
+  .dispute {
+    border-color: color-mix(in oklab, var(--warn) 45%, var(--line));
+    background: color-mix(in oklab, var(--warn) 14%, transparent);
+  }
+</style>
