@@ -28,10 +28,21 @@ fn main() {
         )
         .init();
 
-    let config = una_core::config::load_or_create().unwrap_or_else(|e| {
+    let mut config = una_core::config::load_or_create().unwrap_or_else(|e| {
         tracing::warn!("could not load config ({e}); using defaults");
         una_core::config::Config::default()
     });
+    let binding = hotkey::canonical_binding(&config.hotkey.binding);
+    if binding != config.hotkey.binding {
+        tracing::info!(
+            "hotkey {:?} is really {binding:?}; saving that",
+            config.hotkey.binding
+        );
+        config.hotkey.binding = binding;
+        if let Err(e) = una_core::config::save(&config) {
+            tracing::warn!("could not save the repaired hotkey: {e}");
+        }
+    }
 
     // The audio worker needs to report results into the controller, but the
     // controller is spawned later (it needs tauri's async runtime): bridge
@@ -108,6 +119,8 @@ fn main() {
             commands::hotkey_capture_supported,
             commands::capture_hotkey,
             commands::cancel_hotkey_capture,
+            commands::fn_key_action,
+            commands::open_keyboard_settings,
             commands::probe_endpoints,
             commands::correction_pending,
             commands::correction_submit,

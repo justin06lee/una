@@ -35,6 +35,7 @@
     plus: ['M5 12h14', 'M12 5v14'],
     wifi: ['M12 20h.01', 'M2 8.82a15 15 0 0 1 20 0', 'M5 12.86a10 10 0 0 1 14 0', 'M8.5 16.43a5 5 0 0 1 7 0'],
     activity: ['M22 12h-4l-3 9L9 3l-3 9H2'],
+    globe: [{ circle: [12, 12, 10] }, 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20', 'M2 12h20'],
   } satisfies Record<string, Shape[]>;
 
   export type IconName = keyof typeof ICONS;

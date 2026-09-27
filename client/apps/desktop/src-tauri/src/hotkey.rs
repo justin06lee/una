@@ -54,6 +54,24 @@ pub fn validate_binding(binding: &str) -> Result<(), String> {
     }
 }
 
+/// The binding as it should be stored. A native binding on a keycode that
+/// is really another key is rewritten to that key: Apple keyboards send the
+/// 🌐 key as keycode 179 alongside Fn, and earlier builds recorded it as
+/// "Key 179".
+pub fn canonical_binding(binding: &str) -> String {
+    #[cfg(target_os = "macos")]
+    if let Ok(Binding::Native { keycode, .. }) = Binding::parse(binding) {
+        use una_platform::macos::keys;
+        if let Ok(kc) = u16::try_from(keycode) {
+            let canonical = keys::canonical(kc);
+            if canonical != kc {
+                return format!("native:{canonical}:{}", keys::key_name(canonical));
+            }
+        }
+    }
+    binding.to_string()
+}
+
 /// Get or create the shared event tap, wiring key edges to the controller.
 #[cfg(target_os = "macos")]
 pub fn ensure_tap(app: &AppHandle) -> Result<Arc<EventTap>, String> {
