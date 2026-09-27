@@ -2,20 +2,40 @@
   import Icon from "./Icon.svelte";
   import type { Cap } from "./keycaps";
 
-  let { cap }: { cap: Cap } = $props();
+  let {
+    cap,
+    fill = false,
+    selected = false,
+  }: {
+    cap: Cap;
+    /** Take the width of its container, for keys laid out as a keyboard row. */
+    fill?: boolean;
+    /** Drawn inked: the key that is bound. */
+    selected?: boolean;
+  } = $props();
 </script>
 
-<span class="cap-wrap">
+<span class="cap-wrap" class:fill>
   {#if cap.side}<span class="side">{cap.side}</span>{/if}
   {#if cap.symbol}
-    <kbd class="keycap mod" class:fn={cap.globe}>
+    <kbd
+      class="keycap mod"
+      class:fn={cap.globe}
+      class:selected
+      class:fill
+    >
       <span class="symbol">{cap.symbol}</span>
       <span class="word">
         {#if cap.globe}<Icon name="globe" size={13} stroke={1.6} />{:else}{cap.word}{/if}
       </span>
     </kbd>
   {:else}
-    <kbd class="keycap" class:wide={cap.wide}>{cap.label}</kbd>
+    <kbd
+      class="keycap"
+      class:wide={cap.wide}
+      class:selected
+      class:fill>{cap.label}</kbd
+    >
   {/if}
 </span>
 
@@ -80,6 +100,29 @@
     font-size: 10.5px;
     font-weight: 450;
     color: var(--muted);
+  }
+
+  .cap-wrap.fill {
+    display: flex;
+    width: 100%;
+  }
+
+  /* After .mod and .fn, so a filled key takes its slot's width. */
+  .keycap.fill,
+  .keycap.mod.fill {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .keycap.selected {
+    background: var(--inverse);
+    border-color: var(--inverse);
+    color: var(--on-inverse);
+  }
+
+  .selected .word {
+    color: var(--on-inverse);
+    opacity: 0.7;
   }
 
   .fn .symbol {
