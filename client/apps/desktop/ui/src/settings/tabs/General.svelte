@@ -74,12 +74,14 @@
       >
         <span class="preview" class:empty={m.value === "flash"}>
           <span class="pill">
-            <svg viewBox="1.5 5.8 29 19.5" aria-hidden="true">
-              <rect x="13.9" y="15.2" width="4.2" height="6" rx="2.1" />
-              <rect x="5.05" y="9.4" width="2.2" height="14.03" rx="1.1" />
-              <rect x="2.1" y="6.4" width="2.2" height="18.4" rx="1.1" />
-              <rect x="24.75" y="9.4" width="2.2" height="14.03" rx="1.1" />
-              <rect x="27.7" y="6.4" width="2.2" height="18.4" rx="1.1" />
+            <svg viewBox="0 0 604.8 360.0" aria-hidden="true">
+              <rect x="259.2" y="156.6" width="86.4" height="136.8" rx="43.2" />
+              <rect x="172.8" y="158.4" width="59.4" height="126" rx="29.7" />
+              <rect x="86.4" y="79.2" width="59.4" height="243" rx="29.7" />
+              <rect x="0" y="0" width="59.4" height="360" rx="29.7" />
+              <rect x="372.6" y="158.4" width="59.4" height="126" rx="29.7" />
+              <rect x="459" y="79.2" width="59.4" height="243" rx="29.7" />
+              <rect x="545.4" y="0" width="59.4" height="360" rx="29.7" />
             </svg>
           </span>
         </span>
@@ -118,7 +120,7 @@
     justify-content: center;
   }
 
-  /* The bow, thinned to its outer bars so it survives thumbnail size. */
+  /* The resting pill's bow, at thumbnail size. */
   .pill svg {
     width: 8px;
     height: 5px;

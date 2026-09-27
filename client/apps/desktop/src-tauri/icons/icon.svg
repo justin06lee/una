@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- una app icon: Una's hair bow drawn as a waveform. A knot in the middle,
-       wings of bars that grow outward, tops rising faster than bottoms so the
-       wings tip up like her ribbons. Black on white, as her bows are.
-       Source of truth for every PNG/ICNS in this directory; regenerate them
-       with `make icons` from client/. -->
+  <!-- una app icon: Una's hair bow as a waveform. Seven bars: a knot in the
+       middle and three a side growing outward, tops rising faster than
+       bottoms so the wings tip up like her ribbons. Black on white, as her
+       bows are. Source of truth for every PNG/ICNS in this directory;
+       regenerate them with `make icons` from client/. -->
   <defs>
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -16,16 +16,12 @@
   <rect x="100" y="100" width="824" height="824" rx="185" fill="#000000" filter="url(#drop)"/>
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
   <g fill="#111111">
-    <rect x="467.3" y="478.9" width="89.4" height="144.5" rx="44.7"/>
-    <rect x="419.1" y="501.3" width="34.4" height="94.6" rx="17.2"/>
-    <rect x="371" y="449.1" width="34.4" height="172.7" rx="17.2"/>
-    <rect x="322.8" y="407.3" width="34.4" height="235.3" rx="17.2"/>
-    <rect x="274.6" y="368.6" width="34.4" height="293.3" rx="17.2"/>
-    <rect x="226.5" y="331.9" width="34.4" height="348.3" rx="17.2"/>
-    <rect x="570.5" y="501.3" width="34.4" height="94.6" rx="17.2"/>
-    <rect x="618.6" y="449.1" width="34.4" height="172.7" rx="17.2"/>
-    <rect x="666.8" y="407.3" width="34.4" height="235.3" rx="17.2"/>
-    <rect x="715" y="368.6" width="34.4" height="293.3" rx="17.2"/>
-    <rect x="763.1" y="331.9" width="34.4" height="348.3" rx="17.2"/>
+    <rect x="468.8" y="484.6" width="86.4" height="136.8" rx="43.2"/>
+    <rect x="382.4" y="486.4" width="59.4" height="126" rx="29.7"/>
+    <rect x="296" y="407.2" width="59.4" height="243" rx="29.7"/>
+    <rect x="209.6" y="328" width="59.4" height="360" rx="29.7"/>
+    <rect x="582.2" y="486.4" width="59.4" height="126" rx="29.7"/>
+    <rect x="668.6" y="407.2" width="59.4" height="243" rx="29.7"/>
+    <rect x="755" y="328" width="59.4" height="360" rx="29.7"/>
   </g>
 </svg>
