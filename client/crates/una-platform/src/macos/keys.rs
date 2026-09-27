@@ -143,6 +143,32 @@ pub fn is_modifier(keycode: u16) -> bool {
     modifier_flag(keycode).is_some()
 }
 
+/// The device-dependent flag bits (IOLLEvent.h `NX_DEVICE*KEYMASK`) that say
+/// which physical side of a modifier pair is down: `(this key, either key of
+/// its pair)`. `CGEventFlagAlternate` alone can't tell right ⌥ from left ⌥;
+/// these can. None for keys without a twin (Fn, Caps Lock) and non-modifiers.
+pub fn side_flags(keycode: u16) -> Option<(u64, u64)> {
+    const L_CTRL: u64 = 0x0000_0001;
+    const L_SHIFT: u64 = 0x0000_0002;
+    const R_SHIFT: u64 = 0x0000_0004;
+    const L_CMD: u64 = 0x0000_0008;
+    const R_CMD: u64 = 0x0000_0010;
+    const L_OPT: u64 = 0x0000_0020;
+    const R_OPT: u64 = 0x0000_0040;
+    const R_CTRL: u64 = 0x0000_2000;
+    Some(match keycode {
+        KC_LEFT_CTRL => (L_CTRL, L_CTRL | R_CTRL),
+        KC_RIGHT_CTRL => (R_CTRL, L_CTRL | R_CTRL),
+        KC_LEFT_SHIFT => (L_SHIFT, L_SHIFT | R_SHIFT),
+        KC_RIGHT_SHIFT => (R_SHIFT, L_SHIFT | R_SHIFT),
+        KC_LEFT_CMD => (L_CMD, L_CMD | R_CMD),
+        KC_RIGHT_CMD => (R_CMD, L_CMD | R_CMD),
+        KC_LEFT_OPT => (L_OPT, L_OPT | R_OPT),
+        KC_RIGHT_OPT => (R_OPT, L_OPT | R_OPT),
+        _ => return None,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Human-readable names
 // ---------------------------------------------------------------------------
@@ -343,6 +369,25 @@ mod tests {
         }
         assert!(!is_modifier(49));
         assert_eq!(combo_token(49), Some("Space"));
+    }
+
+    #[test]
+    fn every_paired_modifier_has_its_own_side_bit() {
+        let pairs = [
+            (KC_LEFT_CMD, KC_RIGHT_CMD),
+            (KC_LEFT_OPT, KC_RIGHT_OPT),
+            (KC_LEFT_SHIFT, KC_RIGHT_SHIFT),
+            (KC_LEFT_CTRL, KC_RIGHT_CTRL),
+        ];
+        for (l, r) in pairs {
+            let (lb, lpair) = side_flags(l).unwrap();
+            let (rb, rpair) = side_flags(r).unwrap();
+            assert_ne!(lb, rb);
+            assert_eq!(lpair, rpair);
+            assert_eq!(lb | rb, lpair);
+        }
+        assert!(side_flags(KC_FN).is_none());
+        assert!(side_flags(KC_CAPS_LOCK).is_none());
     }
 
     #[test]

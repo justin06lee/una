@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import Icon from "../../lib/Icon.svelte";
   import Keycap from "../../lib/Keycap.svelte";
+  import KeyboardRow from "../../lib/KeyboardRow.svelte";
   import { capsFor, FN_KEYCODES, MODIFIER_KEYCODES, parseNative, spoken } from "../../lib/keycaps";
   import type { CapturedHotkey, Config } from "../../lib/types";
 
@@ -43,6 +44,14 @@
   const keyName = $derived(spoken(config.hotkey.binding));
   const bindingNative = $derived(parseNative(config.hotkey.binding));
   const isFn = $derived(bindingNative !== null && FN_KEYCODES.includes(bindingNative.keycode));
+  /** The bound key's keycode when it is a single key (Globe counts as Fn). */
+  const boundKeycode = $derived(
+    bindingNative === null ? null : isFn ? 63 : bindingNative.keycode,
+  );
+  /** A bare modifier stays a modifier: using it in a shortcut drops the recording. */
+  const boundModifier = $derived(
+    captureSupported && bindingNative !== null && MODIFIER_KEYCODES.includes(bindingNative.keycode),
+  );
   /** Native non-modifier keys are consumed system-wide — warn about it. */
   const swallowWarning = $derived(
     bindingNative !== null && !MODIFIER_KEYCODES.includes(bindingNative.keycode),
@@ -74,6 +83,17 @@
     } finally {
       capturing = false;
     }
+  }
+
+  const capitalized = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+  function pick(keycode: number, name: string) {
+    if (listening) cancelCapture();
+    recordingHotkey = false;
+    captureError = "";
+    config.hotkey.binding = `native:${keycode}:${name}`;
+    save();
+    flashSaved();
   }
 
   function flashSaved() {
@@ -154,33 +174,45 @@
 <p class="page-sub">The key you hold, anywhere on your computer, to dictate.</p>
 
 <div class="section">
-  <div class="binding" class:listening>
-    <div class="keys" aria-label="Current hotkey: {keyName}">
-      {#if listening}
-        <span class="listening-label">
-          <span class="dot live"></span>
-          {captureSupported ? "Press any key…" : "Press a key combination…"}
-        </span>
-      {:else}
-        {#each keycaps as cap, i (i)}
-          <Keycap {cap} />
-        {/each}
-      {/if}
+  <div class="card" class:listening>
+    <div class="binding">
+      <div class="keys" aria-label="Current hotkey: {keyName}">
+        {#if listening}
+          <span class="listening-label">
+            <span class="dot live"></span>
+            {captureSupported ? "Press any key…" : "Press a key combination…"}
+            <span class="faint">Esc cancels</span>
+          </span>
+        {:else}
+          {#each keycaps as cap, i (i)}
+            <Keycap {cap} />
+          {/each}
+        {/if}
+      </div>
+      <div class="actions">
+        {#if justSaved && !listening}
+          <span class="saved"><Icon name="check" size={13} stroke={2.2} />Saved</span>
+        {/if}
+        <button class="btn" class:btn-primary={!listening} onclick={toggleRecording}>
+          {listening ? "Cancel" : "Change"}
+        </button>
+      </div>
     </div>
-    <div class="actions">
-      {#if justSaved && !listening}
-        <span class="saved"><Icon name="check" size={13} stroke={2.2} />Saved</span>
-      {/if}
-      <button class="btn" class:btn-primary={!listening} onclick={toggleRecording}>
-        {listening ? "Cancel" : "Change"}
-      </button>
-    </div>
+    {#if captureSupported}
+      <div class="picker">
+        <KeyboardRow selected={boundKeycode} onpick={pick} />
+      </div>
+    {/if}
   </div>
 
   <p class="hint">
     {#if captureSupported}
-      Press any single key — fn, right ⌘, F5 — or hold modifiers and press a key for a
-      combination. Esc cancels.
+      Click a key, or Change to record any other key or a combination. Left and right ⌘ and ⌥ are
+      separate keys: bind one and the other works as usual.
+      {#if boundModifier}
+        <br />{capitalized(keyName)} still works in shortcuts. Press another key while holding it
+        and una drops that recording.
+      {/if}
     {:else}
       This platform records modifier + key combinations. Single bare keys like fn or right ⌘ are
       a macOS feature. Esc cancels.
@@ -264,20 +296,24 @@
 {/if}
 
 <style>
+  .card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    overflow: hidden;
+    transition: border-color 160ms ease;
+  }
+
+  .card.listening {
+    border-color: var(--muted);
+  }
+
   .binding {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     padding: 18px 18px 18px 20px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--panel);
-    transition: border-color 160ms ease;
-  }
-
-  .binding.listening {
-    border-color: var(--muted);
   }
 
   .keys {
@@ -285,6 +321,12 @@
     align-items: center;
     gap: 8px;
     min-height: 46px;
+  }
+
+  .picker {
+    padding: 14px 18px 16px 20px;
+    border-top: 1px solid var(--line);
+    background: var(--sidebar);
   }
 
   .actions {

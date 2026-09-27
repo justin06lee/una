@@ -28,7 +28,7 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use una_core::state::Command;
 #[cfg(target_os = "macos")]
-use una_platform::macos::eventtap::EventTap;
+use una_platform::macos::eventtap::{EventTap, HotkeyEdge};
 
 /// The lazily-created, process-wide event tap (macOS only). Created on first
 /// use — a native binding or a capture request — never before, so users on
@@ -83,11 +83,11 @@ pub fn ensure_tap(app: &AppHandle) -> Result<Arc<EventTap>, String> {
         .try_state::<crate::app_state::AppState>()
         .ok_or_else(|| "app state not ready".to_string())?;
     let controller = state.controller.clone();
-    let tap = EventTap::spawn(Box::new(move |down| {
-        controller.command(if down {
-            Command::HotkeyDown
-        } else {
-            Command::HotkeyUp
+    let tap = EventTap::spawn(Box::new(move |edge| {
+        controller.command(match edge {
+            HotkeyEdge::Down => Command::HotkeyDown,
+            HotkeyEdge::Up => Command::HotkeyUp,
+            HotkeyEdge::Shortcut => Command::HotkeyAbort,
         });
     }))?;
     let tap = Arc::new(tap);

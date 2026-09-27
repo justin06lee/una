@@ -96,6 +96,10 @@ pub enum Event {
     HotkeyUp {
         at: Instant,
     },
+    /// The hotkey is a modifier and was just used in a keyboard shortcut
+    /// (right ⌘-Tab, fn-⌫) rather than held to dictate. Drops the recording
+    /// its press started; anything past recording is left alone.
+    HotkeyAbort,
     /// Start/stop from the tray, CLI, or IPC socket.
     Toggle {
         at: Instant,
@@ -399,7 +403,7 @@ pub fn step(m: Machine, ev: Event) -> (Machine, Vec<Effect>) {
             }
         }
         (State::Recording { session, .. }, Event::Toggle { .. }) => finalize(session),
-        (State::Recording { session, .. }, Event::Cancel) => (
+        (State::Recording { session, .. }, Event::Cancel | Event::HotkeyAbort) => (
             State::Idle,
             vec![Effect::CancelRecording { session }, Effect::HideHud],
         ),
@@ -632,6 +636,8 @@ fn finalize(session: u64) -> (State, Vec<Effect>) {
 pub enum Command {
     HotkeyDown,
     HotkeyUp,
+    /// See [`Event::HotkeyAbort`].
+    HotkeyAbort,
     Toggle,
     /// Start recording only if idle.
     Start,
@@ -762,6 +768,7 @@ impl Controller {
         match cmd {
             Command::HotkeyDown => Some(Event::HotkeyDown { at: now }),
             Command::HotkeyUp => Some(Event::HotkeyUp { at: now }),
+            Command::HotkeyAbort => Some(Event::HotkeyAbort),
             Command::Toggle => Some(Event::Toggle { at: now }),
             Command::Start => match machine.state {
                 State::Idle | State::Done { .. } | State::Error { .. } => {
@@ -1278,6 +1285,44 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyDown { at: ms(base, 500) });
         let s2 = recording_session(&m);
         assert!(s2 > s1);
+    }
+
+    /// Right ⌘-Tab on a right-⌘ hotkey: the press started a recording, the
+    /// Tab makes it a shortcut, so the recording is dropped unsent — and
+    /// the release that follows is a no-op, not a hybrid-mode latch.
+    #[test]
+    fn hotkey_abort_drops_the_recording_its_press_started() {
+        let base = t0();
+        for mode in [HotkeyMode::Hold, HotkeyMode::Toggle, HotkeyMode::Hybrid] {
+            let m = machine(mode);
+            let (m, _) = step(m, Event::HotkeyDown { at: base });
+            let session = recording_session(&m);
+            let (m, fx) = step(m, Event::HotkeyAbort);
+            assert_eq!(m.state, State::Idle, "{mode:?}");
+            assert_eq!(
+                fx,
+                vec![Effect::CancelRecording { session }, Effect::HideHud]
+            );
+            let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 120) });
+            assert_eq!(m.state, State::Idle, "{mode:?}");
+            assert!(fx.is_empty());
+        }
+    }
+
+    /// A shortcut on the press that finished a dictation must not throw the
+    /// dictation away: once it is past recording, the abort is ignored.
+    #[test]
+    fn hotkey_abort_leaves_a_finished_dictation_alone() {
+        let base = t0();
+        let m = machine(HotkeyMode::Toggle);
+        let (m, _) = step(m, Event::HotkeyDown { at: base });
+        let (m, _) = step(m, Event::HotkeyUp { at: ms(base, 100) });
+        let session = recording_session(&m);
+        let (m, _) = step(m, Event::HotkeyDown { at: ms(base, 3000) });
+        assert_eq!(m.state, State::Transcribing { session });
+        let (m, fx) = step(m, Event::HotkeyAbort);
+        assert_eq!(m.state, State::Transcribing { session });
+        assert!(fx.is_empty());
     }
 
     #[test]

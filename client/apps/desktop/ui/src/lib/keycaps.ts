@@ -71,6 +71,25 @@ const BY_TOKEN: Record<string, Cap> = {
   ArrowUp: { label: "↑" },
 };
 
+/**
+ * The bottom row of a Mac keyboard, left to right, as one-click hotkeys:
+ * left and right ⌘ and ⌥ are separate keys, so either side can be bound
+ * while its twin stays an ordinary modifier. Names are what the recorder
+ * stores for the same key; `grow` keeps a real keyboard's proportions.
+ */
+export const BOTTOM_ROW: (
+  | { keycode: number; name: string; cap: Cap; grow: number }
+  | { space: true; grow: number }
+)[] = [
+  { keycode: 63, name: "Fn", cap: FN, grow: 1 },
+  { keycode: 59, name: "Left ⌃", cap: CONTROL, grow: 1.3 },
+  { keycode: 58, name: "Left ⌥", cap: OPTION, grow: 1.3 },
+  { keycode: 55, name: "Left ⌘", cap: COMMAND, grow: 1.55 },
+  { space: true, grow: 2.2 },
+  { keycode: 54, name: "Right ⌘", cap: COMMAND, grow: 1.55 },
+  { keycode: 61, name: "Right ⌥", cap: OPTION, grow: 1.3 },
+];
+
 /** The modifier keycodes: held alone, they don't reach other apps' typing. */
 export const MODIFIER_KEYCODES = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 179];
 export const FN_KEYCODES = [63, 179];

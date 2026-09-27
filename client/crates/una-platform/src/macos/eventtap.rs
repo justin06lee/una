@@ -12,8 +12,11 @@
 //!   set_binding`], matching keyDown/keyUp events are CONSUMED (returned as
 //!   `Drop`) and reported as press/release through the `on_hotkey` callback.
 //!   Bare modifier keys (Fn, Right ⌘, …) are matched on flagsChanged via the
-//!   event's keycode field; flagsChanged events cannot be meaningfully
-//!   consumed, so they pass through.
+//!   event's keycode field, and the device-dependent flag bits tell right ⌥
+//!   from left ⌥; flagsChanged events cannot be meaningfully consumed, so
+//!   they pass through. A bound modifier still works as a modifier, so a key
+//!   or click shortly after its press means it was part of a shortcut
+//!   (⌘-Tab, ⌥-←, fn-⌫), reported as [`HotkeyEdge::Shortcut`].
 //! - **One-shot capture**: [`EventTap::capture_next`] arms the tap so the
 //!   next key press resolves to a [`CapturedKey`] for the settings recorder.
 //!   Non-modifier keys resolve (and are consumed) on keyDown, carrying any
@@ -37,7 +40,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use core_foundation::base::TCFType;
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
@@ -74,6 +77,22 @@ pub enum KeyClass {
     Navigate,
 }
 
+/// What the bound key just did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyEdge {
+    Down,
+    Up,
+    /// The bound key is a modifier and another key (or a click) came while
+    /// it was held, soon after the press: it was part of a shortcut, not a
+    /// press to dictate. Whatever the press started should be dropped.
+    Shortcut,
+}
+
+/// How soon after a bound modifier goes down another key still makes it a
+/// shortcut. Later than this, the key is typed mid-dictation and the
+/// dictation carries on.
+pub const SHORTCUT_WINDOW: Duration = Duration::from_millis(1000);
+
 /// A key press captured for the settings recorder.
 #[derive(Debug, Clone)]
 pub struct CapturedKey {
@@ -108,7 +127,7 @@ struct CaptureState {
 }
 
 struct Shared {
-    on_hotkey: Box<dyn Fn(bool) + Send + Sync>,
+    on_hotkey: Box<dyn Fn(HotkeyEdge) + Send + Sync>,
     /// Fast path: skip the watcher mutex entirely when nothing is armed.
     watching: AtomicBool,
     on_edit: Mutex<Option<Box<dyn Fn(KeyClass) + Send + Sync>>>,
@@ -116,6 +135,10 @@ struct Shared {
     matcher: AtomicU32,
     /// Whether the bound key is currently believed held.
     pressed: AtomicBool,
+    /// When the bound modifier went down, while it is held.
+    held_since: Mutex<Option<Instant>>,
+    /// A shortcut was already reported for the current press.
+    shortcut_sent: AtomicBool,
     capture: Mutex<Option<CaptureState>>,
     mach_port: AtomicPtr<c_void>,
     runloop: AtomicPtr<c_void>,
@@ -123,8 +146,16 @@ struct Shared {
 }
 
 impl Shared {
-    fn emit(&self, down: bool) {
-        (self.on_hotkey)(down);
+    fn emit(&self, edge: HotkeyEdge) {
+        (self.on_hotkey)(edge);
+    }
+
+    /// Report a release of the bound key if it was believed held.
+    fn release(&self) {
+        if self.pressed.swap(false, Ordering::SeqCst) {
+            self.held_since.lock().unwrap().take();
+            self.emit(HotkeyEdge::Up);
+        }
     }
 }
 
@@ -133,18 +164,20 @@ pub struct EventTap {
 }
 
 impl EventTap {
-    /// Spawn the tap thread + watchdog. `on_hotkey` receives `true` on press
-    /// and `false` on release of the bound key; it must be non-blocking.
+    /// Spawn the tap thread + watchdog. `on_hotkey` receives the bound key's
+    /// press, release and shortcut edges; it must be non-blocking.
     ///
     /// Fails when the tap cannot be created (most commonly: the
     /// Accessibility permission has not been granted).
-    pub fn spawn(on_hotkey: Box<dyn Fn(bool) + Send + Sync>) -> Result<Self, String> {
+    pub fn spawn(on_hotkey: Box<dyn Fn(HotkeyEdge) + Send + Sync>) -> Result<Self, String> {
         let shared = Arc::new(Shared {
             on_hotkey,
             watching: AtomicBool::new(false),
             on_edit: Mutex::new(None),
             matcher: AtomicU32::new(0),
             pressed: AtomicBool::new(false),
+            held_since: Mutex::new(None),
+            shortcut_sent: AtomicBool::new(false),
             capture: Mutex::new(None),
             mach_port: AtomicPtr::new(std::ptr::null_mut()),
             runloop: AtomicPtr::new(std::ptr::null_mut()),
@@ -165,6 +198,11 @@ impl EventTap {
                         CGEventType::KeyDown,
                         CGEventType::KeyUp,
                         CGEventType::FlagsChanged,
+                        // Only to spot ⌘-click and friends on a bound
+                        // modifier; clicks always pass through.
+                        CGEventType::LeftMouseDown,
+                        CGEventType::RightMouseDown,
+                        CGEventType::OtherMouseDown,
                     ],
                     move |_proxy, etype, event| {
                         catch_unwind(AssertUnwindSafe(|| handle_event(&cb_shared, etype, event)))
@@ -240,9 +278,9 @@ impl EventTap {
                         continue;
                     }
                     let kc = (bound - 1) as u16;
-                    if !key_physically_down(kc) && wd_shared.pressed.swap(false, Ordering::SeqCst) {
+                    if !key_physically_down(kc) && wd_shared.pressed.load(Ordering::SeqCst) {
                         tracing_forced_release(kc);
-                        wd_shared.emit(false);
+                        wd_shared.release();
                     }
                 }
             })
@@ -260,9 +298,7 @@ impl EventTap {
                 .unwrap_or(0),
             Ordering::SeqCst,
         );
-        if self.shared.pressed.swap(false, Ordering::SeqCst) {
-            self.shared.emit(false);
-        }
+        self.shared.release();
     }
 
     /// Block until the next key press resolves (see module docs) or `timeout`
@@ -325,9 +361,15 @@ fn key_physically_down(kc: u16) -> bool {
     }
     if kc != keys::KC_CAPS_LOCK {
         if let Some(flag) = keys::modifier_flag(kc) {
-            // Errs toward "held" when the twin (other-side) modifier is
-            // down; real releases still arrive via flagsChanged.
-            return unsafe { CGEventSourceFlagsState(HID_STATE) } & flag.bits() != 0;
+            let state = unsafe { CGEventSourceFlagsState(HID_STATE) };
+            if let Some((side, pair)) = keys::side_flags(kc) {
+                if state & pair != 0 {
+                    return state & side != 0;
+                }
+            }
+            // No side bits: errs toward "held" when the twin (other-side)
+            // modifier is down; real releases still arrive via flagsChanged.
+            return state & flag.bits() != 0;
         }
     }
     false
@@ -395,6 +437,10 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
             return CallbackResult::Keep;
         }
         CGEventType::KeyDown | CGEventType::KeyUp | CGEventType::FlagsChanged => {}
+        CGEventType::LeftMouseDown | CGEventType::RightMouseDown | CGEventType::OtherMouseDown => {
+            note_other_input(shared);
+            return CallbackResult::Keep;
+        }
         _ => return CallbackResult::Keep,
     }
 
@@ -471,13 +517,24 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
     let bound_kc = (bound - 1) as u16;
 
     if keys::is_modifier(bound_kc) {
-        if matches!(etype, CGEventType::FlagsChanged) && keycode == bound_kc {
-            let down = modifier_down_now(bound_kc, event.get_flags());
-            if shared.pressed.swap(down, Ordering::SeqCst) != down {
-                shared.emit(down);
+        match etype {
+            CGEventType::FlagsChanged if keycode == bound_kc => {
+                if modifier_down_now(bound_kc, event.get_flags()) {
+                    if !shared.pressed.swap(true, Ordering::SeqCst) {
+                        *shared.held_since.lock().unwrap() = Some(Instant::now());
+                        shared.shortcut_sent.store(false, Ordering::SeqCst);
+                        shared.emit(HotkeyEdge::Down);
+                    }
+                } else {
+                    shared.release();
+                }
             }
+            // The Globe keyDown is Fn's own, not a second key.
+            CGEventType::KeyDown if keycode != keys::KC_GLOBE => note_other_input(shared),
+            _ => {}
         }
-        // flagsChanged can't be consumed meaningfully; pass through.
+        // flagsChanged can't be consumed meaningfully, and a bound modifier
+        // stays a modifier for everything else; pass through.
         return CallbackResult::Keep;
     }
 
@@ -491,25 +548,53 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
             // Consume repeats without re-emitting: the FSM debounces, but a
             // repeat must not leak into the focused app either.
             if !autorepeat && !shared.pressed.swap(true, Ordering::SeqCst) {
-                shared.emit(true);
+                shared.emit(HotkeyEdge::Down);
             }
             CallbackResult::Drop
         }
         CGEventType::KeyUp => {
-            if shared.pressed.swap(false, Ordering::SeqCst) {
-                shared.emit(false);
-            }
+            shared.release();
             CallbackResult::Drop
         }
         _ => CallbackResult::Keep,
     }
 }
 
+/// A key or click while the bound modifier is held: within
+/// [`SHORTCUT_WINDOW`] of the press, the modifier is being used in a
+/// shortcut, so report it (once per press).
+fn note_other_input(shared: &Shared) {
+    if !shared.pressed.load(Ordering::SeqCst) {
+        return;
+    }
+    let bound = shared.matcher.load(Ordering::SeqCst);
+    if bound == 0 || !keys::is_modifier((bound - 1) as u16) {
+        return;
+    }
+    let Some(since) = *shared.held_since.lock().unwrap() else {
+        return;
+    };
+    if since.elapsed() <= SHORTCUT_WINDOW && !shared.shortcut_sent.swap(true, Ordering::SeqCst) {
+        shared.emit(HotkeyEdge::Shortcut);
+    }
+}
+
 /// Whether the modifier key `kc` is physically down right after this
-/// flagsChanged event. `CGEventSourceKeyState` distinguishes left/right
-/// twins sharing one flag bit; the event's own flag bit is the fallback for
-/// keys where the key-state register is unreliable (Fn on some keyboards).
+/// flagsChanged event. The event's device-dependent bits say exactly which
+/// side of a pair is down (right ⌥ vs left ⌥ share `CGEventFlagAlternate`);
+/// `CGEventSourceKeyState` covers sources that don't set them, and the
+/// event's own flag bit is the fallback for keys where the key-state
+/// register is unreliable (Fn on some keyboards).
 fn modifier_down_now(kc: u16, event_flags: CGEventFlags) -> bool {
+    let bits = event_flags.bits();
+    if let (Some((side, pair)), Some(class)) = (keys::side_flags(kc), keys::modifier_flag(kc)) {
+        if bits & class.bits() == 0 {
+            return false; // neither key of the pair is held
+        }
+        if bits & pair != 0 {
+            return bits & side != 0;
+        }
+    }
     if unsafe { CGEventSourceKeyState(HID_STATE, kc) } {
         return true;
     }
@@ -672,9 +757,9 @@ mod tests {
 
         const KC_F20: u16 = 90;
 
-        let (tx, rx) = mpsc::channel::<bool>();
-        let tap = EventTap::spawn(Box::new(move |down| {
-            let _ = tx.send(down);
+        let (tx, rx) = mpsc::channel::<HotkeyEdge>();
+        let tap = EventTap::spawn(Box::new(move |edge| {
+            let _ = tx.send(edge);
         }))
         .expect("event tap (accessibility granted?)");
         tap.set_binding(Some(KC_F20));
@@ -686,10 +771,128 @@ mod tests {
         let up = CGEvent::new_keyboard_event(source, KC_F20, false).unwrap();
         up.post(CGEventTapLocation::HID);
 
-        assert_eq!(rx.recv_timeout(Duration::from_secs(3)), Ok(true));
-        assert_eq!(rx.recv_timeout(Duration::from_secs(3)), Ok(false));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(3)),
+            Ok(HotkeyEdge::Down)
+        );
+        assert_eq!(rx.recv_timeout(Duration::from_secs(3)), Ok(HotkeyEdge::Up));
         // No stray third edge.
         assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        tap.set_binding(None);
+    }
+
+    const ALT: u64 = 0x0008_0000; // CGEventFlagAlternate
+    const L_OPT: u64 = 0x20;
+    const R_OPT: u64 = 0x40;
+
+    /// Right ⌥ and left ⌥ share the Alternate flag; the side bits decide.
+    #[test]
+    fn side_bits_tell_right_option_from_left() {
+        use super::keys::{KC_LEFT_OPT, KC_RIGHT_OPT};
+        let f = CGEventFlags::from_bits_retain;
+        assert!(modifier_down_now(KC_RIGHT_OPT, f(ALT | R_OPT)));
+        assert!(!modifier_down_now(KC_LEFT_OPT, f(ALT | R_OPT)));
+        // Left held, right just released.
+        assert!(!modifier_down_now(KC_RIGHT_OPT, f(ALT | L_OPT)));
+        assert!(modifier_down_now(KC_LEFT_OPT, f(ALT | L_OPT)));
+        // Both released.
+        assert!(!modifier_down_now(KC_RIGHT_OPT, f(0)));
+    }
+
+    /// Post a flagsChanged for `keycode` carrying `flags`, as a real
+    /// modifier press or release would.
+    fn post_modifier(keycode: u16, flags: u64) {
+        use core_graphics::event::{CGEvent, CGEventTapLocation};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
+        let ev = CGEvent::new_keyboard_event(source, keycode, flags != 0).unwrap();
+        ev.set_type(CGEventType::FlagsChanged);
+        ev.set_flags(CGEventFlags::from_bits_retain(flags));
+        ev.post(CGEventTapLocation::HID);
+    }
+
+    fn post_key(keycode: u16, down: bool, flags: u64) {
+        use core_graphics::event::{CGEvent, CGEventTapLocation};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
+        let ev = CGEvent::new_keyboard_event(source, keycode, down).unwrap();
+        ev.set_flags(CGEventFlags::from_bits_retain(flags));
+        ev.post(CGEventTapLocation::HID);
+    }
+
+    /// Recording a bare right ⌥ resolves to right ⌥, not left.
+    #[test]
+    #[ignore = "requires Accessibility permission and a real HID event tap"]
+    fn capture_records_right_option() {
+        use super::keys::KC_RIGHT_OPT;
+        let tap = EventTap::spawn(Box::new(|_| {})).expect("event tap (accessibility granted?)");
+        let handle = {
+            let shared = tap.shared.clone();
+            std::thread::spawn(move || {
+                let t = EventTap { shared };
+                let r = t.capture_next(Duration::from_secs(5));
+                std::mem::forget(t);
+                r
+            })
+        };
+        std::thread::sleep(Duration::from_millis(200));
+        post_modifier(KC_RIGHT_OPT, ALT | R_OPT);
+        post_modifier(KC_RIGHT_OPT, 0);
+        let captured = handle.join().unwrap().expect("capture should resolve");
+        assert_eq!(captured.keycode, KC_RIGHT_OPT);
+        assert_eq!(captured.name, "Right ⌥");
+        assert!(captured.is_modifier);
+    }
+
+    /// Bound to right ⌥: its press and release are edges, left ⌥ is ignored,
+    /// and right ⌥ + another key reports a shortcut between the two.
+    #[test]
+    #[ignore = "requires Accessibility permission and a real HID event tap"]
+    fn right_option_alone_matches_and_shortcut_is_reported() {
+        use super::keys::{KC_LEFT_OPT, KC_RIGHT_OPT};
+        const KC_F20: u16 = 90;
+
+        let (tx, rx) = mpsc::channel::<HotkeyEdge>();
+        let tap = EventTap::spawn(Box::new(move |edge| {
+            let _ = tx.send(edge);
+        }))
+        .expect("event tap (accessibility granted?)");
+        tap.set_binding(Some(KC_RIGHT_OPT));
+        std::thread::sleep(Duration::from_millis(100));
+        let recv = || rx.recv_timeout(Duration::from_secs(2));
+
+        // Right ⌥ alone.
+        post_modifier(KC_RIGHT_OPT, ALT | R_OPT);
+        post_modifier(KC_RIGHT_OPT, 0);
+        assert_eq!(recv(), Ok(HotkeyEdge::Down));
+        assert_eq!(recv(), Ok(HotkeyEdge::Up));
+
+        // Left ⌥ alone: nothing.
+        post_modifier(KC_LEFT_OPT, ALT | L_OPT);
+        post_modifier(KC_LEFT_OPT, 0);
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+
+        // Left ⌥ held, right ⌥ pressed and released, left released.
+        post_modifier(KC_LEFT_OPT, ALT | L_OPT);
+        post_modifier(KC_RIGHT_OPT, ALT | L_OPT | R_OPT);
+        post_modifier(KC_RIGHT_OPT, ALT | L_OPT);
+        post_modifier(KC_LEFT_OPT, 0);
+        assert_eq!(recv(), Ok(HotkeyEdge::Down));
+        assert_eq!(recv(), Ok(HotkeyEdge::Up));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+
+        // Right ⌥ + F20: a shortcut, reported once, then the release.
+        post_modifier(KC_RIGHT_OPT, ALT | R_OPT);
+        post_key(KC_F20, true, ALT | R_OPT);
+        post_key(KC_F20, false, ALT | R_OPT);
+        post_key(KC_F20, true, ALT | R_OPT);
+        post_key(KC_F20, false, ALT | R_OPT);
+        post_modifier(KC_RIGHT_OPT, 0);
+        assert_eq!(recv(), Ok(HotkeyEdge::Down));
+        assert_eq!(recv(), Ok(HotkeyEdge::Shortcut));
+        assert_eq!(recv(), Ok(HotkeyEdge::Up));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+
         tap.set_binding(None);
     }
 }
