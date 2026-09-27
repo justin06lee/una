@@ -38,7 +38,24 @@ const K_UC_KEY_TRANSLATE_NO_DEAD_KEYS_MASK: u32 = 1;
 /// Translate a virtual keycode to the character it produces on the current
 /// keyboard layout (no modifiers). Returns None for non-character keys or
 /// when layout resolution fails.
+///
+/// Callable from any thread: the Text Input Sources API is main-thread-only
+/// (macOS asserts, killing the process, when a lookup off the main thread has
+/// to rebuild its input-source list — which is exactly what happens after a
+/// Fn / 🌐 press switches the input source), so the lookup hops to the main
+/// thread. Callers must not be holding anything the main thread may wait on.
 pub fn char_for_keycode(keycode: u16) -> Option<char> {
+    dispatch2::run_on_main(|_| layout_char(keycode))
+}
+
+/// Find the virtual keycode producing `wanted` on the current layout.
+/// Same threading as [`char_for_keycode`], in a single hop to the main thread.
+pub fn keycode_for_char(wanted: char) -> Option<u16> {
+    dispatch2::run_on_main(|_| (0u16..128).find(|&kc| layout_char(kc) == Some(wanted)))
+}
+
+/// The layout lookup itself. Main thread only.
+fn layout_char(keycode: u16) -> Option<char> {
     unsafe {
         let source = TISCopyCurrentKeyboardLayoutInputSource();
         if source.is_null() {
@@ -75,10 +92,6 @@ pub fn char_for_keycode(keycode: u16) -> Option<char> {
     }
 }
 
-/// Find the virtual keycode producing `wanted` on the current layout.
-pub fn keycode_for_char(wanted: char) -> Option<u16> {
-    (0u16..128).find(|&kc| char_for_keycode(kc) == Some(wanted))
-}
 
 // ---------------------------------------------------------------------------
 // Modifier keys
