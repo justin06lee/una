@@ -308,7 +308,7 @@
 
 <main class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
-    <span class="title" data-tauri-drag-region><Mark size={14} /> Review dictations</span>
+    <span class="title" data-tauri-drag-region><Mark size={18} /> Review dictations</span>
     {#if !loading && !error}
       <span class="count" data-tauri-drag-region>
         {pending} left{#if flagged > 0}<span class="sep">·</span>{flagged} to check{/if}

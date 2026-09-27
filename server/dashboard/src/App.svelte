@@ -87,7 +87,7 @@
 <div class="flex h-screen overflow-hidden bg-canvas text-fg">
   <aside class="flex w-56 flex-none flex-col border-r border-line bg-sidebar">
     <div class="flex h-14 items-center gap-2.5 px-4">
-      <Logo size={22} />
+      <Logo size={28} />
       <span class="text-[15px] font-semibold tracking-[-0.02em]">una</span>
     </div>
 

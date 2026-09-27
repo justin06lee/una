@@ -13,7 +13,7 @@
 </script>
 
 <div class="about">
-  <Mark size={56} />
+  <Mark size={84} />
   <h1 class="page-title">una</h1>
   <p class="faint">{version ? `Version ${version}` : ""}</p>
   <p class="page-sub">

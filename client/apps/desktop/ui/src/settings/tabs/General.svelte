@@ -72,7 +72,17 @@
           save();
         }}
       >
-        <span class="preview" class:empty={m.value === "flash"}><span class="pill"><i></i><i></i><i></i></span></span>
+        <span class="preview" class:empty={m.value === "flash"}>
+          <span class="pill">
+            <svg viewBox="1.5 5.8 29 19.5" aria-hidden="true">
+              <rect x="13.9" y="15.2" width="4.2" height="6" rx="2.1" />
+              <rect x="5.05" y="9.4" width="2.2" height="14.03" rx="1.1" />
+              <rect x="2.1" y="6.4" width="2.2" height="18.4" rx="1.1" />
+              <rect x="24.75" y="9.4" width="2.2" height="14.03" rx="1.1" />
+              <rect x="27.7" y="6.4" width="2.2" height="18.4" rx="1.1" />
+            </svg>
+          </span>
+        </span>
         <span class="row-copy">
           <span class="row-title">{m.name}</span>
           <span class="row-sub" style="display: block">{m.desc}</span>
@@ -106,19 +116,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1.5px;
   }
 
-  .pill i {
-    width: 1.5px;
-    height: 2px;
-    border-radius: 1px;
-    background: #fff;
-    opacity: 0.8;
-  }
-
-  .pill i:nth-child(2) {
-    height: 3.5px;
+  /* The bow, thinned to its outer bars so it survives thumbnail size. */
+  .pill svg {
+    width: 8px;
+    height: 5px;
+    fill: rgba(255, 255, 255, 0.85);
   }
 
   .empty .pill {
@@ -126,7 +130,7 @@
     border: 1px dashed var(--faint);
   }
 
-  .empty .pill i {
+  .empty .pill svg {
     display: none;
   }
 </style>

@@ -63,7 +63,7 @@
       {/each}
     </div>
     <div class="brand">
-      <Mark size={18} />
+      <Mark size={22} />
       <span>una</span>
     </div>
   </nav>

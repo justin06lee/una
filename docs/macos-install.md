@@ -62,7 +62,7 @@ not quarantined and open normally.
 ## Permissions walkthrough
 
 una needs two TCC grants. It lives in the menu bar (no dock icon) — look for
-the small three-bar icon.
+the small bow icon.
 
 ### 1. Microphone
 
@@ -107,7 +107,7 @@ resets the grants of every app on the system.
 
 ## First run checklist
 
-1. Launch Una; its three-bar icon appears in the menu bar.
+1. Launch Una; its bow icon appears in the menu bar.
 2. Tray → **Settings… → Server**: add your server's address, or click
    **Scan** under *On this network* to find `_una._tcp` servers on the LAN. The dot next to each
    address turns green when `/v1/health` answers. Add a VPN address too if you
