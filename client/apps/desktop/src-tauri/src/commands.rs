@@ -47,6 +47,7 @@ pub fn set_config(
 
     let mut config = config;
     config.normalize();
+    config.hotkey.binding = hotkey::canonical_binding(&config.hotkey.binding);
 
     let previous = state.config_snapshot();
     una_core::config::save(&config).map_err(|e| e.to_string())?;
@@ -280,6 +281,47 @@ pub async fn capture_hotkey(app: AppHandle) -> Result<CapturedHotkey, String> {
                 .into(),
         )
     }
+}
+
+/// What macOS itself does on a Fn / 🌐 press — System Settings > Keyboard >
+/// "Press 🌐 key to": 0 Do Nothing, 1 Change Input Source, 2 Show Emoji &
+/// Symbols, 3 Start Dictation. None when never set (or not macOS). macOS
+/// acts on the key below any event tap, so una can't stop it; the settings
+/// window warns when Fn is the hotkey and this isn't 0.
+#[tauri::command]
+pub async fn fn_key_action() -> Option<u8> {
+    #[cfg(target_os = "macos")]
+    {
+        // `defaults` goes through cfprefsd, so a change made in System
+        // Settings a moment ago is already visible.
+        tauri::async_runtime::spawn_blocking(|| {
+            let out = std::process::Command::new("/usr/bin/defaults")
+                .args(["read", "com.apple.HIToolbox", "AppleFnUsageType"])
+                .output()
+                .ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+/// Open System Settings > Keyboard, where "Press 🌐 key to" lives.
+#[tauri::command]
+pub fn open_keyboard_settings(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt as _;
+    app.opener()
+        .open_url(
+            "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
+            None::<&str>,
+        )
+        .map_err(|e| e.to_string())
 }
 
 /// Abort a pending capture_hotkey (it returns a \"cancelled\" error).

@@ -109,6 +109,22 @@ pub const KC_RIGHT_CTRL: u16 = 62;
 pub const KC_FN: u16 = 63;
 pub const KC_ESCAPE: u16 = 53;
 
+/// The 🌐 half of the Fn key on Apple keyboards. Besides the Fn
+/// flagsChanged (63), a press also sends a keyDown/keyUp on this code
+/// whenever System Settings gives the key an action ("Press 🌐 key to …").
+/// It is the same physical key, so recording and matching fold it into Fn.
+pub const KC_GLOBE: u16 = 179;
+
+/// The key a keycode really stands for: Globe is Fn, everything else is
+/// itself.
+pub fn canonical(keycode: u16) -> u16 {
+    if keycode == KC_GLOBE {
+        KC_FN
+    } else {
+        keycode
+    }
+}
+
 /// The device-independent flag bit a modifier keycode contributes to
 /// `CGEventFlags`, or None for non-modifier keys.
 pub fn modifier_flag(keycode: u16) -> Option<CGEventFlags> {
@@ -143,7 +159,7 @@ fn special_name(keycode: u16) -> Option<&'static str> {
         KC_RIGHT_SHIFT => "Right ⇧",
         KC_RIGHT_OPT => "Right ⌥",
         KC_RIGHT_CTRL => "Right ⌃",
-        KC_FN => "Fn",
+        KC_FN | KC_GLOBE => "Fn",
         36 => "Return",
         48 => "Tab",
         49 => "Space",
@@ -330,10 +346,18 @@ mod tests {
     }
 
     #[test]
+    fn globe_is_fn() {
+        assert_eq!(canonical(KC_GLOBE), KC_FN);
+        assert_eq!(canonical(KC_FN), KC_FN);
+        assert_eq!(canonical(96), 96);
+    }
+
+    #[test]
     fn f_keys_named() {
         assert_eq!(key_name(96), "F5");
         assert_eq!(key_name(111), "F12");
         assert_eq!(key_name(63), "Fn");
+        assert_eq!(key_name(KC_GLOBE), "Fn");
         assert_eq!(key_name(54), "Right ⌘");
     }
 }

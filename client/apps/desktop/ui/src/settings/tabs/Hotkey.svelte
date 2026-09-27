@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import Icon from "../../lib/Icon.svelte";
+  import Keycap from "../../lib/Keycap.svelte";
+  import { capsFor, FN_KEYCODES, MODIFIER_KEYCODES, parseNative, spoken } from "../../lib/keycaps";
   import type { CapturedHotkey, Config } from "../../lib/types";
 
   let { config = $bindable(), save }: { config: Config; save: () => void } = $props();
@@ -10,47 +12,49 @@
   let capturing = $state(false);
   let recordingHotkey = $state(false); // JS combo recorder, where native capture is missing
   let captureError = $state("");
+  let justSaved = $state(false);
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+  /** macOS's own "Press 🌐 key to" action (0 = Do Nothing); null when never set. */
+  let fnAction = $state<number | null | undefined>(undefined);
+
+  function checkFnAction() {
+    invoke<number | null>("fn_key_action")
+      .then((a) => (fnAction = a))
+      .catch(() => {});
+  }
 
   onMount(() => {
     invoke<boolean>("hotkey_capture_supported")
-      .then((s) => (captureSupported = s))
+      .then((s) => {
+        captureSupported = s;
+        if (s) checkFnAction();
+      })
       .catch(() => {});
+    // Coming back from System Settings: pick up a changed 🌐 action.
+    const onFocus = () => captureSupported && checkFnAction();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearTimeout(savedTimer);
+    };
   });
 
-  const MOD_GLYPHS: Record<string, string> = {
-    Ctrl: "⌃",
-    Control: "⌃",
-    Alt: "⌥",
-    Option: "⌥",
-    Shift: "⇧",
-    Super: "⌘",
-    Cmd: "⌘",
-    Command: "⌘",
-    Meta: "⌘",
-    CmdOrCtrl: "⌘",
-  };
-  const MODIFIER_KEYCODES = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63];
-
-  function parseNative(b: string): { keycode: number; name: string } | null {
-    if (!b.startsWith("native:")) return null;
-    const rest = b.slice("native:".length);
-    const i = rest.indexOf(":");
-    const code = Number(i >= 0 ? rest.slice(0, i) : rest);
-    const name = i >= 0 ? rest.slice(i + 1) : "";
-    return { keycode: code, name: name || `Key ${code}` };
-  }
-
-  /** Keycaps for the current binding ("⌃ ⌥ Space" or a single "Fn"). */
-  const keycaps = $derived.by(() => {
-    const native = parseNative(config.hotkey.binding);
-    if (native) return [native.name];
-    return config.hotkey.binding.split("+").map((t) => MOD_GLYPHS[t] ?? t);
-  });
-
+  const keycaps = $derived(capsFor(config.hotkey.binding));
+  const keyName = $derived(spoken(config.hotkey.binding));
   const bindingNative = $derived(parseNative(config.hotkey.binding));
+  const isFn = $derived(bindingNative !== null && FN_KEYCODES.includes(bindingNative.keycode));
   /** Native non-modifier keys are consumed system-wide — warn about it. */
   const swallowWarning = $derived(
     bindingNative !== null && !MODIFIER_KEYCODES.includes(bindingNative.keycode),
+  );
+  /** What macOS does on top of una when fn is pressed, if anything. */
+  const FN_ACTIONS: Record<number, string> = {
+    1: "switches your input source",
+    2: "opens the emoji picker",
+    3: "starts Apple's dictation",
+  };
+  const fnClash = $derived(
+    captureSupported && isFn && fnAction !== undefined && fnAction !== 0,
   );
   const listening = $derived(capturing || recordingHotkey);
 
@@ -62,6 +66,7 @@
       const cap = await invoke<CapturedHotkey>("capture_hotkey");
       config.hotkey.binding = cap.binding;
       save();
+      flashSaved();
     } catch (e) {
       const msg = String(e);
       // A cancelled capture (Esc or the Cancel button) is not an error.
@@ -69,6 +74,12 @@
     } finally {
       capturing = false;
     }
+  }
+
+  function flashSaved() {
+    justSaved = true;
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => (justSaved = false), 1800);
   }
 
   function cancelCapture() {
@@ -122,14 +133,19 @@
       config.hotkey.binding = combo;
       recordingHotkey = false;
       save();
+      flashSaved();
     }
   }
 
-  const MODES = [
-    { value: "hold", name: "Hold", desc: "Hold to talk, let go to insert." },
-    { value: "toggle", name: "Toggle", desc: "Press to start, press again to finish." },
-    { value: "hybrid", name: "Hybrid", desc: "Hold to talk, or tap to keep listening and tap again to finish." },
-  ] as const;
+  const MODES = $derived([
+    { value: "hold", name: "Hold", desc: `Hold ${keyName} to talk, let go to insert.` },
+    { value: "toggle", name: "Toggle", desc: `Press ${keyName} to start, press it again to finish.` },
+    {
+      value: "hybrid",
+      name: "Hybrid",
+      desc: `Hold ${keyName} to talk, or tap it to keep listening and tap again to finish.`,
+    },
+  ] as const);
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -139,38 +155,59 @@
 
 <div class="section">
   <div class="binding" class:listening>
-    <div class="keys" aria-label="Current hotkey">
+    <div class="keys" aria-label="Current hotkey: {keyName}">
       {#if listening}
         <span class="listening-label">
           <span class="dot live"></span>
           {captureSupported ? "Press any key…" : "Press a key combination…"}
         </span>
       {:else}
-        {#each keycaps as k, i (i)}
-          <span class="keycap">{k}</span>
+        {#each keycaps as cap, i (i)}
+          <Keycap {cap} />
         {/each}
       {/if}
     </div>
-    <button class="btn" class:btn-primary={!listening} onclick={toggleRecording}>
-      {listening ? "Cancel" : "Change hotkey"}
-    </button>
+    <div class="actions">
+      {#if justSaved && !listening}
+        <span class="saved"><Icon name="check" size={13} stroke={2.2} />Saved</span>
+      {/if}
+      <button class="btn" class:btn-primary={!listening} onclick={toggleRecording}>
+        {listening ? "Cancel" : "Change"}
+      </button>
+    </div>
   </div>
 
   <p class="hint">
     {#if captureSupported}
-      Any single key works — Fn, Right ⌘, F5, even a plain letter — including as a hold-to-talk
-      key. Hold modifiers and press a key to record a combination instead. Esc cancels.
+      Press any single key — fn, right ⌘, F5 — or hold modifiers and press a key for a
+      combination. Esc cancels.
     {:else}
-      This platform records modifier + key combinations. Single bare keys like Fn or Right ⌘ are
+      This platform records modifier + key combinations. Single bare keys like fn or right ⌘ are
       a macOS feature. Esc cancels.
     {/if}
   </p>
 
+  {#if fnClash}
+    <div class="note warn with-action">
+      <span class="dot warn"></span>
+      <span>
+        {#if fnAction != null && FN_ACTIONS[fnAction]}
+          macOS also acts on fn: every press {FN_ACTIONS[fnAction]}.
+        {:else}
+          macOS may also act on fn, opening emoji or switching input source.
+        {/if}
+        Set “Press 🌐 key to” to <b>Do Nothing</b> so fn only dictates.
+      </span>
+      <button class="btn btn-sm" onclick={() => invoke("open_keyboard_settings").catch(() => {})}>
+        Keyboard Settings…
+      </button>
+    </div>
+  {/if}
   {#if bindingNative && !captureSupported}
     <div class="note warn">
       <span class="dot warn"></span>
       <span>
-        The saved hotkey “{bindingNative.name}” is a macOS-only key and does nothing here. Record a
+        The saved hotkey “{keyName}” is a macOS-only key and does nothing here. Record a
         combination above, or use a compositor keybind (below).
       </span>
     </div>
@@ -179,8 +216,7 @@
     <div class="note warn">
       <span class="dot warn"></span>
       <span>
-        While una is running, “{bindingNative?.name}” is captured system-wide — other apps won't
-        receive it.
+        While una is running, “{keyName}” is captured system-wide — other apps won't receive it.
       </span>
     </div>
   {/if}
@@ -247,23 +283,38 @@
   .keys {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-height: 36px;
+    gap: 8px;
+    min-height: 46px;
   }
 
-  .keycap {
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .saved {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    height: 36px;
-    padding: 0 12px;
-    border-radius: 8px;
-    border: 1px solid var(--line-strong);
-    border-bottom-width: 2px;
-    background: var(--subtle);
-    font-size: 15px;
-    font-weight: 500;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--muted);
+    animation: fade-in 160ms ease;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .with-action {
+    align-items: center;
+  }
+
+  .with-action .btn {
+    flex: none;
+    margin-left: auto;
   }
 
   .listening-label {

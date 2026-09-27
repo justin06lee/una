@@ -255,7 +255,9 @@ impl EventTap {
     /// any believed-pressed state so a binding change mid-hold cannot wedge.
     pub fn set_binding(&self, keycode: Option<u16>) {
         self.shared.matcher.store(
-            keycode.map(|kc| kc as u32 + 1).unwrap_or(0),
+            keycode
+                .map(|kc| keys::canonical(kc) as u32 + 1)
+                .unwrap_or(0),
             Ordering::SeqCst,
         );
         if self.shared.pressed.swap(false, Ordering::SeqCst) {
@@ -403,6 +405,15 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
         let mut guard = shared.capture.lock().unwrap();
         if guard.is_some() {
             match etype {
+                CGEventType::KeyDown if keycode == keys::KC_GLOBE => {
+                    // The 🌐 keyDown a Fn press sends alongside its
+                    // flagsChanged: it is Fn, so keep waiting for the Fn
+                    // release instead of recording "key 179".
+                    if let Some(cap) = guard.as_mut() {
+                        cap.candidate = Some(keys::KC_FN);
+                    }
+                    return CallbackResult::Drop;
+                }
                 CGEventType::KeyDown => {
                     let flags = event.get_flags().bits() & MODIFIER_MASK;
                     if keycode == keys::KC_ESCAPE && flags == 0 {
@@ -441,7 +452,11 @@ fn handle_event(shared: &Shared, etype: CGEventType, event: &CGEvent) -> Callbac
 
     // ---- Correction watcher ----------------------------------------------
     // Observational only: classify the press and pass it straight through.
-    if shared.watching.load(Ordering::SeqCst) && matches!(etype, CGEventType::KeyDown) {
+    // The Globe keyDown of a Fn press changes no text.
+    if shared.watching.load(Ordering::SeqCst)
+        && matches!(etype, CGEventType::KeyDown)
+        && keycode != keys::KC_GLOBE
+    {
         let class = classify_edit_key(keycode, event.get_flags());
         if let Some(on_edit) = shared.on_edit.lock().unwrap().as_ref() {
             on_edit(class);
