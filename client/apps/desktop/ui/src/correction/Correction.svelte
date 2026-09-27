@@ -83,7 +83,7 @@
 <main class:mac={isMac}>
   {#if isMac}
     <div class="titlebar" data-tauri-drag-region>
-      <Mark size={14} />
+      <Mark size={18} />
       <span data-tauri-drag-region>Fix dictation</span>
     </div>
   {/if}

@@ -172,7 +172,17 @@
         <button class="retry" onclick={retry}>Retry</button>
       {/if}
     {:else}
-      <div class="mini"><i></i><i></i><i></i></div>
+      <svg class="mini" viewBox="1.5 5.8 29 19.5" aria-hidden="true">
+        <rect x="13.9" y="15.2" width="4.2" height="6" rx="2.1"/>
+        <rect x="10.95" y="15.4" width="2.2" height="5.3" rx="1.1"/>
+        <rect x="8" y="12.4" width="2.2" height="9.67" rx="1.1"/>
+        <rect x="5.05" y="9.4" width="2.2" height="14.03" rx="1.1"/>
+        <rect x="2.1" y="6.4" width="2.2" height="18.4" rx="1.1"/>
+        <rect x="18.85" y="15.4" width="2.2" height="5.3" rx="1.1"/>
+        <rect x="21.8" y="12.4" width="2.2" height="9.67" rx="1.1"/>
+        <rect x="24.75" y="9.4" width="2.2" height="14.03" rx="1.1"/>
+        <rect x="27.7" y="6.4" width="2.2" height="18.4" rx="1.1"/>
+      </svg>
     {/if}
   </div>
 </div>
@@ -237,7 +247,7 @@
   }
 
   /* -------------------------------------------------------------- Idle */
-  /* The resting pill carries the app icon's three bars: short, tall, mid. */
+  /* The resting pill carries the app icon's bow, small and dimmed. */
   .pill.idle {
     width: 56px;
     height: 14px;
@@ -245,25 +255,10 @@
   }
 
   .mini {
-    display: flex;
-    align-items: center;
-    gap: 2.5px;
-  }
-
-  .mini i {
-    width: 2px;
-    border-radius: 1px;
-    background: rgba(255, 255, 255, 0.5);
-  }
-
-  .mini i:nth-child(1) {
-    height: 3.5px;
-  }
-  .mini i:nth-child(2) {
-    height: 7px;
-  }
-  .mini i:nth-child(3) {
-    height: 5px;
+    width: 16px;
+    height: 10.8px;
+    flex: none;
+    fill: rgba(255, 255, 255, 0.6);
   }
 
   /* --------------------------------------------------------- Recording */

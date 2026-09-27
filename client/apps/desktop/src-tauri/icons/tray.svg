@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">
-  <!-- Menu-bar template image: macOS tints it to match the bar. -->
+  <!-- Menu-bar template image: the bow at four bars a side. macOS tints it. -->
   <g fill="#000000">
-    <rect x="12" y="15" width="5" height="14" rx="2.5"/>
-    <rect x="19.5" y="8" width="5" height="28" rx="2.5"/>
-    <rect x="27" y="12.5" width="5" height="19" rx="2.5"/>
+    <rect x="19.11" y="20.9" width="5.78" height="8.25" rx="2.89"/>
+    <rect x="15.06" y="21.18" width="3.03" height="7.29" rx="1.51"/>
+    <rect x="11" y="17.05" width="3.03" height="13.29" rx="1.51"/>
+    <rect x="6.94" y="12.93" width="3.03" height="19.3" rx="1.51"/>
+    <rect x="2.89" y="8.8" width="3.03" height="25.3" rx="1.51"/>
+    <rect x="25.92" y="21.18" width="3.03" height="7.29" rx="1.51"/>
+    <rect x="29.98" y="17.05" width="3.03" height="13.29" rx="1.51"/>
+    <rect x="34.03" y="12.93" width="3.03" height="19.3" rx="1.51"/>
+    <rect x="38.09" y="8.8" width="3.03" height="25.3" rx="1.51"/>
   </g>
 </svg>
