@@ -1,14 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">
-  <!-- Menu-bar template image: the bow at four bars a side. macOS tints it. -->
+  <!-- Menu-bar template image: the same seven-bar bow. macOS tints it. -->
   <g fill="#000000">
-    <rect x="19.11" y="20.9" width="5.78" height="8.25" rx="2.89"/>
-    <rect x="15.06" y="21.18" width="3.03" height="7.29" rx="1.51"/>
-    <rect x="11" y="17.05" width="3.03" height="13.29" rx="1.51"/>
-    <rect x="6.94" y="12.93" width="3.03" height="19.3" rx="1.51"/>
-    <rect x="2.89" y="8.8" width="3.03" height="25.3" rx="1.51"/>
-    <rect x="25.92" y="21.18" width="3.03" height="7.29" rx="1.51"/>
-    <rect x="29.98" y="17.05" width="3.03" height="13.29" rx="1.51"/>
-    <rect x="34.03" y="12.93" width="3.03" height="19.3" rx="1.51"/>
-    <rect x="38.09" y="8.8" width="3.03" height="25.3" rx="1.51"/>
+    <rect x="19.29" y="20.53" width="5.43" height="8.6" rx="2.71"/>
+    <rect x="13.86" y="20.64" width="3.73" height="7.92" rx="1.87"/>
+    <rect x="8.43" y="15.67" width="3.73" height="15.27" rx="1.87"/>
+    <rect x="3" y="10.69" width="3.73" height="22.62" rx="1.87"/>
+    <rect x="26.41" y="20.64" width="3.73" height="7.92" rx="1.87"/>
+    <rect x="31.84" y="15.67" width="3.73" height="15.27" rx="1.87"/>
+    <rect x="37.27" y="10.69" width="3.73" height="22.62" rx="1.87"/>
   </g>
 </svg>
