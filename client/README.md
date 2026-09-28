@@ -21,7 +21,7 @@ via clipboard + paste chord, after which your previous clipboard is restored.
 
 Three hotkey modes: **hold** (push-to-talk), **toggle** (press to start /
 press to finish), and **hybrid** (default — hold to talk, or tap within
-250 ms to latch into toggle).
+500 ms to latch into toggle).
 
 Afterwards the client watches what you do with the text: fixing it files the
 fix as a style target for the cleanup model, leaving it alone files it as a
