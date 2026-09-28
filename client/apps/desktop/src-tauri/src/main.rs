@@ -127,6 +127,7 @@ fn main() {
             commands::open_keyboard_settings,
             commands::probe_endpoints,
             commands::correction_pending,
+            commands::correction_audio,
             commands::correction_submit,
             commands::correction_dismiss,
             commands::review_queue,
@@ -183,6 +184,7 @@ fn main() {
                 last_dictation: Mutex::new(None),
                 pending_correction: Arc::new(Mutex::new(None)),
                 recent_paste: Mutex::new(None),
+                recent_dictation: Mutex::new(None),
             };
             app.manage(state);
 

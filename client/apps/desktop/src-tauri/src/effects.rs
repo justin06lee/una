@@ -11,7 +11,7 @@ use una_core::endpoint::EndpointResolver;
 use una_core::net::{ApiClient, DictationRequest};
 use una_core::state::{ControllerHandle, EffectRunner, ErrKind, Event};
 
-use crate::app_state::AppState;
+use crate::app_state::{AppState, RecentDictation};
 use crate::corrections;
 use crate::windows;
 
@@ -131,6 +131,11 @@ impl EffectRunner for TauriEffects {
                     // dictation id a correction has to be filed against.
                     if let Some(id) = resp.id.clone() {
                         if let Some(state) = app.try_state::<AppState>() {
+                            *state.recent_dictation.lock().unwrap() = Some(RecentDictation {
+                                id: id.clone(),
+                                wav: Arc::new(request.wav.clone()),
+                                raw_text: resp.raw_text.clone(),
+                            });
                             *state.last_dictation.lock().unwrap() = Some((id, resp.text.clone()));
                         }
                     }

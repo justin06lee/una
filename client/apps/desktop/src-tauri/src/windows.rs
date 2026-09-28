@@ -31,9 +31,9 @@ pub const CORRECTION_LABEL: &str = "correction";
 pub const REVIEW_LABEL: &str = "review";
 
 /// The correction window is a small centered panel, sized for a sentence or
-/// two of dictated text plus its buttons.
-const CORRECTION_WIDTH: f64 = 520.0;
-const CORRECTION_HEIGHT: f64 = 280.0;
+/// two of dictated text in both forms, the recording's player, and its buttons.
+const CORRECTION_WIDTH: f64 = 560.0;
+const CORRECTION_HEIGHT: f64 = 470.0;
 
 /// Fixed outer window size; the visual pill (max ~360x44) floats inside.
 pub const HUD_WIDTH: f64 = 400.0;
@@ -202,7 +202,7 @@ pub fn create_correction(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     )
     .title("Fix dictation")
     .inner_size(CORRECTION_WIDTH, CORRECTION_HEIGHT)
-    .min_inner_size(380.0, 200.0)
+    .min_inner_size(420.0, 380.0)
     .always_on_top(true)
     .skip_taskbar(true)
     .visible(false)
@@ -250,6 +250,10 @@ pub fn show_correction(app: &AppHandle) {
 }
 
 pub fn hide_correction(app: &AppHandle) {
+    // Hidden, not destroyed: tell the page, or its playback would go on unseen.
+    if let Some(window) = app.get_webview_window(CORRECTION_LABEL) {
+        let _ = window.emit("correction-closed", ());
+    }
     hide_window(app, CORRECTION_LABEL);
 }
 

@@ -384,27 +384,112 @@ pub struct PendingCorrection {
     app_name: Option<String>,
     /// Whether submitting can put the corrected text back, or only record it.
     can_write_back: bool,
+    /// What the ASR heard, before cleanup: the "What you said" field. None
+    /// when neither memory nor the server has it, and the field is left out.
+    raw_text: Option<String>,
 }
 
 /// What the correction window should be showing, if anything.
 #[tauri::command]
-pub fn correction_pending(state: State<'_, AppState>) -> Option<PendingCorrection> {
-    let pending = state.pending_correction.lock().unwrap();
-    pending.as_ref().map(|p| PendingCorrection {
-        text: p.inserted.clone(),
-        app_name: p.app_name.clone(),
-        can_write_back: p.app_pid.is_some() && p.span_len.is_some(),
-    })
+pub async fn correction_pending(
+    state: State<'_, AppState>,
+) -> Result<Option<PendingCorrection>, String> {
+    let Some((id, known_raw)) = state
+        .pending_correction
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|p| (p.dictation_id.clone(), p.raw_text.clone()))
+    else {
+        return Ok(None);
+    };
+    let raw_text = match known_raw {
+        Some(raw) => Some(raw),
+        None => {
+            let recent = state
+                .recent_dictation
+                .lock()
+                .unwrap()
+                .as_ref()
+                .filter(|r| r.id == id)
+                .map(|r| r.raw_text.clone());
+            match recent {
+                Some(raw) => raw,
+                None => fetch_raw_text(&state, &id).await,
+            }
+        }
+    };
+    let mut slot = state.pending_correction.lock().unwrap();
+    Ok(slot.as_mut().filter(|p| p.dictation_id == id).map(|p| {
+        p.raw_text.clone_from(&raw_text);
+        PendingCorrection {
+            text: p.inserted.clone(),
+            app_name: p.app_name.clone(),
+            can_write_back: p.app_pid.is_some() && p.span_len.is_some(),
+            raw_text,
+        }
+    }))
 }
 
-/// File the user's corrected text as a training pair and put it back into the
-/// app it came from.
+/// An older dictation's raw transcript, from the server.
+async fn fetch_raw_text(state: &AppState, id: &str) -> Option<String> {
+    let base = live_server(state).await.ok()?;
+    let detail = state
+        .api
+        .get_json(&base, &format!("/v1/dictations/{id}"))
+        .await
+        .ok()?;
+    detail.get("raw_text")?.as_str().map(str::to_string)
+}
+
+/// The recording behind the correction being edited (WAV bytes), so the user
+/// can hear what they actually said. Straight from memory for the latest
+/// dictation; from the server for an older one.
+#[tauri::command]
+pub async fn correction_audio(state: State<'_, AppState>) -> Result<tauri::ipc::Response, String> {
+    let id = state
+        .pending_correction
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|p| p.dictation_id.clone())
+        .ok_or("nothing to correct")?;
+    let cached = state
+        .recent_dictation
+        .lock()
+        .unwrap()
+        .as_ref()
+        .filter(|r| r.id == id)
+        .map(|r| r.wav.clone());
+    if let Some(wav) = cached {
+        return Ok(tauri::ipc::Response::new(wav.as_ref().clone()));
+    }
+    let base = live_server(&state).await?;
+    let bytes = state
+        .api
+        .get_bytes(&base, &format!("/v1/dictations/{id}/audio"))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// File the user's fix as training pairs and put the written version back
+/// into the app it came from.
 ///
-/// The pair is recorded first: a write-back that fails (the app quit, the
+/// `said` is the "What you said" field, present when the window showed the
+/// raw transcript: then both targets are filed at once, the transcript for
+/// the voice model and the wording for the style model. Without it, the fix
+/// is to the pasted text only, a style target.
+///
+/// The pairs are recorded first: a write-back that fails (the app quit, the
 /// caret moved) must not cost the training data, which is the point of the
 /// whole exercise.
 #[tauri::command]
-pub async fn correction_submit(app: AppHandle, text: String) -> Result<bool, String> {
+pub async fn correction_submit(
+    app: AppHandle,
+    text: String,
+    said: Option<String>,
+) -> Result<bool, String> {
     let (pending, restore_clipboard) = {
         let state = app.state::<AppState>();
         let pending = state.pending_correction.lock().unwrap().take();
@@ -416,10 +501,33 @@ pub async fn correction_submit(app: AppHandle, text: String) -> Result<bool, Str
     };
     windows::hide_correction(&app);
 
-    let action = una_core::correction::classify(&pending.inserted, &text);
-    corrections::submit_with_source(&app, &pending.dictation_id, action, text.clone(), "popup")
-        .await;
+    let changed = text != pending.inserted;
+    match (said, pending.raw_text.clone()) {
+        (Some(said), Some(raw)) if !said.trim().is_empty() => {
+            let said = (said.trim() != raw.trim()).then(|| said.trim().to_string());
+            // An unchanged wording is the cleanup model's own output: filing
+            // it as a style target would train the model on itself.
+            let written = changed.then(|| text.trim().to_string());
+            corrections::submit_with_transcript(&app, &pending.dictation_id, said, written).await;
+        }
+        _ => {
+            let action = una_core::correction::classify(&pending.inserted, &text);
+            corrections::submit_with_source(
+                &app,
+                &pending.dictation_id,
+                action,
+                text.clone(),
+                "popup",
+            )
+            .await;
+        }
+    }
     let pid = pending.app_pid;
+    if !changed {
+        // Nothing to rewrite in the app; just go back to it.
+        windows::return_focus(pid);
+        return Ok(false);
+    }
     let written = corrections::write_back(pending, text, restore_clipboard).await;
     if !written {
         // Writing back brings the app forward itself; otherwise do it here.
@@ -502,6 +610,7 @@ pub async fn review_submit(
         corrected_text,
         polished_text,
         source: "review".into(),
+        transcript_shown: true,
     };
     state
         .api

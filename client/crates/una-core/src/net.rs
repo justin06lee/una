@@ -56,9 +56,10 @@ pub struct DictationResponse {
 /// Body of `PUT /v1/dictations/{id}/correction`.
 ///
 /// `corrected_text` is the ASR target ("what I actually said"); `polished_text`
-/// is the style target ("how I want it written"). An edit to pasted text is
-/// only ever the second (action `polished`) — what was pasted is the cleaned
-/// text — while the review window confirms both at once.
+/// is the style target ("how I want it written"). An edit to pasted text alone
+/// is only ever the second (action `polished`) — what was pasted is the cleaned
+/// text — while the review window, and a fix window showing the transcript
+/// (`transcript_shown`), confirm both at once.
 #[derive(Debug, Clone, Serialize)]
 pub struct CorrectionRequest {
     pub action: String,
@@ -68,6 +69,11 @@ pub struct CorrectionRequest {
     pub polished_text: Option<String>,
     /// How the correction was captured, for the dashboard's stats.
     pub source: String,
+    /// The raw transcript was on screen when this was judged, so an edit or
+    /// an accept is a verdict on what was literally said. Omitted when false,
+    /// which older servers need.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub transcript_shown: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

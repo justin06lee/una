@@ -97,6 +97,44 @@ def test_older_clients_in_app_edits_are_read_as_polish(client):
     assert client.get(f"/v1/dictations/{dictation_id}").json()["corrected_text"] is None
 
 
+def test_fix_window_with_the_transcript_on_screen_trains_both(client):
+    """The fix window shows the raw transcript beside the recording: an edit there is
+    a verdict on what was literally said (an ASR pair), and the written version is the
+    style pair, just as in review."""
+    dictation_id = post_dictation(client).json()["id"]
+    resp = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={
+            "action": "edited",
+            "corrected_text": "um so this is a test dictation okay",
+            "polished_text": "So this is a test dictation, okay.",
+            "source": "popup",
+            "transcript_shown": True,
+        },
+    ).json()
+    assert resp["action"] == "edited"
+    assert resp["training_eligible"] is True
+    assert resp["source"] == "popup"
+    assert resp["polished_text"] == "So this is a test dictation, okay."
+    detail = client.get(f"/v1/dictations/{dictation_id}").json()
+    assert detail["corrected_text"] == "um so this is a test dictation okay"
+    assert detail["reviewed"] is True
+    # reviewed there, so it has left the review queue
+    assert client.get("/v1/review/next").json() is None
+
+
+def test_fix_window_can_confirm_the_transcript_as_heard(client):
+    dictation_id = post_dictation(client).json()["id"]
+    resp = client.put(
+        f"/v1/dictations/{dictation_id}/correction",
+        json={"action": "accepted", "source": "popup", "transcript_shown": True},
+    ).json()
+    assert resp["action"] == "accepted"
+    assert resp["training_eligible"] is True
+    detail = client.get(f"/v1/dictations/{dictation_id}").json()
+    assert detail["corrected_text"] == detail["raw_text"]
+
+
 def test_polish_after_review_keeps_the_transcript_verdict(client):
     dictation_id = post_dictation(client).json()["id"]
     client.put(f"/v1/dictations/{dictation_id}/correction", json={"action": "accepted"})
