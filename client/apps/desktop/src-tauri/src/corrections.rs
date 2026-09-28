@@ -56,6 +56,8 @@ pub struct Pending {
     /// known — `None` once the user has moved the caret, at which point
     /// nothing can safely be deleted on their behalf.
     pub span_len: Option<usize>,
+    /// The raw transcript, once the correction window has looked it up.
+    pub raw_text: Option<String>,
 }
 
 /// The pending correction the window is editing, if it is open.
@@ -120,6 +122,7 @@ async fn watch(
             app_pid: target_pid,
             app_name,
             span_len: None,
+            raw_text: None,
         });
     }
 
@@ -317,6 +320,47 @@ async fn finalize(
 }
 
 /// PUT the correction to whichever server address is live.
+/// File a fix made with the raw transcript on screen: `said` is the corrected
+/// transcript when it was changed (None confirms it as heard), `written` the
+/// new wording when that was changed. Both targets in one go, like review.
+pub async fn submit_with_transcript(
+    app: &AppHandle,
+    dictation_id: &str,
+    said: Option<String>,
+    written: Option<String>,
+) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let (urls, autodiscover) = {
+        let cfg = state.config.read().unwrap();
+        (cfg.server.urls.clone(), cfg.server.autodiscover)
+    };
+    let Some(base) = state.endpoints.resolve(&urls, autodiscover).await else {
+        tracing::debug!("correction: no server reachable; dropping this pair");
+        return;
+    };
+    let action = if said.is_some() { "edited" } else { "accepted" };
+    let payload = CorrectionRequest {
+        action: action.into(),
+        corrected_text: said,
+        polished_text: written,
+        source: "popup".into(),
+        transcript_shown: true,
+    };
+    match state
+        .api
+        .put_correction(&base, dictation_id, &payload)
+        .await
+    {
+        Ok(resp) => tracing::info!(
+            "correction: {action} with transcript for {dictation_id} (eligible: {})",
+            resp.training_eligible.unwrap_or(false)
+        ),
+        Err(e) => tracing::warn!("correction: could not submit for {dictation_id}: {e}"),
+    }
+}
+
 pub async fn submit(app: &AppHandle, dictation_id: &str, action: Action, text: String) {
     submit_with_source(app, dictation_id, action, text, "auto").await;
 }
@@ -350,6 +394,7 @@ pub async fn submit_with_source(
             corrected_text: None,
             polished_text: None,
             source: source.into(),
+            transcript_shown: false,
         },
         // What was pasted is the cleaned text, so the fix is how it should have
         // read — a style target. What was literally said is left for review.
@@ -358,6 +403,7 @@ pub async fn submit_with_source(
             corrected_text: None,
             polished_text: Some(text),
             source: source.into(),
+            transcript_shown: false,
         },
         // Deleted outright: no target of any kind, just a note not to train
         // on this utterance.
@@ -366,6 +412,7 @@ pub async fn submit_with_source(
             corrected_text: None,
             polished_text: None,
             source: source.into(),
+            transcript_shown: false,
         },
     };
     match state.api.put_correction(&base, dictation_id, &payload).await {
@@ -444,6 +491,7 @@ async fn open_window(
         app_pid: pid,
         app_name,
         span_len: counter.len(),
+        raw_text: None,
     };
     if let Some(state) = app.try_state::<AppState>() {
         *state.pending_correction.lock().unwrap() = Some(pending);

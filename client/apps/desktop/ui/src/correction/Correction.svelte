@@ -3,37 +3,68 @@
    * The correction window: what una pasted, editable, in the apps whose text
    * the accessibility API cannot read.
    *
-   * It opens because the user has already started fixing the text by hand, so
-   * it has to be immediately typeable — the textarea is focused and the caret
-   * placed at the end on every open. Submit rewrites the text in the app it
-   * came from and files the pair for training; Escape walks away and records
-   * nothing.
+   * Like the review window it has the recording and two texts: what was said,
+   * word for word (the raw transcript, which trains the voice model), and how
+   * it should read (the pasted text, which trains the cleanup model and is
+   * what goes back into the app). The raw field is left out when neither
+   * memory nor the server has the transcript.
+   *
+   * It opens because the user has already started fixing the pasted text, so
+   * that field is focused with the caret at the end on every open. The
+   * recording plays on ⌘P and never by itself: the window opens mid-edit,
+   * and sound out of nowhere would be jarring. Submit files both and rewrites
+   * the text in the app; Escape walks away and records nothing.
    */
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
+  import AudioPlayer from "../lib/AudioPlayer.svelte";
   import Mark from "../lib/Mark.svelte";
 
   type Pending = {
     text: string;
     app_name: string | null;
     can_write_back: boolean;
+    raw_text: string | null;
   };
 
   let pending = $state<Pending | null>(null);
   let text = $state("");
+  let said = $state("");
   let busy = $state(false);
   let editor: HTMLTextAreaElement | undefined = $state();
+  let player: AudioPlayer | undefined = $state();
+  let audioUrl = $state<string | null>(null);
+  let audioMissing = $state(false);
 
   /** macOS draws the traffic lights over the top of the window (overlay title bar). */
   const isMac = navigator.userAgent.includes("Mac");
 
-  /** Whether the user actually changed anything. */
+  const showSaid = $derived(pending?.raw_text != null);
+  /** Whether the user changed how it reads (and so what goes back in the app). */
   const dirty = $derived(pending !== null && text !== pending.text);
+  /** Whether the user changed the transcript of what was said. */
+  const saidDirty = $derived(showSaid && said !== pending?.raw_text);
+  const canSubmit = $derived(!!text.trim() && (!showSaid || !!said.trim()));
+
+  async function loadAudio() {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = null;
+    audioMissing = false;
+    try {
+      const bytes = await invoke<ArrayBuffer>("correction_audio");
+      audioUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    } catch (e) {
+      console.warn("recording unavailable", e);
+      audioMissing = true;
+    }
+  }
 
   async function load() {
     pending = await invoke<Pending | null>("correction_pending");
     text = pending?.text ?? "";
+    said = pending?.raw_text ?? "";
+    if (pending) void loadAudio();
     // The window is shown before this resolves; wait a frame so the textarea
     // exists, then put the caret where a person would expect it.
     requestAnimationFrame(() => {
@@ -45,16 +76,20 @@
   onMount(() => {
     void load();
     const opened = listen("correction-opened", () => void load());
+    // Hidden, not closed: stop the recording with the window.
+    const closed = listen("correction-closed", () => player?.stop());
     return () => {
       void opened.then((un) => un());
+      void closed.then((un) => un());
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   });
 
   async function submit() {
-    if (busy || !text.trim()) return;
+    if (busy || !canSubmit) return;
     busy = true;
     try {
-      await invoke("correction_submit", { text });
+      await invoke("correction_submit", { text, said: showSaid ? said : null });
     } catch (e) {
       console.error("correction submit failed", e);
     } finally {
@@ -74,6 +109,9 @@
     } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       void submit();
+    } else if (event.key.toLowerCase() === "p" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      player?.toggle();
     }
   }
 </script>
@@ -97,22 +135,56 @@
     Your fix teaches it how you'd have written it.
   </p>
 
-  <textarea
-    bind:this={editor}
-    bind:value={text}
-    spellcheck="false"
-    autocapitalize="off"
-    {...{ autocorrect: "off" }}
-    placeholder="What you actually said…"
-    aria-label="Corrected text"
-  ></textarea>
+  <AudioPlayer
+    bind:this={player}
+    src={audioUrl}
+    unavailable={audioMissing}
+    shortcut={isMac ? "⌘P" : "Ctrl+P"}
+  />
+
+  {#if showSaid}
+    <div class="field">
+      <div class="label-row">
+        <label class="label" for="said">What you said</label>
+        <span class="hint">Word for word — ums and all. Trains your voice.</span>
+      </div>
+      <textarea
+        id="said"
+        bind:value={said}
+        spellcheck="false"
+        autocapitalize="off"
+        {...{ autocorrect: "off" }}
+        placeholder="What you said, word for word…"
+      ></textarea>
+    </div>
+  {/if}
+
+  <div class="field">
+    <div class="label-row">
+      <label class="label" for="written">How you'd have written it</label>
+      <span class="hint">Your style. Trains the cleanup model.</span>
+    </div>
+    <textarea
+      id="written"
+      bind:this={editor}
+      bind:value={text}
+      spellcheck="false"
+      autocapitalize="off"
+      {...{ autocorrect: "off" }}
+      placeholder="How it should read…"
+    ></textarea>
+  </div>
 
   <footer>
     <span class="hint">
-      {#if pending && !pending.can_write_back}
-        Saves the correction only — the cursor moved, so the text in the app stays as it is.
+      {#if dirty && pending && !pending.can_write_back}
+        Saves your fix only — the cursor moved, so the text in the app stays as it is.
       {:else if dirty}
-        Replaces the text in the app.
+        Replaces the text in {pending?.app_name ?? "the app"}.
+      {:else if saidDirty}
+        Leaves the text in the app as it is.
+      {:else if showSaid}
+        Unchanged — submitting confirms both were right.
       {:else}
         Unchanged — submitting confirms it was right.
       {/if}
@@ -121,7 +193,7 @@
       <button class="btn btn-ghost" onclick={dismiss} disabled={busy}>
         Cancel <span class="kbd">esc</span>
       </button>
-      <button class="btn btn-primary" onclick={submit} disabled={busy || !text.trim()}>
+      <button class="btn btn-primary" onclick={submit} disabled={busy || !canSubmit}>
         Submit <span class="kbd">⌘↵</span>
       </button>
     </div>
@@ -168,9 +240,36 @@
     font-weight: 500;
   }
 
-  textarea {
+  /* The two texts share the height the window has. */
+  .field {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 2px;
+  }
+
+  .label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fg);
+  }
+
+  .label-row .hint {
+    font-size: 11.5px;
+  }
+
+  textarea {
+    flex: 1;
+    min-height: 44px;
     resize: none;
     padding: 10px 12px;
     border: 1px solid var(--line-strong);

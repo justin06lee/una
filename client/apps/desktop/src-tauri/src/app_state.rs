@@ -30,6 +30,19 @@ pub struct AppState {
     /// The most recent paste, kept after its watch window closes so "Fix Last
     /// Dictation…" can still file a correction against it minutes later.
     pub recent_paste: Mutex<Option<Pending>>,
+    /// The latest dictation's recording and raw transcript, so the correction
+    /// window can play it back and show what was heard instantly and offline.
+    /// Corrections are almost always about the latest dictation; older ones
+    /// come from the server.
+    pub recent_dictation: Mutex<Option<RecentDictation>>,
+}
+
+pub struct RecentDictation {
+    pub id: String,
+    /// The WAV that was uploaded.
+    pub wav: Arc<Vec<u8>>,
+    /// What the ASR heard, before cleanup.
+    pub raw_text: Option<String>,
 }
 
 impl AppState {

@@ -363,9 +363,15 @@ def _guard_unseen_transcript(
     rewrote enough that it could have hidden a mishearing, the pair is kept but
     marked ineligible, so it still shows up in Review to be judged by hand.
     Hand review (`source: review`) is exempt: there the raw transcript is on
-    screen, which is exactly what is being approved.
+    screen, which is exactly what is being approved. So is a fix window that
+    showed it (`transcript_shown`).
     """
-    if not result.eligible or body.action != "accepted" or body.source == "review":
+    if (
+        not result.eligible
+        or body.action != "accepted"
+        or body.source == "review"
+        or body.transcript_shown
+    ):
         return result
     cleaned = row["cleaned_text"]
     if not row["cleanup_applied"] or not cleaned:
@@ -393,10 +399,13 @@ def _is_polish_only(body: CorrectionRequest) -> bool:
     says nothing about what was literally said — using it as the ASR target would
     teach Whisper to drop fillers and self-corrections. Clients before the
     "polished" action sent these as `edited` with the source `auto` or `popup`;
-    those are read the same way.
+    those are read the same way — unless the transcript itself was on screen
+    (`transcript_shown`), in which case the edit really is about what was said.
     """
     if body.action == "polished":
         return True
+    if body.transcript_shown:
+        return False
     return body.action == "edited" and body.source in ("auto", "popup")
 
 

@@ -111,6 +111,10 @@ class CorrectionRequest(BaseModel):
     action: Literal["accepted", "edited", "skipped", "excluded", "polished"]
     polished_text: str | None = None  # preferred final rendering -> style-LLM training pair
     source: Literal["review", "auto", "popup"] = "review"
+    # The raw transcript was on screen next to the recording (the fix window's "What
+    # you said"), so the verdict is on what was literally said, as in review. Without
+    # it, a popup edit can only be a verdict on the pasted, cleaned text.
+    transcript_shown: bool = False
 
 
 class CorrectionResponse(BaseModel):
