@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The una mark: Una's hair bow drawn as seven waveform bars, the same
+   * The una mark: Una's hair bow drawn as five waveform bars, the same
    * drawing as the app icon, in the text colour so it flips with the theme.
    * `size` is the width; the bow is wider than it is tall.
    */
@@ -9,17 +9,15 @@
 
 <svg
   width={size}
-  height={size * 0.5952}
-  viewBox="0 0 604.8 360.0"
+  height={size * 0.6169}
+  viewBox="0 0 616 380"
   fill="currentColor"
   aria-hidden="true"
   style="flex: none"
 >
-  <rect x="259.2" y="156.6" width="86.4" height="136.8" rx="43.2"/>
-  <rect x="172.8" y="158.4" width="59.4" height="126" rx="29.7"/>
-  <rect x="86.4" y="79.2" width="59.4" height="243" rx="29.7"/>
-  <rect x="0" y="0" width="59.4" height="360" rx="29.7"/>
-  <rect x="372.6" y="158.4" width="59.4" height="126" rx="29.7"/>
-  <rect x="459" y="79.2" width="59.4" height="243" rx="29.7"/>
-  <rect x="545.4" y="0" width="59.4" height="360" rx="29.7"/>
+  <rect x="0" y="0" width="84" height="380" rx="42"/>
+  <rect x="126" y="88" width="84" height="262" rx="42"/>
+  <rect x="252" y="170" width="112" height="150" rx="56"/>
+  <rect x="406" y="88" width="84" height="262" rx="42"/>
+  <rect x="532" y="0" width="84" height="380" rx="42"/>
 </svg>
