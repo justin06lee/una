@@ -99,6 +99,10 @@ icons:
 	cp $(ICON_DIR)/256x256.png $(ICON_DIR)/128x128@2x.png
 	rsvg-convert -w 512 -h 512 $(ICON_DIR)/icon.svg -o $(ICON_DIR)/icon.png
 	rsvg-convert -w 44 -h 44 $(ICON_DIR)/tray.svg -o $(ICON_DIR)/tray.png
+	# Opaque art comes out RGB; tauri's bundle icons must be RGBA.
+	python3 scripts/png_rgba.py $(ICON_DIR)/32x32.png $(ICON_DIR)/64x64.png \
+		$(ICON_DIR)/128x128.png $(ICON_DIR)/128x128@2x.png $(ICON_DIR)/256x256.png \
+		$(ICON_DIR)/icon.png
 	rm -rf $(ICON_DIR)/una.iconset && mkdir $(ICON_DIR)/una.iconset
 	for s in 16 32 128 256 512; do \
 		rsvg-convert -w $$s -h $$s $(ICON_DIR)/icon.svg -o $(ICON_DIR)/una.iconset/icon_$${s}x$${s}.png; \
