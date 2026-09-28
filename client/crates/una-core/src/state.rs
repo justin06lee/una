@@ -17,7 +17,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 
 /// A press-then-release faster than this latches hybrid mode into toggle.
-pub const HYBRID_LATCH_WINDOW: Duration = Duration::from_millis(250);
+///
+/// Long enough that an ordinary, unhurried tap still counts as a tap: at
+/// 250ms a relaxed click read as a hold and ended the dictation on release.
+/// Nothing worth transcribing fits in a push-to-talk this short anyway.
+pub const HYBRID_LATCH_WINDOW: Duration = Duration::from_millis(500);
 /// Utterances shorter than this are discarded silently.
 pub const MIN_UTTERANCE: Duration = Duration::from_millis(300);
 /// Hard cap: recordings auto-finalize after this long.
@@ -908,8 +912,8 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyDown { at: base });
         let session = recording_session(&m);
 
-        // Release within the 250ms window: latch, keep recording.
-        let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 100) });
+        // A relaxed tap, well inside the 500ms window: latch, keep recording.
+        let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 350) });
         assert!(matches!(m.state, State::Recording { latched: true, .. }));
         assert!(fx.is_empty());
 
@@ -931,8 +935,8 @@ mod tests {
         let (m, _) = step(m, Event::HotkeyDown { at: base });
         let session = recording_session(&m);
 
-        // Release at exactly the window boundary: NOT a latch (>= 250ms).
-        let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 250) });
+        // Release at exactly the window boundary: NOT a latch (>= 500ms).
+        let (m, fx) = step(m, Event::HotkeyUp { at: ms(base, 500) });
         assert_eq!(m.state, State::Transcribing { session });
         assert_eq!(fx, vec![Effect::StopRecording { session }]);
     }

@@ -13,12 +13,14 @@
    * that field is focused with the caret at the end on every open. The
    * recording plays on ⌘P and never by itself: the window opens mid-edit,
    * and sound out of nowhere would be jarring. Submit files both and rewrites
-   * the text in the app; Escape walks away and records nothing.
+   * the text in the app; Escape walks away and records nothing. Fix up (⌘J)
+   * rewrites what was said as clean text, once the transcript is right.
    */
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import AudioPlayer from "../lib/AudioPlayer.svelte";
+  import FixUp from "../lib/FixUp.svelte";
   import Mark from "../lib/Mark.svelte";
 
   type Pending = {
@@ -34,11 +36,14 @@
   let busy = $state(false);
   let editor: HTMLTextAreaElement | undefined = $state();
   let player: AudioPlayer | undefined = $state();
+  let fixer: FixUp | undefined = $state();
+  let fixing = $state(false);
   let audioUrl = $state<string | null>(null);
   let audioMissing = $state(false);
 
   /** macOS draws the traffic lights over the top of the window (overlay title bar). */
   const isMac = navigator.userAgent.includes("Mac");
+  const fixKey = isMac ? "⌘J" : "Ctrl+J";
 
   const showSaid = $derived(pending?.raw_text != null);
   /** Whether the user changed how it reads (and so what goes back in the app). */
@@ -64,6 +69,7 @@
     pending = await invoke<Pending | null>("correction_pending");
     text = pending?.text ?? "";
     said = pending?.raw_text ?? "";
+    fixer?.reset();
     if (pending) void loadAudio();
     // The window is shown before this resolves; wait a frame so the textarea
     // exists, then put the caret where a person would expect it.
@@ -86,7 +92,7 @@
   });
 
   async function submit() {
-    if (busy || !canSubmit) return;
+    if (busy || fixing || !canSubmit) return;
     busy = true;
     try {
       await invoke("correction_submit", { text, said: showSaid ? said : null });
@@ -112,6 +118,9 @@
     } else if (event.key.toLowerCase() === "p" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       player?.toggle();
+    } else if (event.key.toLowerCase() === "j" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void fixer?.run();
     }
   }
 </script>
@@ -156,6 +165,13 @@
         {...{ autocorrect: "off" }}
         placeholder="What you said, word for word…"
       ></textarea>
+      <div class="under">
+        <FixUp from={said} bind:to={text} bind:busy={fixing} bind:this={fixer} shortcut={fixKey} />
+      </div>
+    </div>
+  {:else}
+    <div class="under">
+      <FixUp from={text} bind:to={text} bind:busy={fixing} bind:this={fixer} shortcut={fixKey} />
     </div>
   {/if}
 
@@ -168,6 +184,8 @@
       id="written"
       bind:this={editor}
       bind:value={text}
+      readonly={fixing}
+      class:fixing
       spellcheck="false"
       autocapitalize="off"
       {...{ autocorrect: "off" }}
@@ -193,7 +211,7 @@
       <button class="btn btn-ghost" onclick={dismiss} disabled={busy}>
         Cancel <span class="kbd">esc</span>
       </button>
-      <button class="btn btn-primary" onclick={submit} disabled={busy || !canSubmit}>
+      <button class="btn btn-primary" onclick={submit} disabled={busy || fixing || !canSubmit}>
         Submit <span class="kbd">⌘↵</span>
       </button>
     </div>
@@ -290,6 +308,17 @@
     outline: none;
     border-color: var(--muted);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg) 8%, transparent);
+  }
+
+  textarea.fixing {
+    opacity: 0.55;
+  }
+
+  /* Fix up, right under what was said: it turns that into the text below. */
+  .under {
+    display: flex;
+    align-items: center;
+    min-height: 26px;
   }
 
   textarea::placeholder {

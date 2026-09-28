@@ -134,6 +134,8 @@ fn main() {
             commands::review_audio,
             commands::review_submit,
             commands::review_close,
+            commands::fixup_text,
+            commands::yagami_inventory,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

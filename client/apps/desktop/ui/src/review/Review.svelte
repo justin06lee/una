@@ -8,11 +8,13 @@
    * audio, and Claude reconciling the two transcripts. Words the two listens
    * heard differently are listed above the transcript and play just that moment
    * when clicked, so attention goes where the doubt is. Most of the time the
-   * review is: listen, press ⌘↵.
+   * review is: listen, press ⌘↵. Fix up (F, ⌘J) redoes the written version
+   * from the transcript once that is right.
    */
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount, tick } from "svelte";
+  import FixUp from "../lib/FixUp.svelte";
   import Icon from "../lib/Icon.svelte";
   import Mark from "../lib/Mark.svelte";
 
@@ -62,6 +64,8 @@
   let polished = $state("");
   let literalEl: HTMLTextAreaElement | undefined = $state();
   let polishedEl: HTMLTextAreaElement | undefined = $state();
+  let fixer: FixUp | undefined = $state();
+  let fixing = $state(false);
 
   const item = $derived(items[0] ?? null);
   const literalDraft = $derived(item ? (item.teacher?.literal_guess ?? item.raw_text) : "");
@@ -155,6 +159,7 @@
     polished = next
       ? (next.polished_text ?? next.teacher?.polished_guess ?? usableCleanup(next) ?? next.raw_text)
       : "";
+    fixer?.reset();
     if (next) void loadAudio(next.id);
   }
 
@@ -187,7 +192,7 @@
   }
 
   async function submit(action: "confirm" | "exclude") {
-    if (!item || busy) return;
+    if (!item || busy || fixing) return;
     busy = true;
     const said = literal.trim();
     const wrote = polished.trim();
@@ -240,6 +245,11 @@
       void submit("confirm");
       return;
     }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+      event.preventDefault();
+      void fixer?.run();
+      return;
+    }
     if (typing) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -275,6 +285,7 @@
     else if (key === "w") void focusField(polishedEl);
     else if (key === "s") skip();
     else if (key === "x") void submit("exclude");
+    else if (key === "f") void fixer?.run();
     else return;
     event.preventDefault();
   }
@@ -420,6 +431,13 @@
           {:else if item.teacher?.status === "partial"}
             <span class="hint">Claude hasn't weighed in on this one yet.</span>
           {/if}
+          <FixUp
+            from={literal}
+            bind:to={polished}
+            bind:busy={fixing}
+            bind:this={fixer}
+            shortcut={isMac ? "⌘J" : "Ctrl+J"}
+          />
         </div>
       </div>
 
@@ -432,6 +450,8 @@
           class="polished"
           bind:this={polishedEl}
           bind:value={polished}
+          readonly={fixing}
+          class:fixing
           rows="3"
           spellcheck="false"
           autocapitalize="off"
@@ -447,7 +467,7 @@
 
   {#if item && !error}
     <footer>
-      <button class="btn btn-primary" onclick={() => void submit("confirm")} disabled={busy}>
+      <button class="btn btn-primary" onclick={() => void submit("confirm")} disabled={busy || fixing}>
         <Icon name="check" size={14} /> Confirm both <span class="kbd">{isMac ? "⌘↵" : "Ctrl ↵"}</span>
       </button>
       {#if flash}
@@ -465,6 +485,7 @@
       <span><span class="kbd">R</span> replay</span>
       <span><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span> speed</span>
       <span><span class="kbd">E</span> <span class="kbd">W</span> edit</span>
+      <span><span class="kbd">F</span> fix up</span>
       <span><span class="kbd">↵</span> confirm</span>
       <span><span class="kbd">esc</span> close</span>
     </p>
@@ -680,6 +701,9 @@
   textarea.polished {
     font-size: 13.5px;
     min-height: 72px;
+  }
+  textarea.fixing {
+    opacity: 0.55;
   }
   textarea:focus {
     outline: none;

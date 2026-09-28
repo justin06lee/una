@@ -32,6 +32,12 @@ pub fn set_config(
     if !matches!(config.ui.hud_mode.as_str(), "pill" | "flash") {
         return Err(format!("invalid hud mode {:?}", config.ui.hud_mode));
     }
+    if config.fixup.model.trim().is_empty() {
+        return Err("pick a model for Fix up".into());
+    }
+    if !config.fixup.effort.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(format!("invalid effort {:?}", config.fixup.effort));
+    }
     for url in &config.server.urls {
         let url = url.trim();
         if url.is_empty() {
@@ -622,4 +628,51 @@ pub async fn review_submit(
 #[tauri::command]
 pub fn review_close(app: AppHandle) {
     windows::hide_review(&app);
+}
+
+// ---------------------------------------------------------------------------
+// Fix up (yagami)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct FixedUp {
+    text: String,
+    /// The model that wrote it, as picked in settings.
+    model: String,
+}
+
+/// Rewrite what was said as clean text, with the model picked in settings,
+/// through yagami on this machine (started here if it isn't running).
+/// Settings' "Try it" passes its own `model` and `effort`, since what's on
+/// screen may not have been saved yet.
+#[tauri::command]
+pub async fn fixup_text(
+    state: State<'_, AppState>,
+    text: String,
+    model: Option<String>,
+    effort: Option<String>,
+) -> Result<FixedUp, String> {
+    if text.trim().is_empty() {
+        return Err("Nothing to fix up yet".into());
+    }
+    let (model, effort) = {
+        let cfg = state.config.read().unwrap();
+        (
+            model.unwrap_or_else(|| cfg.fixup.model.clone()),
+            effort.unwrap_or_else(|| cfg.fixup.effort.clone()),
+        )
+    };
+    let fixed = una_core::yagami::fix_up(&model, Some(&effort), &text)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(FixedUp { text: fixed, model })
+}
+
+/// The agent CLIs on this machine and the models they offer, for settings.
+#[tauri::command]
+pub async fn yagami_inventory() -> Result<una_core::yagami::Inventory, String> {
+    let client = una_core::yagami::Yagami::connect()
+        .await
+        .map_err(|e| e.to_string())?;
+    client.inventory().await.map_err(|e| e.to_string())
 }
