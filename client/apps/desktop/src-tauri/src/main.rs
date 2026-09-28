@@ -21,6 +21,9 @@ use una_core::state::{Command, Controller, Event, HotkeyMode, Snapshot};
 
 use app_state::AppState;
 
+/// Passed by the login item, so a launch at login doesn't pop the window up.
+const AUTOSTART_FLAG: &str = "--autostart";
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -76,6 +79,7 @@ fn main() {
         }),
     ));
 
+    let launched_at_login = std::env::args().any(|a| a == AUTOSTART_FLAG);
     let mode = HotkeyMode::parse(&config.hotkey.mode);
     let config = Arc::new(RwLock::new(config));
 
@@ -87,7 +91,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![AUTOSTART_FLAG]),
         ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -131,9 +135,6 @@ fn main() {
             commands::review_close,
         ])
         .setup(move |app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
             let handle = app.handle().clone();
 
             // The HUD pill is created (and, in pill mode, shown) up front;
@@ -202,6 +203,24 @@ fn main() {
                 });
             }
 
+            // Login items written before the flag existed launch without
+            // it; rewrite them so a login launch stays quiet.
+            {
+                use tauri_plugin_autostart::ManagerExt as _;
+                let autolaunch = handle.autolaunch();
+                if autolaunch.is_enabled().unwrap_or(false) {
+                    if let Err(e) = autolaunch.enable() {
+                        tracing::warn!("could not refresh the login item: {e}");
+                    }
+                }
+            }
+
+            // Opened by hand, Una opens its window like any app; started at
+            // login, it just sits in the menu bar and the Dock.
+            if !launched_at_login {
+                windows::show_settings(&handle);
+            }
+
             // Ask for mic access on first run so the first dictation doesn't
             // stall on the permission dialog.
             let perms = una_platform::permissions();
@@ -211,6 +230,15 @@ fn main() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running una");
+        .build(tauri::generate_context!())
+        .expect("error while building una")
+        .run(|app, event| {
+            // Clicking the Dock icon: bring the window back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                windows::reopen(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

@@ -11,10 +11,14 @@
 //! - "flash": the previous behavior — hidden while idle, shown by the FSM's
 //!   ShowHud/HideHud effects.
 //!
+//! Una is a regular Dock app: the settings window ("the Una window") opens on
+//! launch and from the Dock icon, stays put behind other apps so ⌘-Tab gets
+//! back to it, and hides rather than closes on the red button or ⌘W.
+//!
 //! The correction and review windows are the opposite of the HUD: they
-//! deliberately take focus, because they exist to be typed into. Showing one
-//! flips the app out of accessory mode for as long as it is up (a menu-bar
-//! app's windows cannot take keyboard focus otherwise) and back afterwards.
+//! deliberately take focus, because they exist to be typed into. The
+//! correction window pops up over whatever the user was typing in, so it
+//! hands focus back to that app when it goes away.
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use una_core::state::Snapshot;
@@ -63,7 +67,10 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
     // above the Dock's window level or the Dock would cover it.
     #[cfg(target_os = "macos")]
     if let Ok(ptr) = window.ns_window() {
-        unsafe { una_platform::macos::raise_window_above_dock(ptr) };
+        unsafe {
+            una_platform::macos::raise_window_above_dock(ptr);
+            una_platform::macos::keep_out_of_window_lists(ptr);
+        }
     }
 
     position_hud(app, &window);
@@ -76,7 +83,7 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
 pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let builder =
         WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("settings.html".into()))
-            .title("Una Settings")
+            .title("Una")
             .inner_size(780.0, 560.0)
             .min_inner_size(660.0, 440.0)
             .visible(false);
@@ -88,8 +95,8 @@ pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .hidden_title(true);
     let window = builder.build()?;
 
-    // Hide instead of destroy on close, so the window can be reopened
-    // instantly from the tray.
+    // Hide instead of destroy on close (the red button and ⌘W), so it comes
+    // back instantly from the Dock icon or the tray and Una keeps running.
     let win = window.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -208,16 +215,18 @@ pub fn create_correction(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let window = builder.build()?;
 
     // Closing the window is "never mind": drop the pending correction so a
-    // later dictation can't be filed against it.
+    // later dictation can't be filed against it, and go back to the app it
+    // came from.
     let handle = app.clone();
-    let win = window.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
-            if let Some(state) = handle.try_state::<AppState>() {
-                state.pending_correction.lock().unwrap().take();
-            }
-            let _ = win.hide();
+            let pid = handle
+                .try_state::<AppState>()
+                .and_then(|s| s.pending_correction.lock().unwrap().take())
+                .and_then(|p| p.app_pid);
+            hide_correction(&handle);
+            return_focus(pid);
         }
     });
     Ok(window)
@@ -233,10 +242,6 @@ pub fn show_correction(app: &AppHandle) {
         let Some(window) = handle.get_webview_window(CORRECTION_LABEL) else {
             return;
         };
-        // A menu-bar app is an accessory: its windows cannot take keyboard
-        // focus until it is temporarily promoted to a regular app.
-        #[cfg(target_os = "macos")]
-        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Regular);
         let _ = window.center();
         let _ = window.show();
         let _ = window.set_focus();
@@ -244,32 +249,26 @@ pub fn show_correction(app: &AppHandle) {
     });
 }
 
-/// Hide the correction window and give the menu-bar app its accessory status
-/// back, so it stops showing up in the Dock and ⌘-Tab.
 pub fn hide_correction(app: &AppHandle) {
-    hide_focus_window(app, CORRECTION_LABEL);
+    hide_window(app, CORRECTION_LABEL);
 }
 
-/// Hide one of the focus-taking windows; drop back to accessory mode unless
-/// the other is still up and being typed into.
-fn hide_focus_window(app: &AppHandle, label: &'static str) {
+fn hide_window(app: &AppHandle, label: &'static str) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window(label) {
             let _ = window.hide();
         }
-        let other_open = [CORRECTION_LABEL, REVIEW_LABEL]
-            .into_iter()
-            .filter(|l| *l != label)
-            .filter_map(|l| handle.get_webview_window(l))
-            .any(|w| w.is_visible().unwrap_or(false));
-        #[cfg(target_os = "macos")]
-        if !other_open {
-            let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = other_open;
     });
+}
+
+/// Put the user back in the app the correction window popped up over. Una
+/// is a regular app now, so hiding its window alone would leave Una in front
+/// with nothing showing.
+pub fn return_focus(pid: Option<i32>) {
+    if let Some(pid) = pid {
+        std::thread::spawn(move || una_platform::activate_pid(pid));
+    }
 }
 
 /// Create the review window: a regular window for going through recent
@@ -305,8 +304,6 @@ pub fn show_review(app: &AppHandle) {
         let Some(window) = handle.get_webview_window(REVIEW_LABEL) else {
             return;
         };
-        #[cfg(target_os = "macos")]
-        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Regular);
         let _ = window.show();
         let _ = window.set_focus();
         let _ = window.emit("review-opened", ());
@@ -318,12 +315,29 @@ pub fn hide_review(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(REVIEW_LABEL) {
         let _ = window.emit("review-closed", ());
     }
-    hide_focus_window(app, REVIEW_LABEL);
+    hide_window(app, REVIEW_LABEL);
 }
 
 pub fn show_settings(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(SETTINGS_LABEL) {
+        let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// The Dock icon was clicked. The always-on HUD pill counts as a visible
+/// window to macOS, so decide here: bring forward a correction or review
+/// window that is already up, otherwise open the Una window.
+pub fn reopen(app: &AppHandle) {
+    let up = [CORRECTION_LABEL, REVIEW_LABEL, SETTINGS_LABEL]
+        .into_iter()
+        .filter_map(|l| app.get_webview_window(l))
+        .find(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false));
+    match up {
+        Some(window) => {
+            let _ = window.set_focus();
+        }
+        None => show_settings(app),
     }
 }
