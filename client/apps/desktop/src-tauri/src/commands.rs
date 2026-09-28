@@ -419,14 +419,26 @@ pub async fn correction_submit(app: AppHandle, text: String) -> Result<bool, Str
     let action = una_core::correction::classify(&pending.inserted, &text);
     corrections::submit_with_source(&app, &pending.dictation_id, action, text.clone(), "popup")
         .await;
-    Ok(corrections::write_back(pending, text, restore_clipboard).await)
+    let pid = pending.app_pid;
+    let written = corrections::write_back(pending, text, restore_clipboard).await;
+    if !written {
+        // Writing back brings the app forward itself; otherwise do it here.
+        windows::return_focus(pid);
+    }
+    Ok(written)
 }
 
 /// Close the window without recording anything.
 #[tauri::command]
 pub fn correction_dismiss(app: AppHandle, state: State<'_, AppState>) {
-    state.pending_correction.lock().unwrap().take();
+    let pid = state
+        .pending_correction
+        .lock()
+        .unwrap()
+        .take()
+        .and_then(|p| p.app_pid);
     windows::hide_correction(&app);
+    windows::return_focus(pid);
 }
 
 // ---------------------------------------------------------------------------

@@ -70,6 +70,26 @@ pub unsafe fn raise_window_above_dock(ns_window: *mut c_void) {
     let _: () = objc2::msg_send![&*window, setLevel: STATUS_WINDOW_LEVEL];
 }
 
+/// Keep an overlay window out of the app's window lists: the Window menu,
+/// ⌘-` cycling and Mission Control. The HUD pill needs this now that una is
+/// a regular Dock app, or it would count as one of its windows.
+///
+/// # Safety
+/// `ns_window` must be a valid `NSWindow*`, called on the main thread.
+pub unsafe fn keep_out_of_window_lists(ns_window: *mut c_void) {
+    use objc2::runtime::AnyObject;
+    const STATIONARY: usize = 1 << 4; // NSWindowCollectionBehaviorStationary
+    const IGNORES_CYCLE: usize = 1 << 6; // NSWindowCollectionBehaviorIgnoresCycle
+    let window = ns_window as *mut AnyObject;
+    if window.is_null() {
+        return;
+    }
+    let behavior: usize = objc2::msg_send![&*window, collectionBehavior];
+    let _: () =
+        objc2::msg_send![&*window, setCollectionBehavior: behavior | STATIONARY | IGNORES_CYCLE];
+    let _: () = objc2::msg_send![&*window, setExcludedFromWindowsMenu: true];
+}
+
 fn post_cmd_v() -> Result<(), InjectError> {
     let keycode = keycode_for_v();
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)

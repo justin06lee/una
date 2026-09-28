@@ -4,7 +4,5 @@
 <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Una records your voice while the dictation hotkey is held and sends it to your own una server for transcription.</string>
-    <key>LSUIElement</key>
-    <true/>
 </dict>
 </plist>
