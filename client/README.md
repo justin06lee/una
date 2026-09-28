@@ -37,6 +37,14 @@ word for word, and how you'd have written it — and the words its second listen
 heard differently shown as chips that play just that moment. Listen, press ⌘↵.
 See [docs/personal-model.md](../docs/personal-model.md).
 
+Both windows have **Fix up** (⌘J): once "what you said" is right, it rewrites it
+as clean text in the field below. It runs on the coding-agent CLIs already
+signed in on this machine (Claude Code, Codex, OpenCode, …) through a local
+[yagami](https://github.com/justin06lee/yagami) server, which una starts when it
+isn't running, so there is no API key to set up. Settings → **Fix up** picks the
+model and effort from whatever those CLIs offer; the default is Sonnet at low
+effort, about 2–3 s.
+
 ## Layout
 
 ```

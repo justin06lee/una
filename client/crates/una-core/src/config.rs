@@ -115,6 +115,7 @@ pub struct Config {
     pub audio: AudioConfig,
     pub insert: InsertConfig,
     pub correction: CorrectionConfig,
+    pub fixup: FixupConfig,
     pub ui: UiConfig,
     pub general: GeneralConfig,
 }
@@ -134,6 +135,7 @@ impl Default for Config {
             audio: AudioConfig::default(),
             insert: InsertConfig::default(),
             correction: CorrectionConfig::default(),
+            fixup: FixupConfig::default(),
             ui: UiConfig::default(),
             general: GeneralConfig::default(),
         }
@@ -285,6 +287,27 @@ impl Default for CorrectionConfig {
     }
 }
 
+/// The "Fix up" button in the fix and review windows: rewrites what you said
+/// as clean text, with a model run through yagami on this machine.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct FixupConfig {
+    /// A yagami model id: bare for its default CLI (`sonnet`), otherwise
+    /// `"<provider>:<model>"` (`codex:gpt-6-sol`).
+    pub model: String,
+    /// Reasoning effort (`low` … `max`); empty for the model's own default.
+    pub effort: String,
+}
+
+impl Default for FixupConfig {
+    fn default() -> Self {
+        Self {
+            model: crate::yagami::DEFAULT_MODEL.into(),
+            effort: crate::yagami::DEFAULT_EFFORT.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct UiConfig {
@@ -403,6 +426,8 @@ mod tests {
         assert_eq!(cfg.hotkey.mode, "hybrid");
         assert_eq!(cfg.insert.restore_delay_ms, 300);
         assert_eq!(cfg.ui.hud_mode, "pill");
+        assert_eq!(cfg.fixup.model, "sonnet");
+        assert_eq!(cfg.fixup.effort, "low");
     }
 
     #[test]

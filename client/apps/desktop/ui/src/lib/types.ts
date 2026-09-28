@@ -29,6 +29,8 @@ export interface Config {
     auto_accept: boolean;
     popup: boolean;
   };
+  /** The Fix up button: a yagami model id, and effort ("" = the model's default). */
+  fixup: { model: string; effort: string };
   ui: { sounds: boolean; hud_mode: "pill" | "flash" };
   general: { launch_at_login: boolean };
 }
@@ -65,4 +67,20 @@ export interface TestRecordResult {
   ok: boolean;
   max_rms: number;
   max_peak: number;
+}
+
+/** One model an agent CLI on this machine can run, via yagami. */
+export interface YagamiModel {
+  id: string;
+  provider: string;
+  name: string;
+  efforts: string[];
+  default_effort: string | null;
+}
+
+export interface YagamiInventory {
+  version: string | null;
+  providers: string[];
+  default_provider: string | null;
+  models: YagamiModel[];
 }

@@ -6,6 +6,7 @@
   import type { Config } from "../lib/types";
   import About from "./tabs/About.svelte";
   import Audio from "./tabs/Audio.svelte";
+  import FixUp from "./tabs/FixUp.svelte";
   import General from "./tabs/General.svelte";
   import Hotkey from "./tabs/Hotkey.svelte";
   import Learning from "./tabs/Learning.svelte";
@@ -19,6 +20,7 @@
     { id: "audio", label: "Audio", icon: "mic" },
     { id: "pasting", label: "Pasting", icon: "clipboard" },
     { id: "learning", label: "Learning", icon: "flask" },
+    { id: "fixup", label: "Fix up", icon: "wand" },
     { id: "about", label: "About", icon: "info" },
   ];
 
@@ -85,6 +87,8 @@
         <Pasting bind:config {save} />
       {:else if tab === "learning"}
         <Learning bind:config {save} />
+      {:else if tab === "fixup"}
+        <FixUp bind:config {save} />
       {:else if tab === "about"}
         <About />
       {/if}

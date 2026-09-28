@@ -2,7 +2,7 @@
 //!
 //! Contains the dictation state machine and its controller actor, audio
 //! capture/resampling, the server API client, mDNS discovery, configuration,
-//! the WAV spool, and the unix IPC socket. No GUI or Objective-C dependencies.
+//! the WAV spool, the unix IPC socket, and the yagami client behind "Fix up". No GUI or Objective-C dependencies.
 
 pub mod audio;
 pub mod config;
@@ -14,6 +14,7 @@ pub mod ipc;
 pub mod net;
 pub mod spool;
 pub mod state;
+pub mod yagami;
 
 pub use endpoint::EndpointResolver;
 pub use state::{Command, Controller, ControllerHandle, Effect, Event, Machine, Snapshot, State};
