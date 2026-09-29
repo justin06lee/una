@@ -21,6 +21,14 @@
     { path: '/insights', label: 'Insights', icon: 'chart' },
   ];
 
+  /**
+   * Inside una's history window, which sets this before the page loads. On
+   * macOS its title bar is an overlay: the traffic lights sit over the top of
+   * the sidebar, and the window drags by the strips marked below.
+   */
+  const inMacApp =
+    (window as { __UNA_APP__?: { platform?: string } }).__UNA_APP__?.platform === 'macos';
+
   let health = $state<Health | null>(null);
   let unreachable = $state(false);
   let backlog = $state<number | null>(null);
@@ -86,7 +94,10 @@
 
 <div class="flex h-screen overflow-hidden bg-canvas text-fg">
   <aside class="flex w-56 flex-none flex-col border-r border-line bg-sidebar">
-    <div class="flex h-14 items-center gap-2.5 px-4">
+    {#if inMacApp}
+      <div class="h-7 flex-none" data-tauri-drag-region></div>
+    {/if}
+    <div class="flex h-14 items-center gap-2.5 px-4" data-tauri-drag-region={inMacApp ? 'deep' : undefined}>
       <Logo size={28} />
       <span class="text-[15px] font-semibold tracking-[-0.02em]">una</span>
     </div>
@@ -138,6 +149,10 @@
   </aside>
 
   <main class="min-w-0 flex-1 overflow-y-auto">
+    {#if inMacApp}
+      <!-- over the pages' own top padding, so it never covers a control -->
+      <div class="sticky top-0 z-20 -mb-7 h-7" data-tauri-drag-region></div>
+    {/if}
     {#if router.path === '/review'}
       <Review />
     {:else if router.path === '/dictionary'}

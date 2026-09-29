@@ -1,4 +1,5 @@
-//! HUD, settings, correction, and review window management.
+//! HUD, settings, correction, and review window management (the history
+//! window, which shows the server's dashboard, lives in `history.rs`).
 //!
 //! The HUD is a fixed-size, frameless, transparent, always-on-top,
 //! click-through window anchored bottom-center of the display that holds the
@@ -332,9 +333,14 @@ pub fn show_settings(app: &AppHandle) {
 
 /// The Dock icon was clicked. The always-on HUD pill counts as a visible
 /// window to macOS, so decide here: bring forward a correction or review
-/// window that is already up, otherwise open the Una window.
+/// or history window that is already up, otherwise open the Una window.
 pub fn reopen(app: &AppHandle) {
-    let up = [CORRECTION_LABEL, REVIEW_LABEL, SETTINGS_LABEL]
+    let up = [
+        CORRECTION_LABEL,
+        REVIEW_LABEL,
+        crate::history::HISTORY_LABEL,
+        SETTINGS_LABEL,
+    ]
         .into_iter()
         .filter_map(|l| app.get_webview_window(l))
         .find(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false));

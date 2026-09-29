@@ -4,5 +4,15 @@
 <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Una records your voice while the dictation hotkey is held and sends it to your own una server for transcription.</string>
+    <!-- The history window shows your una server's dashboard, which is plain
+         http on the LAN or over Tailscale. Web views only: una's own requests
+         go through its HTTP client, which ATS doesn't govern. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
 </dict>
 </plist>
