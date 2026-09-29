@@ -4,7 +4,6 @@ use tauri::menu::{CheckMenuItem, MenuBuilder, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt as _;
-use tauri_plugin_opener::OpenerExt as _;
 use una_core::state::Command;
 
 use crate::app_state::AppState;
@@ -84,18 +83,7 @@ fn on_menu_event(app: &AppHandle, id: &str) {
         }
         ID_REVIEW => windows::show_review(app),
         ID_SETTINGS => windows::show_settings(app),
-        ID_HISTORY => {
-            match state.dashboard_url() {
-                // No server configured: settings is the useful destination.
-                None => windows::show_settings(app),
-                Some(url) => {
-                    let home = format!("{}/#/home", url.trim_end_matches('/'));
-                    if let Err(e) = app.opener().open_url(home, None::<&str>) {
-                        tracing::warn!("could not open the dashboard: {e}");
-                    }
-                }
-            }
-        }
+        ID_HISTORY => crate::history::open(app),
         ID_LAUNCH => {
             let autolaunch = app.autolaunch();
             let currently = autolaunch.is_enabled().unwrap_or(false);

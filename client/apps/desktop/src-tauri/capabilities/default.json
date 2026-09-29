@@ -1,11 +1,12 @@
 {
   "identifier": "default",
-  "description": "Capabilities for the una HUD, settings, correction and review windows",
+  "description": "Capabilities for the una HUD, settings, correction, review and history windows (the history window's local page; its dashboard page gets only a drag permission, added at runtime)",
   "windows": [
     "hud",
     "settings",
     "correction",
-    "review"
+    "review",
+    "history"
   ],
   "permissions": [
     "core:default",

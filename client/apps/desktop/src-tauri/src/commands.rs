@@ -559,17 +559,8 @@ pub fn correction_dismiss(app: AppHandle, state: State<'_, AppState>) {
 // Review window
 // ---------------------------------------------------------------------------
 
-/// Whichever configured server address is live right now.
 async fn live_server(state: &AppState) -> Result<String, String> {
-    let (urls, autodiscover) = {
-        let cfg = state.config.read().unwrap();
-        (cfg.server.urls.clone(), cfg.server.autodiscover)
-    };
-    state
-        .endpoints
-        .resolve(&urls, autodiscover)
-        .await
-        .ok_or_else(|| "Can't reach the una server".to_string())
+    state.live_server().await
 }
 
 /// Unreviewed dictations with the teacher's guesses, flagged ones first.
@@ -675,4 +666,19 @@ pub async fn yagami_inventory() -> Result<una_core::yagami::Inventory, String> {
         .await
         .map_err(|e| e.to_string())?;
     client.inventory().await.map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// History window
+// ---------------------------------------------------------------------------
+
+/// Try the server again, from the history window's "can't reach it" page.
+#[tauri::command]
+pub fn open_history(app: AppHandle) {
+    crate::history::open(&app);
+}
+
+#[tauri::command]
+pub fn open_settings(app: AppHandle) {
+    windows::show_settings(&app);
 }

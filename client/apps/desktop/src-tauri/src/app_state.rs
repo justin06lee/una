@@ -50,11 +50,15 @@ impl AppState {
         self.config.read().unwrap().clone()
     }
 
-    /// Base URL for opening the dashboard: whichever endpoint is currently
-    /// live, else the first one configured.
-    pub fn dashboard_url(&self) -> Option<String> {
+    /// Whichever configured server address is live right now.
+    pub async fn live_server(&self) -> Result<String, String> {
+        let (urls, autodiscover) = {
+            let cfg = self.config.read().unwrap();
+            (cfg.server.urls.clone(), cfg.server.autodiscover)
+        };
         self.endpoints
-            .cached()
-            .or_else(|| self.config.read().unwrap().server.urls.first().cloned())
+            .resolve(&urls, autodiscover)
+            .await
+            .ok_or_else(|| "Can't reach the una server".to_string())
     }
 }

@@ -390,19 +390,37 @@
                         {/if}
                       </div>
 
-                      {#if detail.corrected_text}
-                        <div class="mt-5">
-                          <div class="label mb-1.5">Your correction</div>
-                          <p class="text-[13px] leading-relaxed">{detail.corrected_text}</p>
+                      <!-- Your fixes, each under what it fixes: the transcript
+                           (trains the voice model) and the wording (trains
+                           the cleanup model). -->
+                      {#if detail.corrected_text || detail.polished_text}
+                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                          {#if detail.corrected_text}
+                            <div>
+                              <div class="label mb-1.5">What you actually said</div>
+                              <p class="text-[13px] leading-relaxed">{detail.corrected_text}</p>
+                            </div>
+                          {/if}
+                          {#if detail.polished_text}
+                            <div class="sm:col-start-2">
+                              <div class="label mb-1.5">How you'd have written it</div>
+                              <p class="text-[13px] leading-relaxed">{detail.polished_text}</p>
+                            </div>
+                          {/if}
                         </div>
                       {/if}
 
                       <div class="mt-5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
                         {#if detail.training_eligible}
-                          <span class="chip"><span class="dot dot-ok"></span>Training pair</span>
+                          <span class="chip"><span class="dot dot-ok"></span>Trains your voice</span>
                         {:else if detail.eligibility_reason}
-                          <span class="chip" title={detail.eligibility_reason}>
-                            <span class="dot"></span>Not used for training
+                          <span class="chip" title="Not used for the voice model: {detail.eligibility_reason}">
+                            <span class="dot"></span>Not used for your voice
+                          </span>
+                        {/if}
+                        {#if detail.polished_text && detail.review_action !== 'excluded'}
+                          <span class="chip" title="Trains the cleanup model">
+                            <span class="dot dot-ok"></span>Trains your style
                           </span>
                         {/if}
                         {#if detail.eval_holdout}

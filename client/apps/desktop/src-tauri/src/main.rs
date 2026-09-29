@@ -7,6 +7,7 @@ mod commands;
 mod corrections;
 mod effects;
 mod events;
+mod history;
 mod hotkey;
 mod sounds;
 mod tray;
@@ -136,6 +137,8 @@ fn main() {
             commands::review_close,
             commands::fixup_text,
             commands::yagami_inventory,
+            commands::open_history,
+            commands::open_settings,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
