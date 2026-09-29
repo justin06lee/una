@@ -127,8 +127,8 @@ Press once to start, again to finish (identical to una's "toggle" mode).
 GNOME removed tray icons; install the **AppIndicator and KStatusNotifierItem
 Support** extension (`gnome-shell-extension-appindicator`) to see una's menu
 bar icon. Without it the app still runs — control it via the `una` CLI and
-the Una window (relaunch the binary to re-show it; a second instance
-forwards to the first).
+the settings window (relaunch the binary to re-show settings; a second
+instance forwards to the first).
 
 ## Wayland limitations
 

@@ -47,7 +47,7 @@ confirm them.
 
 ### Reviewing
 
-The Una window's **Review** page (tray → **Review Dictations…**; the dashboard has one too) shows
+The desktop app's tray → **Review Dictations…** (and the dashboard's Review page) shows
 one dictation at a time, flagged ones first: the audio, **What you said** pre-filled with
 the literal guess, and **How you'd have written it** pre-filled with your own earlier fix
 if you made one, else the polished guess. The words the second listen heard differently

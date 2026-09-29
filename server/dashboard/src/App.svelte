@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
 
   import { api, type Health } from './api';
-  import { captureHostLinks, embedded, listenToHost, tellHost } from './lib/embed';
+  import { APP_SETTINGS_URL, inApp, inMacApp, openAppSettings } from './lib/app';
+  import Kbd from './lib/Kbd.svelte';
   import Icon, { type IconName } from './lib/Icon.svelte';
   import Logo from './lib/Logo.svelte';
   import { theme } from './lib/theme.svelte';
@@ -23,8 +24,6 @@
   ];
 
   let health = $state<Health | null>(null);
-  /** Bumped when the Una window asks for a page again: remount it, refetching. */
-  let refresh = $state(0);
   let unreachable = $state(false);
   let backlog = $state<number | null>(null);
 
@@ -46,18 +45,6 @@
   }
 
   onMount(() => {
-    // In the Una window, the window shows status and counts itself.
-    if (embedded) {
-      const stopLinks = captureHostLinks();
-      const stopHost = listenToHost((path) => {
-        router.go(path);
-        refresh += 1;
-      });
-      return () => {
-        stopLinks();
-        stopHost();
-      };
-    }
     void pollHealth();
     const t = setInterval(() => void pollHealth(), 10_000);
     const b = setInterval(() => void refreshBacklog(), 60_000);
@@ -70,12 +57,7 @@
   // Re-count on every navigation, so the Review badge drops as you work.
   $effect(() => {
     void router.path;
-    if (!embedded) void refreshBacklog();
-  });
-
-  // Keep the Una window's sidebar on the page this one is showing.
-  $effect(() => {
-    tellHost({ type: 'una:route', path: router.path });
+    void refreshBacklog();
   });
 
   const tone = $derived(
@@ -104,10 +86,22 @@
   const active = $derived((path: string) => router.path === path);
 </script>
 
+<svelte:window
+  onkeydown={(e) => {
+    // ⌘, is Settings in every Mac app: in una's window, the app's settings.
+    if (inApp && e.key === ',' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      openAppSettings();
+    }
+  }}
+/>
+
 <div class="flex h-screen overflow-hidden bg-canvas text-fg">
-  {#if !embedded}
   <aside class="flex w-56 flex-none flex-col border-r border-line bg-sidebar">
-    <div class="flex h-14 items-center gap-2.5 px-4">
+    {#if inMacApp}
+      <div class="h-7 flex-none" data-tauri-drag-region></div>
+    {/if}
+    <div class="flex h-14 items-center gap-2.5 px-4" data-tauri-drag-region={inMacApp ? 'deep' : undefined}>
       <Logo size={28} />
       <span class="text-[15px] font-semibold tracking-[-0.02em]">una</span>
     </div>
@@ -125,10 +119,26 @@
     </nav>
 
     <div class="px-2.5 pb-3">
-      <a href="#/settings" class="nav-item" class:active={active('/settings')}>
-        <Icon name="settings" size={16} />
-        Settings
-      </a>
+      {#if inApp}
+        <!-- The app's own settings (hotkey, audio, …) open in their window;
+             this page's settings are the server's. -->
+        <a href={APP_SETTINGS_URL} class="nav-item group">
+          <Icon name="settings" size={16} />
+          <span class="flex-1">Settings</span>
+          <span class="opacity-0 transition-opacity group-hover:opacity-100">
+            <Kbd>{inMacApp ? '⌘,' : 'Ctrl+,'}</Kbd>
+          </span>
+        </a>
+        <a href="#/settings" class="nav-item" class:active={active('/settings')}>
+          <Icon name="server" size={16} />
+          Server settings
+        </a>
+      {:else}
+        <a href="#/settings" class="nav-item" class:active={active('/settings')}>
+          <Icon name="settings" size={16} />
+          Settings
+        </a>
+      {/if}
 
       <div class="mt-2 flex items-start gap-2 border-t border-line px-2.5 pt-3">
         <div class="min-w-0 flex-1">
@@ -157,10 +167,12 @@
       </div>
     </div>
   </aside>
-  {/if}
 
   <main class="min-w-0 flex-1 overflow-y-auto">
-    {#key refresh}
+    {#if inMacApp}
+      <!-- over the pages' own top padding, so it never covers a control -->
+      <div class="sticky top-0 z-20 -mb-7 h-7" data-tauri-drag-region></div>
+    {/if}
     {#if router.path === '/review'}
       <Review />
     {:else if router.path === '/dictionary'}
@@ -174,6 +186,5 @@
     {:else}
       <Home />
     {/if}
-    {/key}
   </main>
 </div>
