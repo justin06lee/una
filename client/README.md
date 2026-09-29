@@ -31,6 +31,11 @@ small correction window asks instead, and the tray's **Fix Last Dictation…**
 opens that window for the last paste whenever you want it. Settings →
 **Learning**, and [docs/learning.md](../docs/learning.md).
 
+Una's main window is your **dictation history** (launch it, or click its Dock
+icon): the server's dashboard — Home, Review, Dictionary, Training, Insights —
+inside a window of the app. Its **Settings** item (or ⌘,) opens the app's own
+settings in their smaller window; **Server settings** below it are the server's.
+
 The tray's **Review Dictations…** goes through recent dictations one at a time,
 with both right answers already drafted by the server's teacher — what you said,
 word for word, and how you'd have written it — and the words its second listen
@@ -92,7 +97,7 @@ servers advertising `_una._tcp` over mDNS.
 
 Configuration lives at the platform config dir (macOS: `~/Library/Application
 Support/sh.tenet.una/config.toml`, Linux: `~/.config/una/config.toml`) and is
-editable from the settings window (tray → Settings…). An older `url = "..."`
+editable from the settings window (Settings in the main window, ⌘, or tray → Settings…). An older `url = "..."`
 setting is migrated into `urls` on first load.
 
 Failed uploads are spooled (last 5) and can be resent via tray →

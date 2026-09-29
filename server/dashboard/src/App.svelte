@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
 
   import { api, type Health } from './api';
+  import { APP_SETTINGS_URL, inApp, inMacApp, openAppSettings } from './lib/app';
+  import Kbd from './lib/Kbd.svelte';
   import Icon, { type IconName } from './lib/Icon.svelte';
   import Logo from './lib/Logo.svelte';
   import { theme } from './lib/theme.svelte';
@@ -20,14 +22,6 @@
     { path: '/training', label: 'Training', icon: 'flask' },
     { path: '/insights', label: 'Insights', icon: 'chart' },
   ];
-
-  /**
-   * Inside una's history window, which sets this before the page loads. On
-   * macOS its title bar is an overlay: the traffic lights sit over the top of
-   * the sidebar, and the window drags by the strips marked below.
-   */
-  const inMacApp =
-    (window as { __UNA_APP__?: { platform?: string } }).__UNA_APP__?.platform === 'macos';
 
   let health = $state<Health | null>(null);
   let unreachable = $state(false);
@@ -92,6 +86,16 @@
   const active = $derived((path: string) => router.path === path);
 </script>
 
+<svelte:window
+  onkeydown={(e) => {
+    // ⌘, is Settings in every Mac app: in una's window, the app's settings.
+    if (inApp && e.key === ',' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      openAppSettings();
+    }
+  }}
+/>
+
 <div class="flex h-screen overflow-hidden bg-canvas text-fg">
   <aside class="flex w-56 flex-none flex-col border-r border-line bg-sidebar">
     {#if inMacApp}
@@ -115,10 +119,26 @@
     </nav>
 
     <div class="px-2.5 pb-3">
-      <a href="#/settings" class="nav-item" class:active={active('/settings')}>
-        <Icon name="settings" size={16} />
-        Settings
-      </a>
+      {#if inApp}
+        <!-- The app's own settings (hotkey, audio, …) open in their window;
+             this page's settings are the server's. -->
+        <a href={APP_SETTINGS_URL} class="nav-item group">
+          <Icon name="settings" size={16} />
+          <span class="flex-1">Settings</span>
+          <span class="opacity-0 transition-opacity group-hover:opacity-100">
+            <Kbd>{inMacApp ? '⌘,' : 'Ctrl+,'}</Kbd>
+          </span>
+        </a>
+        <a href="#/settings" class="nav-item" class:active={active('/settings')}>
+          <Icon name="server" size={16} />
+          Server settings
+        </a>
+      {:else}
+        <a href="#/settings" class="nav-item" class:active={active('/settings')}>
+          <Icon name="settings" size={16} />
+          Settings
+        </a>
+      {/if}
 
       <div class="mt-2 flex items-start gap-2 border-t border-line px-2.5 pt-3">
         <div class="min-w-0 flex-1">

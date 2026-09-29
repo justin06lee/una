@@ -6,6 +6,7 @@
   import PageHeader from '../lib/PageHeader.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import ThemeToggle from '../lib/ThemeToggle.svelte';
+  import { inApp } from '../lib/app';
   import Toggle from '../lib/Toggle.svelte';
 
   let stored = $state<Settings | null>(null);
@@ -101,7 +102,11 @@
 {/snippet}
 
 <div class="mx-auto max-w-[42rem] px-10 py-12 pb-28">
-  <PageHeader title="Settings" sub="Saved on the server, applied the moment you save, and kept across restarts." />
+  <!-- In una's window the app's own settings are a separate window. -->
+  <PageHeader
+    title={inApp ? 'Server settings' : 'Settings'}
+    sub="Saved on the server, applied the moment you save, and kept across restarts."
+  />
 
   {#if error}
     <Banner message={error} />

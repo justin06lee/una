@@ -86,8 +86,8 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // A second launch just brings up settings.
-            windows::show_settings(app);
+            // A second launch just brings up the main window.
+            history::open(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
@@ -225,7 +225,7 @@ fn main() {
             // Opened by hand, Una opens its window like any app; started at
             // login, it just sits in the menu bar and the Dock.
             if !launched_at_login {
-                windows::show_settings(&handle);
+                history::open(&handle);
             }
 
             // Ask for mic access on first run so the first dictation doesn't

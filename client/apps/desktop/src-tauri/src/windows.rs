@@ -12,9 +12,11 @@
 //! - "flash": the previous behavior — hidden while idle, shown by the FSM's
 //!   ShowHud/HideHud effects.
 //!
-//! Una is a regular Dock app: the settings window ("the Una window") opens on
-//! launch and from the Dock icon, stays put behind other apps so ⌘-Tab gets
-//! back to it, and hides rather than closes on the red button or ⌘W.
+//! Una is a regular Dock app: its main window is the history (see history.rs),
+//! which opens on launch and from the Dock icon; the settings window is the
+//! smaller one, opened from the history's Settings item, ⌘, or the tray. Both
+//! stay put behind other apps so ⌘-Tab gets back to them, and hide rather
+//! than close on the red button or ⌘W.
 //!
 //! The correction and review windows are the opposite of the HUD: they
 //! deliberately take focus, because they exist to be typed into. The
@@ -332,8 +334,8 @@ pub fn show_settings(app: &AppHandle) {
 }
 
 /// The Dock icon was clicked. The always-on HUD pill counts as a visible
-/// window to macOS, so decide here: bring forward a correction or review
-/// or history window that is already up, otherwise open the Una window.
+/// window to macOS, so decide here: bring forward a correction, review,
+/// history or settings window that is already up, otherwise open the history.
 pub fn reopen(app: &AppHandle) {
     let up = [
         CORRECTION_LABEL,
@@ -348,6 +350,6 @@ pub fn reopen(app: &AppHandle) {
         Some(window) => {
             let _ = window.set_focus();
         }
-        None => show_settings(app),
+        None => crate::history::open(app),
     }
 }

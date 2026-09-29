@@ -14,6 +14,11 @@
 //! With no server answering, the window shows a small local page that says so
 //! and can try again. Like the other windows it hides rather than closes, and
 //! every open from the tray starts again at Home, with fresh data.
+//!
+//! It's the app's main window: launching una or clicking its Dock icon opens
+//! it. The app's own settings stay in their smaller window, which the page's
+//! Settings item (and ⌘,) opens by following a `una://settings` link that the
+//! window stops here — no IPC needed from the server's page.
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -100,6 +105,18 @@ fn create(app: &AppHandle, url: tauri::Url) -> tauri::Result<tauri::WebviewWindo
         .inner_size(1120.0, 760.0)
         .min_inner_size(760.0, 520.0)
         .initialization_script(IN_APP_SCRIPT)
+        .on_navigation({
+            let handle = app.clone();
+            move |url| {
+                if url.scheme() != "una" {
+                    return true;
+                }
+                if url.host_str() == Some("settings") {
+                    crate::windows::show_settings(&handle);
+                }
+                false
+            }
+        })
         .center();
     #[cfg(target_os = "macos")]
     let builder = builder
