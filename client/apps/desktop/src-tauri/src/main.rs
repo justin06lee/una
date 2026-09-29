@@ -7,7 +7,6 @@ mod commands;
 mod corrections;
 mod effects;
 mod events;
-mod history;
 mod hotkey;
 mod sounds;
 mod tray;
@@ -86,8 +85,8 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // A second launch just brings up settings.
-            windows::show_settings(app);
+            // A second launch just brings up the window.
+            windows::show_main(app, None);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
@@ -134,11 +133,9 @@ fn main() {
             commands::review_queue,
             commands::review_audio,
             commands::review_submit,
-            commands::review_close,
             commands::fixup_text,
             commands::yagami_inventory,
-            commands::open_history,
-            commands::open_settings,
+            commands::dashboard_base,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -147,9 +144,8 @@ fn main() {
             // settings stays hidden until requested.
             let pill = config.read().unwrap().ui.hud_mode != "flash";
             windows::create_hud(&handle, pill)?;
-            windows::create_settings(&handle)?;
+            windows::create_main(&handle)?;
             windows::create_correction(&handle)?;
-            windows::create_review(&handle)?;
 
             // One resolver shared by the dictation path and the settings
             // window, so both agree on which endpoint is live.
@@ -225,7 +221,7 @@ fn main() {
             // Opened by hand, Una opens its window like any app; started at
             // login, it just sits in the menu bar and the Dock.
             if !launched_at_login {
-                windows::show_settings(&handle);
+                windows::show_main(&handle, None);
             }
 
             // Ask for mic access on first run so the first dictation doesn't

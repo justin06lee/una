@@ -6,11 +6,15 @@
  * keeps the attribute, localStorage, and the OS preference in sync.
  */
 
+import { embedded } from './embed';
+
 export type ThemeChoice = 'light' | 'dark' | 'system';
 
 const STORAGE_KEY = 'una:theme';
 
 function stored(): ThemeChoice {
+  // In the Una window the page follows the system, like the window around it.
+  if (embedded) return 'system';
   const raw = localStorage.getItem(STORAGE_KEY);
   return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
 }
