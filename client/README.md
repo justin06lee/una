@@ -31,20 +31,13 @@ small correction window asks instead, and the tray's **Fix Last Dictation…**
 opens that window for the last paste whenever you want it. Settings →
 **Learning**, and [docs/learning.md](../docs/learning.md).
 
-Everything else is in one window, the **Una window** (Dock icon, or any tray
-item): Home (your dictation history), Review, Dictionary, Training and Insights
-in the sidebar, and Settings at the bottom (⌘,), which holds the app's own
-settings plus the server's cleanup and training ones. Home, Dictionary,
-Training, Insights and that last settings page are the server's dashboard,
-shown inside the window; the rest works with the server down.
-
-**Review** (tray → **Review Dictations…**) goes through recent dictations one at a time,
+The tray's **Review Dictations…** goes through recent dictations one at a time,
 with both right answers already drafted by the server's teacher — what you said,
 word for word, and how you'd have written it — and the words its second listen
 heard differently shown as chips that play just that moment. Listen, press ⌘↵.
 See [docs/personal-model.md](../docs/personal-model.md).
 
-Review and the correction window have **Fix up** (⌘J): once "what you said" is right, it rewrites it
+Both windows have **Fix up** (⌘J): once "what you said" is right, it rewrites it
 as clean text in the field below. It runs on the coding-agent CLIs already
 signed in on this machine (Claude Code, Codex, OpenCode, …) through a local
 [yagami](https://github.com/justin06lee/yagami) server, which una starts when it
@@ -63,9 +56,9 @@ client/
 │   │                   # (macOS: NSPasteboard + CGEvent + AX; Linux: XTest/ydotool/wtype)
 │   └── una-cli         # `una` — toggle/start/stop/cancel over the unix socket
 ├── apps/desktop/
-│   ├── src-tauri       # tauri v2 app: tray, HUD + Una window + correction
-│   │                   # popup, hotkey, correction capture
-│   └── ui              # Svelte 5 + Vite, multi-page (hud, app, correction)
+│   ├── src-tauri       # tauri v2 app: tray, HUD + settings + correction +
+│   │                   # review windows, hotkey, correction capture
+│   └── ui              # Svelte 5 + Vite, multi-page (hud, settings, correction, review)
 └── scripts/gen_icons.py  # stdlib-only PNG icon generator
 ```
 
@@ -99,7 +92,7 @@ servers advertising `_una._tcp` over mDNS.
 
 Configuration lives at the platform config dir (macOS: `~/Library/Application
 Support/sh.tenet.una/config.toml`, Linux: `~/.config/una/config.toml`) and is
-editable from the Una window's Settings (tray → Settings…, or ⌘,). An older `url = "..."`
+editable from the settings window (tray → Settings…). An older `url = "..."`
 setting is migrated into `urls` on first load.
 
 Failed uploads are spooled (last 5) and can be resent via tray →

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * Review, a page of the Una window: recent dictations, one at a time, with
-   * both of their right answers already drafted — what was literally said (trains Whisper)
+   * The review window: recent dictations, one at a time, with both of their
+   * right answers already drafted — what was literally said (trains Whisper)
    * and how it should read (trains the cleanup model).
    *
    * The drafts come from the server's teacher: a second, slower listen to the
@@ -16,6 +16,7 @@
   import { onMount, tick } from "svelte";
   import FixUp from "../lib/FixUp.svelte";
   import Icon from "../lib/Icon.svelte";
+  import Mark from "../lib/Mark.svelte";
 
   type Span = { start: number; end: number; alt: string; t0: number | null; t1: number | null };
   type Teacher = {
@@ -263,6 +264,10 @@
     // a focused button handles its own Enter/Space
     if (target?.tagName === "BUTTON" && (event.key === "Enter" || event.key === " ")) return;
     switch (event.key) {
+      case "Escape":
+        event.preventDefault();
+        void invoke("review_close");
+        return;
       case " ":
         event.preventDefault();
         toggle();
@@ -285,17 +290,20 @@
     event.preventDefault();
   }
 
-  // Loads (and starts playing) when the page is opened, and falls silent when
-  // it's left or the window is hidden.
+  // The window is created hidden at launch and lives for the whole session:
+  // it loads (and starts playing) only when opened, and falls silent when closed.
   onMount(() => {
-    void load();
-    const hidden = listen("window-hidden", () => {
+    const opened = listen("review-opened", () => {
+      skipped.clear();
+      void load();
+    });
+    const closed = listen("review-closed", () => {
       stopAt = null;
       audio?.pause();
     });
     return () => {
-      void hidden.then((un) => un());
-      audio?.pause();
+      void opened.then((un) => un());
+      void closed.then((un) => un());
       clearTimeout(flashTimer);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
@@ -311,7 +319,7 @@
 
 <main class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
-    <span class="title" data-tauri-drag-region>Review</span>
+    <span class="title" data-tauri-drag-region><Mark size={18} /> Review dictations</span>
     {#if !loading && !error}
       <span class="count" data-tauri-drag-region>
         {pending} left{#if flagged > 0}<span class="sep">·</span>{flagged} to check{/if}
@@ -479,6 +487,7 @@
       <span><span class="kbd">E</span> <span class="kbd">W</span> edit</span>
       <span><span class="kbd">F</span> fix up</span>
       <span><span class="kbd">↵</span> confirm</span>
+      <span><span class="kbd">esc</span> close</span>
     </p>
   {/if}
 </main>
@@ -652,10 +661,9 @@
     gap: 5px;
     height: 22px;
     padding: 0 8px;
-    /* wants a look: a darker edge and a grey wash, no colour */
-    border: 1px solid color-mix(in oklab, var(--fg) 40%, var(--line));
+    border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--line));
     border-radius: var(--radius-sm);
-    background: color-mix(in oklab, var(--fg) 7%, transparent);
+    background: var(--warn-soft);
     color: var(--fg);
     font-size: 12px;
   }

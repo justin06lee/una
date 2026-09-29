@@ -1,4 +1,5 @@
-//! HUD, main (the Una window), and correction window management.
+//! HUD, settings, correction, and review window management (the history
+//! window, which shows the server's dashboard, lives in `history.rs`).
 //!
 //! The HUD is a fixed-size, frameless, transparent, always-on-top,
 //! click-through window anchored bottom-center of the display that holds the
@@ -11,15 +12,14 @@
 //! - "flash": the previous behavior — hidden while idle, shown by the FSM's
 //!   ShowHud/HideHud effects.
 //!
-//! Una is a regular Dock app with one window, "the Una window": history,
-//! review, dictionary, training, insights and settings, all in its sidebar.
-//! It opens on launch and from the Dock icon, the tray opens it at a page,
-//! it stays put behind other apps so ⌘-Tab gets back to it, and it hides
-//! rather than closes on the red button or ⌘W.
+//! Una is a regular Dock app: the settings window ("the Una window") opens on
+//! launch and from the Dock icon, stays put behind other apps so ⌘-Tab gets
+//! back to it, and hides rather than closes on the red button or ⌘W.
 //!
-//! The correction window is the opposite of the HUD: it deliberately takes
-//! focus, because it exists to be typed into. It pops up over whatever the
-//! user was typing in, so it hands focus back to that app when it goes away.
+//! The correction and review windows are the opposite of the HUD: they
+//! deliberately take focus, because they exist to be typed into. The
+//! correction window pops up over whatever the user was typing in, so it
+//! hands focus back to that app when it goes away.
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use una_core::state::Snapshot;
@@ -27,8 +27,9 @@ use una_core::state::Snapshot;
 use crate::app_state::AppState;
 
 pub const HUD_LABEL: &str = "hud";
-pub const MAIN_LABEL: &str = "main";
+pub const SETTINGS_LABEL: &str = "settings";
 pub const CORRECTION_LABEL: &str = "correction";
+pub const REVIEW_LABEL: &str = "review";
 
 /// The correction window is a small centered panel, sized for a sentence or
 /// two of dictated text in both forms, the recording's player, and its buttons.
@@ -80,16 +81,15 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
     Ok(window)
 }
 
-/// The Una window. Kept alive and hidden between uses, so it comes back
-/// instantly and the pages keep their place.
-pub fn create_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    let builder = WebviewWindowBuilder::new(app, MAIN_LABEL, WebviewUrl::App("app.html".into()))
-        .title("Una")
-        .inner_size(1120.0, 760.0)
-        .min_inner_size(860.0, 540.0)
-        .visible(false);
+pub fn create_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let builder =
+        WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("settings.html".into()))
+            .title("Una")
+            .inner_size(780.0, 560.0)
+            .min_inner_size(660.0, 440.0)
+            .visible(false);
     // The sidebar runs to the top edge with the traffic lights drawn over it;
-    // the page leaves room for them and marks drag regions.
+    // the page leaves room for them and marks a drag region.
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
@@ -98,12 +98,10 @@ pub fn create_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 
     // Hide instead of destroy on close (the red button and ⌘W), so it comes
     // back instantly from the Dock icon or the tray and Una keeps running.
-    // Tell the page, or a review's recording would play on unseen.
     let win = window.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
-            let _ = win.emit("window-hidden", ());
             let _ = win.hide();
         }
     });
@@ -278,13 +276,55 @@ pub fn return_focus(pid: Option<i32>) {
     }
 }
 
-/// Bring up the Una window, at `page` when given ("home", "review",
-/// "settings", or a settings tab); otherwise where it was left.
-pub fn show_main(app: &AppHandle, page: Option<&str>) {
-    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
-        if let Some(page) = page {
-            let _ = window.emit("navigate", page);
+/// Create the review window: a regular window for going through recent
+/// dictations with the teacher's guesses. Kept alive and hidden between uses.
+pub fn create_review(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let builder =
+        WebviewWindowBuilder::new(app, REVIEW_LABEL, WebviewUrl::App("review.html".into()))
+            .title("Review dictations")
+            .inner_size(640.0, 660.0)
+            .min_inner_size(520.0, 520.0)
+            .visible(false)
+            .center();
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder.build()?;
+
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            hide_review(&handle);
         }
+    });
+    Ok(window)
+}
+
+/// Bring up the review window, focused, and tell it to fetch the queue.
+pub fn show_review(app: &AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(window) = handle.get_webview_window(REVIEW_LABEL) else {
+            return;
+        };
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("review-opened", ());
+    });
+}
+
+pub fn hide_review(app: &AppHandle) {
+    // Hidden, not destroyed: tell the page, or its audio would play on unseen.
+    if let Some(window) = app.get_webview_window(REVIEW_LABEL) {
+        let _ = window.emit("review-closed", ());
+    }
+    hide_window(app, REVIEW_LABEL);
+}
+
+pub fn show_settings(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(SETTINGS_LABEL) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -292,10 +332,15 @@ pub fn show_main(app: &AppHandle, page: Option<&str>) {
 }
 
 /// The Dock icon was clicked. The always-on HUD pill counts as a visible
-/// window to macOS, so decide here: bring forward a correction window that
-/// is already up, otherwise open the Una window.
+/// window to macOS, so decide here: bring forward a correction or review
+/// or history window that is already up, otherwise open the Una window.
 pub fn reopen(app: &AppHandle) {
-    let up = [CORRECTION_LABEL, MAIN_LABEL]
+    let up = [
+        CORRECTION_LABEL,
+        REVIEW_LABEL,
+        crate::history::HISTORY_LABEL,
+        SETTINGS_LABEL,
+    ]
         .into_iter()
         .filter_map(|l| app.get_webview_window(l))
         .find(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false));
@@ -303,6 +348,6 @@ pub fn reopen(app: &AppHandle) {
         Some(window) => {
             let _ = window.set_focus();
         }
-        None => show_main(app, None),
+        None => show_settings(app),
     }
 }

@@ -6,7 +6,6 @@
   import PageHeader from '../lib/PageHeader.svelte';
   import Skeleton from '../lib/Skeleton.svelte';
   import ThemeToggle from '../lib/ThemeToggle.svelte';
-  import { embedded } from '../lib/embed';
   import Toggle from '../lib/Toggle.svelte';
 
   let stored = $state<Settings | null>(null);
@@ -102,26 +101,20 @@
 {/snippet}
 
 <div class="mx-auto max-w-[42rem] px-10 py-12 pb-28">
-  <!-- In the Una window this is one tab among the app's own settings. -->
-  <PageHeader
-    title={embedded ? 'Cleanup & training' : 'Settings'}
-    sub="Saved on the server, applied the moment you save, and kept across restarts."
-  />
+  <PageHeader title="Settings" sub="Saved on the server, applied the moment you save, and kept across restarts." />
 
   {#if error}
     <Banner message={error} />
   {/if}
 
-  <!-- Appearance (the Una window follows the system) --------------------- -->
-  {#if !embedded}
-    <section class="mb-10">
-      {@render heading('Appearance', 'How this dashboard looks. The desktop app follows your system.')}
-      <div class="panel flex items-center justify-between gap-6 px-5 py-4">
-        {@render copy('Theme', 'System follows your operating system.')}
-        <ThemeToggle />
-      </div>
-    </section>
-  {/if}
+  <!-- Appearance ---------------------------------------------------------- -->
+  <section class="mb-10">
+    {@render heading('Appearance', 'How this dashboard looks. The desktop app follows your system.')}
+    <div class="panel flex items-center justify-between gap-6 px-5 py-4">
+      {@render copy('Theme', 'System follows your operating system.')}
+      <ThemeToggle />
+    </div>
+  </section>
 
   {#if loading}
     <div class="space-y-4">
