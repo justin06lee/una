@@ -339,13 +339,11 @@
                       <span class="text-muted">
                         {fmtWer(run.wer_baseline)} → <span class="text-fg">{fmtWer(run.wer_candidate)}</span>
                       </span>
-                      <!-- green only when the gain was real enough to promote -->
+                      <!-- full ink only when the gain was real enough to promote -->
                       <span
-                        class="ml-1.5 text-[12px] {!better
-                          ? 'text-danger'
-                          : run.status === 'promoted'
-                            ? 'text-ok'
-                            : 'text-faint'}"
+                        class="ml-1.5 text-[12px] {run.status === 'promoted' && better
+                          ? 'font-medium text-fg'
+                          : 'text-faint'}"
                       >
                         {fmtWerDelta(run.wer_baseline, run.wer_candidate)}
                       </span>

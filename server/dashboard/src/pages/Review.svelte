@@ -414,9 +414,10 @@
 </div>
 
 <style>
-  /* Disputed words need attention: amber, the palette's colour for that. */
+  /* Disputed words need attention: a darker edge and a grey wash, since the
+     interface has no colour to spend on it. */
   .dispute {
-    border-color: color-mix(in oklab, var(--warn) 45%, var(--line));
-    background: color-mix(in oklab, var(--warn) 14%, transparent);
+    border-color: color-mix(in oklab, var(--fg) 40%, var(--line));
+    background: color-mix(in oklab, var(--fg) 7%, transparent);
   }
 </style>

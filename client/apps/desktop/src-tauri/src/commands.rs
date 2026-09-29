@@ -1,4 +1,4 @@
-//! Tauri commands invoked by the settings, HUD, correction, and review webviews.
+//! Tauri commands invoked by the Una window, the HUD, and the correction popup.
 
 use std::time::Duration;
 
@@ -616,10 +616,6 @@ pub async fn review_submit(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn review_close(app: AppHandle) {
-    windows::hide_review(&app);
-}
 
 // ---------------------------------------------------------------------------
 // Fix up (yagami)
@@ -669,16 +665,11 @@ pub async fn yagami_inventory() -> Result<una_core::yagami::Inventory, String> {
 }
 
 // ---------------------------------------------------------------------------
-// History window
+// The Una window's server pages
 // ---------------------------------------------------------------------------
 
-/// Try the server again, from the history window's "can't reach it" page.
+/// Where the server's pages are framed from: whichever address is live.
 #[tauri::command]
-pub fn open_history(app: AppHandle) {
-    crate::history::open(&app);
-}
-
-#[tauri::command]
-pub fn open_settings(app: AppHandle) {
-    windows::show_settings(&app);
+pub async fn dashboard_base(state: State<'_, AppState>) -> Result<String, String> {
+    state.live_server().await
 }

@@ -16,7 +16,9 @@
       // wrong background. The theme store takes over once the app mounts.
       (() => {
         try {
-          const saved = localStorage.getItem('una:theme');
+          // In the Una window (?embed) the page follows the system.
+          const embedded = new URLSearchParams(location.search).has('embed');
+          const saved = embedded ? 'system' : localStorage.getItem('una:theme');
           const dark =
             saved === 'dark' ||
             ((saved === 'system' || saved === null) &&
