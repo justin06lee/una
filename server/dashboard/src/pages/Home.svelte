@@ -448,7 +448,7 @@
                               Cancel
                             </button>
                             <button
-                              class="btn btn-sm !border-transparent !bg-[var(--danger)] !text-white"
+                              class="btn btn-sm btn-primary"
                               onclick={() => void remove(item.id)}
                             >
                               Delete for good

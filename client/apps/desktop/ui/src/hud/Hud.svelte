@@ -264,14 +264,14 @@
     padding: 0 14px 0 15px;
   }
 
-  /* The one spot of colour while listening: a steady red "on air" dot. */
+  /* "On air": a breathing white dot. No colour anywhere in the app. */
   .live {
     width: 7px;
     height: 7px;
     flex: none;
     border-radius: 50%;
-    background: #ff453a;
-    box-shadow: 0 0 8px rgba(255, 69, 58, 0.55);
+    background: #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
     animation: breathe 1.6s ease-in-out infinite;
   }
 
@@ -337,7 +337,7 @@
   .pill.done {
     width: 80px;
     height: 32px;
-    border-color: rgba(74, 222, 128, 0.4);
+    border-color: rgba(255, 255, 255, 0.4);
     animation: pulse 0.7s ease-out;
   }
 
@@ -345,7 +345,7 @@
     width: 17px;
     height: 17px;
     flex: none;
-    color: #4ade80;
+    color: #ffffff;
   }
 
   .check path {
@@ -364,12 +364,12 @@
     0% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 0 rgba(74, 222, 128, 0.45);
+        0 0 0 0 rgba(255, 255, 255, 0.35);
     }
     100% {
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.35),
-        0 0 0 14px rgba(74, 222, 128, 0);
+        0 0 0 14px rgba(255, 255, 255, 0);
     }
   }
 
@@ -378,8 +378,7 @@
     width: 356px;
     height: 44px;
     padding: 0 10px 0 16px;
-    background: rgba(38, 14, 14, 0.88);
-    border-color: rgba(248, 113, 113, 0.45);
+    border-color: rgba(255, 255, 255, 0.4);
     animation: shake 0.35s ease;
   }
 
@@ -387,7 +386,7 @@
     width: 17px;
     height: 17px;
     flex: none;
-    color: #f87171;
+    color: #ffffff;
   }
 
   .msg {

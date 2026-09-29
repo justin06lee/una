@@ -1,7 +1,7 @@
 /**
  * Shared design tokens for the desktop client. The names and values mirror
- * the server dashboard's app.css: true neutrals with no brand hue, colour
- * reserved for meaning (green ok, amber attention, red errors), and primary
+ * the server dashboard's app.css: true neutrals with no hue at all, status
+ * included (a filled dot is fine, a ring wants attention), and primary
  * actions drawn as the inverse of the canvas.
  *
  * The client follows the operating system's colour scheme rather than offering
@@ -28,11 +28,13 @@
   --on-inverse: #ffffff;
   --knob: #ffffff;
 
-  --ok: #16a34a;
-  --warn: #d97706;
-  --warn-soft: #fffbeb;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
+  /* No colour, even for status: these are the ink, and meaning is carried by
+     shape and weight. */
+  --ok: var(--fg);
+  --warn: var(--fg);
+  --warn-soft: var(--subtle);
+  --danger: var(--fg);
+  --danger-soft: var(--subtle);
 
   --radius-sm: 6px;
   --radius: 8px;
@@ -63,11 +65,11 @@
     --on-inverse: #0a0a0a;
     --knob: #a1a1a1;
 
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --warn-soft: #231c0b;
-    --danger: #f87171;
-    --danger-soft: #2a1515;
+    --ok: var(--fg);
+    --warn: var(--fg);
+    --warn-soft: var(--subtle);
+    --danger: var(--fg);
+    --danger-soft: var(--subtle);
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
 
