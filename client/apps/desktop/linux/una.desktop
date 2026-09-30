@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Una
+GenericName=Dictation
+Comment=Hold a key, speak, and the text lands in the focused app
+Exec=@BIN@
+Icon=sh.tenet.una
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=dictation;speech;voice;transcribe;whisper;
+StartupNotify=false
+StartupWMClass=una-desktop

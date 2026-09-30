@@ -4,12 +4,19 @@
   import Icon from "../../lib/Icon.svelte";
   import Keycap from "../../lib/Keycap.svelte";
   import KeyboardRow from "../../lib/KeyboardRow.svelte";
-  import { capsFor, FN_KEYCODES, MODIFIER_KEYCODES, parseNative, spoken } from "../../lib/keycaps";
+  import {
+    capsFor,
+    FN_KEYCODES,
+    IS_MAC,
+    MODIFIER_KEYCODES,
+    parseNative,
+    spoken,
+  } from "../../lib/keycaps";
   import type { CapturedHotkey, Config } from "../../lib/types";
 
   let { config = $bindable(), save }: { config: Config; save: () => void } = $props();
 
-  let captureSupported = $state(false); // native event-tap capture available (macOS)
+  let captureSupported = $state(false); // native key capture (macOS, or Linux on X11)
   let capturing = $state(false);
   let recordingHotkey = $state(false); // JS combo recorder, where native capture is missing
   let captureError = $state("");
@@ -207,15 +214,16 @@
 
   <p class="hint">
     {#if captureSupported}
-      Click a key, or Change to record any other key or a combination. Left and right ⌘ and ⌥ are
-      separate keys: bind one and the other works as usual.
+      Click a key, or Change to record any other key or a combination. Left and right
+      {IS_MAC ? "⌘ and ⌥" : "Ctrl, Alt and Super"} are separate keys: bind one and the other works
+      as usual.
       {#if boundModifier}
         <br />{capitalized(keyName)} still works in shortcuts. Press another key while holding it
         and una drops that recording.
       {/if}
     {:else}
-      This platform records modifier + key combinations. Single bare keys like fn or right ⌘ are
-      a macOS feature. Esc cancels.
+      This session records modifier + key combinations. Single bare keys like right Ctrl need
+      macOS or an X11 session. Esc cancels.
     {/if}
   </p>
 
@@ -239,7 +247,7 @@
     <div class="note warn">
       <span class="dot warn"></span>
       <span>
-        The saved hotkey “{keyName}” is a macOS-only key and does nothing here. Record a
+        The saved hotkey “{keyName}” is a single key, which this session can't hear. Record a
         combination above, or use a compositor keybind (below).
       </span>
     </div>

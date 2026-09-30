@@ -1,8 +1,7 @@
 //! X11 paste via the XTEST extension (x11rb).
 //!
-//! Unverified on this development machine (written on macOS); the keycode
-//! resolution scans the server keymap for the keysyms instead of hardcoding
-//! keycodes.
+//! The keycode resolution scans the server keymap for the keysyms instead of
+//! hardcoding keycodes.
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xtest::ConnectionExt as XTestExt;
@@ -16,7 +15,24 @@ const KEY_RELEASE: u8 = 3;
 // X11 keysyms.
 const XK_V_LOWER: u32 = 0x0076;
 const XK_CONTROL_L: u32 = 0xffe3;
+const XK_CONTROL_R: u32 = 0xffe4;
 const XK_SHIFT_L: u32 = 0xffe1;
+const XK_SHIFT_R: u32 = 0xffe2;
+
+/// The first of `keysyms` whose key isn't the single-key hotkey: with Left
+/// Ctrl bound, a paste pressing Left Ctrl would start the next dictation.
+fn modifier_keycode(conn: &impl Connection, keysyms: [u32; 2]) -> Result<u8, InjectError> {
+    let bound = super::keytap::bound_keycode();
+    let mut first = None;
+    for keysym in keysyms {
+        match keycode_for_keysym(conn, keysym) {
+            Ok(kc) if Some(kc) != bound => return Ok(kc),
+            Ok(kc) => first = first.or(Some(kc)),
+            Err(_) => {}
+        }
+    }
+    first.ok_or_else(|| InjectError::Keystroke(format!("no keycode maps keysym {:#x}", keysyms[0])))
+}
 
 fn keycode_for_keysym(conn: &impl Connection, keysym: u32) -> Result<u8, InjectError> {
     let setup = conn.setup();
@@ -38,9 +54,16 @@ fn keycode_for_keysym(conn: &impl Connection, keysym: u32) -> Result<u8, InjectE
     )))
 }
 
+/// A gap between synthesized key events, as xdotool leaves: some toolkits
+/// drop a chord whose events all arrive at once.
+const KEY_GAP: std::time::Duration = std::time::Duration::from_millis(12);
+
 fn fake_key(conn: &impl Connection, kind: u8, keycode: u8) -> Result<(), InjectError> {
     conn.xtest_fake_input(kind, keycode, x11rb::CURRENT_TIME, x11rb::NONE, 0, 0, 0)
         .map_err(|e| InjectError::Keystroke(format!("xtest_fake_input: {e}")))?;
+    conn.flush()
+        .map_err(|e| InjectError::Keystroke(format!("flush: {e}")))?;
+    std::thread::sleep(KEY_GAP);
     Ok(())
 }
 
@@ -85,10 +108,10 @@ pub fn paste(chord: PasteChord) -> Result<(), InjectError> {
     let (conn, _screen) = x11rb::connect(None)
         .map_err(|e| InjectError::Unavailable(format!("could not connect to X server: {e}")))?;
 
-    let ctrl = keycode_for_keysym(&conn, XK_CONTROL_L)?;
+    let ctrl = modifier_keycode(&conn, [XK_CONTROL_L, XK_CONTROL_R])?;
     let v = keycode_for_keysym(&conn, XK_V_LOWER)?;
     let shift = if chord.shift {
-        Some(keycode_for_keysym(&conn, XK_SHIFT_L)?)
+        Some(modifier_keycode(&conn, [XK_SHIFT_L, XK_SHIFT_R])?)
     } else {
         None
     };
@@ -103,7 +126,11 @@ pub fn paste(chord: PasteChord) -> Result<(), InjectError> {
         fake_key(&conn, KEY_RELEASE, shift)?;
     }
     fake_key(&conn, KEY_RELEASE, ctrl)?;
-    conn.flush()
-        .map_err(|e| InjectError::Keystroke(format!("flush: {e}")))?;
+    // A round trip before the connection goes away, so the server has
+    // processed every event this client sent.
+    x11rb::protocol::xproto::ConnectionExt::get_input_focus(&conn)
+        .map_err(|e| InjectError::Keystroke(format!("sync: {e}")))?
+        .reply()
+        .map_err(|e| InjectError::Keystroke(format!("sync: {e}")))?;
     Ok(())
 }

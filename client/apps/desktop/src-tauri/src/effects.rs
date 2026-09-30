@@ -101,6 +101,7 @@ impl EffectRunner for TauriEffects {
                     .flatten();
 
             let request = DictationRequest::new(wav, app_name);
+            let sent = Instant::now();
             let mut result = api.dictate(&base, &request).await;
 
             // A transport failure usually means the cached endpoint is no
@@ -120,6 +121,10 @@ impl EffectRunner for TauriEffects {
 
             match result {
                 Ok(resp) => {
+                    tracing::info!(
+                        "dictation transcribed by {base} in {} ms",
+                        sent.elapsed().as_millis()
+                    );
                     // A retried dictation just landed; drop its spool entry.
                     match una_core::spool::remove_latest_if_matches(&request.wav) {
                         Ok(true) => tracing::debug!("removed spooled retry after success"),
@@ -193,7 +198,8 @@ impl EffectRunner for TauriEffects {
                 paste_combo,
             };
             match injector().inject(&text, &opts) {
-                Ok(_outcome) => {
+                Ok(outcome) => {
+                    tracing::info!("inserted {} chars: {outcome:?}", text.chars().count());
                     // The text is in front of the user now: start watching for
                     // the edits that make it a training pair.
                     if let Some(id) = dictation_id_for(&app, &text) {
@@ -205,6 +211,7 @@ impl EffectRunner for TauriEffects {
                     });
                 }
                 Err(e) => {
+                    tracing::warn!("could not insert the dictation: {e}");
                     controller.event(Event::InsertErr {
                         session,
                         message: e.to_string(),

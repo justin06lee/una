@@ -11,12 +11,18 @@ CLI_BIN   := target/release/una
 PREFIX    := $(shell if [ -w /usr/local/bin ]; then echo /usr/local/bin; else echo $$HOME/.local/bin; fi)
 UI_DIR    := apps/desktop/ui
 UNAME_S   := $(shell uname -s)
+# Linux: where the launcher and its icons go, so Una shows up in the app grid.
+DATA_HOME := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)
+DESKTOP_ID := $(BUNDLE_ID)
 
-.PHONY: all build install update ui tauri-cli reset-permissions stop launch clean icons
+.PHONY: all build install update ui tauri-cli reset-permissions stop launch clean icons linux-desktop-entry
 
 all: build
 ifeq ($(UNAME_S),Darwin)
 	$(MAKE) reset-permissions
+else
+	# A running Una would keep the old build: `git pull && make` restarts it.
+	$(MAKE) stop
 endif
 	$(MAKE) install
 	$(MAKE) launch
@@ -25,12 +31,17 @@ endif
 # the dmg keeps the golden path from re-running hdiutil on every rebuild.
 # Linking is fat-LTO'd, so the last cargo step sits at 100% for a while — that
 # is the linker working, not a hang.
+# On Linux, cargo builds the binary alone. It needs tauri's custom-protocol
+# feature, which `tauri build` adds on macOS: without it the windows look for
+# the Vite dev server instead of the built pages. (The tauri CLI itself isn't
+# used here: it sets up a file watcher and fails once a busy machine is out of
+# inotify instances.)
 build: ui
 ifeq ($(UNAME_S),Darwin)
 	$(MAKE) tauri-cli
 	cargo tauri build --bundles app
 else
-	cargo build --release -p una-desktop
+	cargo build --release -p una-desktop --features tauri/custom-protocol
 endif
 	cargo build --release -p una-cli
 
@@ -53,9 +64,24 @@ ifeq ($(UNAME_S),Darwin)
 	fi
 else
 	install -m 755 target/release/una-desktop $(PREFIX)/una-desktop
+	$(MAKE) linux-desktop-entry
 endif
 	install -m 755 $(CLI_BIN) $(PREFIX)/una
 	@echo "installed $(PREFIX)/una"
+
+# The app-grid launcher and its icons, under ~/.local/share (no root needed).
+ICON_SRC := apps/desktop/src-tauri/icons
+linux-desktop-entry:
+	@mkdir -p $(DATA_HOME)/applications
+	sed 's|@BIN@|$(PREFIX)/una-desktop|' apps/desktop/linux/una.desktop \
+		> $(DATA_HOME)/applications/$(DESKTOP_ID).desktop
+	for s in 32 64 128 256; do \
+		install -Dm644 $(ICON_SRC)/$${s}x$${s}.png $(DATA_HOME)/icons/hicolor/$${s}x$${s}/apps/$(DESKTOP_ID).png; \
+	done
+	install -Dm644 $(ICON_SRC)/icon.png $(DATA_HOME)/icons/hicolor/512x512/apps/$(DESKTOP_ID).png
+	-update-desktop-database -q $(DATA_HOME)/applications 2>/dev/null
+	-gtk-update-icon-cache -q -t $(DATA_HOME)/icons/hicolor 2>/dev/null
+	@echo "installed $(DATA_HOME)/applications/$(DESKTOP_ID).desktop"
 
 update: stop
 ifeq ($(UNAME_S),Darwin)
@@ -86,7 +112,12 @@ ifeq ($(UNAME_S),Darwin)
 	@if [ -d "/Applications/$(APP).app" ]; then open "/Applications/$(APP).app"; \
 	else ./target/release/una-desktop & fi
 else
-	@echo "run: una-desktop (or set up an autostart entry)"
+	@if [ -n "$$DISPLAY$$WAYLAND_DISPLAY" ]; then \
+		setsid -f $(PREFIX)/una-desktop >/dev/null 2>&1 </dev/null; \
+		echo "launched $(PREFIX)/una-desktop"; \
+	else \
+		echo "no display here: open Una from the app grid"; \
+	fi
 endif
 
 # Rasterise the icon SVGs into every PNG/ICNS the bundle and tray load. The
@@ -99,6 +130,8 @@ icons:
 	cp $(ICON_DIR)/256x256.png $(ICON_DIR)/128x128@2x.png
 	rsvg-convert -w 512 -h 512 $(ICON_DIR)/icon.svg -o $(ICON_DIR)/icon.png
 	rsvg-convert -w 44 -h 44 $(ICON_DIR)/tray.svg -o $(ICON_DIR)/tray.png
+	# Linux panels draw the tray icon untinted, on a dark bar: a white copy.
+	sed 's/#000000/#ffffff/' $(ICON_DIR)/tray.svg | rsvg-convert -w 44 -h 44 -o $(ICON_DIR)/tray-light.png
 	# Opaque art comes out RGB; tauri's bundle icons must be RGBA.
 	python3 scripts/png_rgba.py $(ICON_DIR)/32x32.png $(ICON_DIR)/64x64.png \
 		$(ICON_DIR)/128x128.png $(ICON_DIR)/128x128@2x.png $(ICON_DIR)/256x256.png \

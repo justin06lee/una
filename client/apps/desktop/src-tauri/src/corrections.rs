@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::UnboundedReceiver;
 use una_core::config::{Config, CorrectionConfig};
 use una_core::correction::{classify, Action, EditCounter, EditKey};
 use una_core::net::CorrectionRequest;
@@ -70,16 +70,48 @@ pub fn on_inserted(app: &AppHandle, dictation_id: String, inserted: String) {
         return;
     };
     let cfg = state.config_snapshot();
-    if !cfg.correction.enabled || !una_platform::supports_correction_capture() {
+    if !cfg.correction.enabled || inserted.trim().is_empty() {
         return;
     }
-    if inserted.trim().is_empty() {
+    if !una_platform::supports_correction_capture() {
+        // Nothing watches the text here, but the tray's Fix Last Dictation…
+        // still needs to know what was pasted.
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            remember_paste(&app, dictation_id, inserted, None).await;
+        });
         return;
     }
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         watch(app, generation, dictation_id, inserted, cfg).await;
+    });
+}
+
+/// Keep the paste past the watch window so a correction can still be made by
+/// hand. No span length: by the time the user goes to the menu the caret is
+/// long gone, so that path records the pair without rewriting anything.
+async fn remember_paste(
+    app: &AppHandle,
+    dictation_id: String,
+    inserted: String,
+    app_pid: Option<i32>,
+) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let app_name = tauri::async_runtime::spawn_blocking(|| una_platform::frontmost().current())
+        .await
+        .ok()
+        .flatten();
+    *state.recent_paste.lock().unwrap() = Some(Pending {
+        dictation_id,
+        inserted,
+        app_pid,
+        app_name,
+        span_len: None,
+        raw_text: None,
     });
 }
 
@@ -108,23 +140,7 @@ async fn watch(
     .await
     .unwrap_or((None, None));
 
-    // Kept past the watch window so a correction can still be made by hand.
-    // No span length: by the time the user goes to the menu the caret is long
-    // gone, so this path records the pair without rewriting anything.
-    if let Some(state) = app.try_state::<AppState>() {
-        let app_name = tauri::async_runtime::spawn_blocking(|| una_platform::frontmost().current())
-            .await
-            .ok()
-            .flatten();
-        *state.recent_paste.lock().unwrap() = Some(Pending {
-            dictation_id: dictation_id.clone(),
-            inserted: inserted.clone(),
-            app_pid: target_pid,
-            app_name,
-            span_len: None,
-            raw_text: None,
-        });
-    }
+    remember_paste(&app, dictation_id.clone(), inserted.clone(), target_pid).await;
 
     let Some(mut rx) = arm_watcher(&app) else {
         tracing::debug!("correction: no event tap available; not watching this paste");
@@ -443,7 +459,7 @@ fn arm_watcher(app: &AppHandle) -> Option<UnboundedReceiver<EditKey>> {
             return None;
         }
     };
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     tap.watch_edits(Box::new(move |class| {
         let key = match class {
             KeyClass::Insert => EditKey::Insert,

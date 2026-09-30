@@ -1,22 +1,22 @@
 # una desktop on Linux
 
-Status: the Linux code paths compile on x86_64 Linux (checked on Arch with
-webkit2gtk-4.1) but have **not been run against a live compositor yet**
-(development happens on macOS). Treat this as a build recipe plus the setup
-the code expects; issues are welcome.
+Status: runs on **Ubuntu 24.04 aarch64, GNOME on Xorg** (an NVIDIA Jetson Orin
+Nano): hotkey, recording, paste, tray, and the history, settings, review and
+fix windows. The Wayland paths below compile but are untested. Development
+happens on macOS, so build on Linux after touching Linux code.
 
 ## Build dependencies
 
 una is a tauri v2 app: it needs webkit2gtk 4.1 and a tray (appindicator)
 library, plus ALSA headers for audio. All of these are available on arm64
-(aarch64) as well as x86_64.
+(aarch64) as well as x86_64. You also need Rust and [bun](https://bun.sh).
 
 ### Debian / Ubuntu (incl. arm64)
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
   libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-  libasound2-dev
+  libasound2-dev pipewire-alsa
 ```
 
 ### Fedora
@@ -33,19 +33,88 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
   appmenu-gtk-module libappindicator-gtk3 librsvg alsa-lib
 ```
 
-### Build
+## Build and install
+
+From the repo root:
 
 ```sh
-cd client/apps/desktop/ui && bun install && bun run build && cd ../../..
-cargo build --release -p una-desktop -p una-cli
-# or, for .deb/.AppImage bundles: cargo tauri build
+make                # build → stop a running Una → install → launch
+git pull && make    # later: the same, so Una restarts on the new build
 ```
 
-## Text injection setup
+This builds the pages with bun and the app with
+`cargo build --release -p una-desktop --features tauri/custom-protocol` (without
+that feature the windows look for a Vite dev server and come up blank), then
+installs, without root:
 
-una inserts text by putting it on the clipboard and synthesizing a paste
-chord. On X11 this works out of the box (XTest). On Wayland a helper is
-required:
+- `una-desktop` and the `una` CLI into `/usr/local/bin` if you can write
+  there, otherwise `~/.local/bin`;
+- `~/.local/share/applications/sh.tenet.una.desktop` and its icons, so **Una**
+  is in the app grid.
+
+Launching Una opens its main window, the dictation history; **Settings** in
+it opens the app's own settings. Tray → **Launch at Login** adds it to
+`~/.config/autostart`. The app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for
+itself (WebKitGTK draws blank windows on NVIDIA/Tegra without it).
+
+## Which server
+
+The client needs a una server, and a small ARM board is a client, not a
+server: CTranslate2 (under faster-whisper) ships CPU-only wheels for aarch64,
+a Jetson comes without the CUDA toolkit, and large-v3-turbo plus an 8B cleanup
+model don't fit next to a desktop in 8 GB of shared memory. Point it at your
+GPU box in Settings → Server (LAN address plus a VPN/mesh one — see
+[remote-access.md](remote-access.md)).
+
+## Hotkey
+
+On X11 both kinds of hotkey work, with hold, toggle and hybrid modes:
+
+- **A key combination** (default `Ctrl+Alt+Space`), grabbed from the X server.
+- **A single key**, like the Mac's Fn: Settings → Hotkey, click Left/Right
+  Ctrl, Super or Alt in the keyboard row, or **Change** and press any key.
+  una listens to XInput2 raw key events, so a bound modifier still works as a
+  modifier (press another key within a second and that recording is dropped);
+  any other single key (F13, Pause, …) is grabbed and stops reaching apps.
+
+On Wayland neither is reliable; see the compositor keybinds below.
+
+## Pasting
+
+una puts the text on the clipboard and presses Ctrl+V with XTest, then puts
+your clipboard back. Terminals paste with Ctrl+Shift+V: GNOME Terminal,
+kitty, Alacritty, foot and Konsole are already listed in Settings → Pasting,
+matched against the window's class.
+
+## Tray
+
+The tray icon (white bars, for GNOME's dark top bar) needs an AppIndicator
+host: Ubuntu's GNOME has one on by default; elsewhere install the
+**AppIndicator and KStatusNotifierItem Support** extension
+(`gnome-shell-extension-appindicator`). Without one Una still runs: launch it
+again to bring up its window (a second launch hands over to the first), and
+the `una` CLI starts and stops dictation.
+
+## Microphone
+
+With the input device on **auto** una records from PipeWire (or PulseAudio),
+so it uses the microphone chosen in Settings → Sound → Input. ALSA's own
+`default` device can be a bare sound card that hears nothing (on a Jetson it
+is the SoC's I2S interface), which is why auto skips it.
+
+## What's different from macOS
+
+- **Silently learning from your edits** needs the macOS accessibility API;
+  on Linux una doesn't watch the pasted text. Tray → **Fix Last Dictation…**
+  opens the fix window for the last paste whenever you want it.
+- **Fix up** (Ctrl+J) runs through [yagami](https://github.com/justin06lee/yagami)
+  on this machine: install it (`bun add -g @justin06lee/yagami`) and sign in
+  to at least one agent CLI it drives (Claude Code, Codex, …).
+- Clipboard restore keeps plain text only.
+
+## Wayland: pasting setup
+
+On X11 pasting needs nothing (above). On Wayland a helper is required:
 
 ### ydotool (recommended — works on every compositor)
 
@@ -121,14 +190,6 @@ Neither exposes key-release custom shortcuts, so bind a toggle:
 - KDE: System Settings → Shortcuts → Add Command → `una toggle`.
 
 Press once to start, again to finish (identical to una's "toggle" mode).
-
-## GNOME tray note
-
-GNOME removed tray icons; install the **AppIndicator and KStatusNotifierItem
-Support** extension (`gnome-shell-extension-appindicator`) to see una's menu
-bar icon. Without it the app still runs — control it via the `una` CLI and
-the settings window (relaunch the binary to re-show settings; a second
-instance forwards to the first).
 
 ## Wayland limitations
 
