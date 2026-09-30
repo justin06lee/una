@@ -5,11 +5,13 @@
 //!
 //! - Combo strings ("Ctrl+Alt+Space") go to the tauri global-shortcut
 //!   plugin; its handler is installed at build time in main.rs.
-//! - "native:<keycode>:<Name>" bindings go to the macOS CGEventTap backend
-//!   (`una_platform::macos::eventtap`), which matches raw keycodes and so
-//!   supports single keys — including bare modifiers like Fn or Right ⌘ —
-//!   as push-to-talk keys. On Linux, native bindings are disabled with a
-//!   notice (the settings UI points at compositor keybinds + `una` CLI).
+//! - "native:<keycode>:<Name>" bindings go to the key tap
+//!   (`una_platform::hotkeys`: the CGEventTap on macOS, XInput2 raw keys on
+//!   X11), which matches raw keycodes and so supports single keys —
+//!   including bare modifiers like Fn, Right ⌘ or Right Ctrl — as
+//!   push-to-talk keys. Keycodes are the platform's own. Where there is no
+//!   tap (Wayland), native bindings are disabled with a notice (the settings
+//!   UI points at compositor keybinds + `una` CLI).
 //!
 //! [`apply`] tears down whatever was registered before applying the new
 //! binding, so live rebinds from the settings window need no restart.
@@ -20,21 +22,16 @@ use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use una_core::config::Binding;
 
-#[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex};
 
-#[cfg(target_os = "macos")]
 use tauri::Manager;
-#[cfg(target_os = "macos")]
 use una_core::state::Command;
-#[cfg(target_os = "macos")]
-use una_platform::macos::eventtap::{EventTap, HotkeyEdge};
+use una_platform::hotkeys::{HotkeyEdge, KeyTap};
 
-/// The lazily-created, process-wide event tap (macOS only). Created on first
-/// use — a native binding or a capture request — never before, so users on
-/// combo bindings pay nothing.
-#[cfg(target_os = "macos")]
-static EVENT_TAP: Mutex<Option<Arc<EventTap>>> = Mutex::new(None);
+/// The lazily-created, process-wide key tap. Created on first use — a native
+/// binding or a capture request — never before, so users on combo bindings
+/// pay nothing.
+static KEY_TAP: Mutex<Option<Arc<KeyTap>>> = Mutex::new(None);
 
 /// Parse a combo string like "Ctrl+Alt+Space" into a plugin Shortcut.
 pub fn parse_combo(combo: &str) -> Result<Shortcut, String> {
@@ -72,10 +69,22 @@ pub fn canonical_binding(binding: &str) -> String {
     binding.to_string()
 }
 
-/// Get or create the shared event tap, wiring key edges to the controller.
-#[cfg(target_os = "macos")]
-pub fn ensure_tap(app: &AppHandle) -> Result<Arc<EventTap>, String> {
-    let mut guard = EVENT_TAP.lock().unwrap();
+/// Whether single keys can be bound here: always on macOS, on Linux only in
+/// an X11 session (Wayland shows apps no keys but their own).
+pub fn native_supported() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        una_platform::linux::detect::session_kind() == una_platform::linux::SessionKind::X11
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        true
+    }
+}
+
+/// Get or create the shared key tap, wiring key edges to the controller.
+pub fn ensure_tap(app: &AppHandle) -> Result<Arc<KeyTap>, String> {
+    let mut guard = KEY_TAP.lock().unwrap();
     if let Some(tap) = guard.as_ref() {
         return Ok(tap.clone());
     }
@@ -83,7 +92,7 @@ pub fn ensure_tap(app: &AppHandle) -> Result<Arc<EventTap>, String> {
         .try_state::<crate::app_state::AppState>()
         .ok_or_else(|| "app state not ready".to_string())?;
     let controller = state.controller.clone();
-    let tap = EventTap::spawn(Box::new(move |edge| {
+    let tap = KeyTap::spawn(Box::new(move |edge| {
         controller.command(match edge {
             HotkeyEdge::Down => Command::HotkeyDown,
             HotkeyEdge::Up => Command::HotkeyUp,
@@ -96,9 +105,8 @@ pub fn ensure_tap(app: &AppHandle) -> Result<Arc<EventTap>, String> {
 }
 
 /// Abort a pending capture, if any.
-#[cfg(target_os = "macos")]
 pub fn cancel_capture() {
-    if let Some(tap) = EVENT_TAP.lock().unwrap().as_ref() {
+    if let Some(tap) = KEY_TAP.lock().unwrap().as_ref() {
         tap.cancel_capture();
     }
 }
@@ -108,8 +116,7 @@ pub fn apply(app: &AppHandle, binding: &str) -> Result<(), String> {
     let parsed = Binding::parse(binding).map_err(|e| e.to_string())?;
     let gs = app.global_shortcut();
     gs.unregister_all().map_err(|e| e.to_string())?;
-    #[cfg(target_os = "macos")]
-    if let Some(tap) = EVENT_TAP.lock().unwrap().as_ref() {
+    if let Some(tap) = KEY_TAP.lock().unwrap().as_ref() {
         tap.set_binding(None);
     }
 
@@ -120,17 +127,14 @@ pub fn apply(app: &AppHandle, binding: &str) -> Result<(), String> {
             tracing::info!("registered global hotkey {combo}");
         }
         Binding::Native { keycode, name } => {
-            #[cfg(target_os = "macos")]
-            {
+            if native_supported() {
                 let tap = ensure_tap(app)?;
                 tap.set_binding(Some(keycode as u16));
-                tracing::info!("armed native event-tap hotkey {name} (keycode {keycode})");
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
+                tracing::info!("armed native hotkey {name} (keycode {keycode})");
+            } else {
                 tracing::warn!(
-                    "native hotkey binding {name:?} (keycode {keycode}) is not supported on \
-                     this platform; the hotkey is disabled. Use a key combo instead, or bind \
+                    "native hotkey binding {name:?} (keycode {keycode}) is not supported in \
+                     this session; the hotkey is disabled. Use a key combo instead, or bind \
                      a compositor shortcut to run `una toggle` / `una start` / `una stop`."
                 );
             }

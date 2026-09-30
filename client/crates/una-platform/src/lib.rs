@@ -12,6 +12,19 @@ pub mod macos;
 #[cfg(target_os = "linux")]
 pub mod linux;
 
+/// Single-key hotkeys (bare modifiers included) and the settings recorder's
+/// one-shot key capture: the macOS event tap, or XInput2 raw keys on X11.
+#[cfg(target_os = "macos")]
+pub mod hotkeys {
+    pub use crate::macos::eventtap::{
+        CaptureError, CapturedKey, EventTap as KeyTap, HotkeyEdge, SHORTCUT_WINDOW,
+    };
+}
+#[cfg(target_os = "linux")]
+pub mod hotkeys {
+    pub use crate::linux::keytap::{CaptureError, CapturedKey, HotkeyEdge, KeyTap, SHORTCUT_WINDOW};
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionState {

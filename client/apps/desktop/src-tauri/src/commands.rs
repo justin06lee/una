@@ -227,10 +227,10 @@ pub struct CapturedHotkey {
     pub is_native: bool,
 }
 
-/// Whether native single-key capture (the event-tap backend) exists here.
+/// Whether native single-key capture (the key-tap backend) exists here.
 #[tauri::command]
 pub fn hotkey_capture_supported() -> bool {
-    cfg!(target_os = "macos")
+    hotkey::native_supported()
 }
 
 /// Arm the event tap in one-shot mode and wait (up to 20s) for the next key
@@ -238,7 +238,13 @@ pub fn hotkey_capture_supported() -> bool {
 /// modifiers held resolves to the combo form when it is expressible.
 #[tauri::command]
 pub async fn capture_hotkey(app: AppHandle) -> Result<CapturedHotkey, String> {
-    #[cfg(target_os = "macos")]
+    if !hotkey::native_supported() {
+        return Err(
+            "Single-key capture needs macOS or an X11 session. Type a key combo instead, or \
+             bind a compositor shortcut to run `una toggle`."
+                .into(),
+        );
+    }
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt as _;
 
@@ -277,15 +283,6 @@ pub async fn capture_hotkey(app: AppHandle) -> Result<CapturedHotkey, String> {
             is_modifier: captured.is_modifier,
             is_native,
         })
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = app;
-        Err(
-            "Native key capture is only available on macOS. Type a key combo instead, or \
-             bind a compositor shortcut to run `una toggle`."
-                .into(),
-        )
     }
 }
 
@@ -333,7 +330,6 @@ pub fn open_keyboard_settings(app: AppHandle) -> Result<(), String> {
 /// Abort a pending capture_hotkey (it returns a \"cancelled\" error).
 #[tauri::command]
 pub fn cancel_hotkey_capture() {
-    #[cfg(target_os = "macos")]
     hotkey::cancel_capture();
 }
 
