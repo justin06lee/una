@@ -23,6 +23,8 @@
 //! correction window pops up over whatever the user was typing in, so it
 //! hands focus back to that app when it goes away.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use una_core::state::Snapshot;
 
@@ -45,6 +47,21 @@ pub const HUD_HEIGHT: f64 = 72.0;
 /// remaining visual offset (~8px) is CSS padding inside the webview.
 const HUD_BOTTOM_MARGIN: f64 = 0.0;
 
+/// Whether the HUD takes the cursor (only in the Error state, for Retry).
+static HUD_INTERACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// Make the HUD click-through, or not, as [`HUD_INTERACTIVE`] says. GTK can
+/// only shape a window that has been shown once — before that tao panics on
+/// the missing GdkWindow — so on Linux this waits until the HUD is up, and
+/// every show calls it again.
+fn apply_click_through(window: &WebviewWindow) {
+    #[cfg(target_os = "linux")]
+    if !window.is_visible().unwrap_or(false) {
+        return;
+    }
+    let _ = window.set_ignore_cursor_events(!HUD_INTERACTIVE.load(Ordering::SeqCst));
+}
+
 /// Create the HUD window. `pill` decides initial visibility.
 pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, HUD_LABEL, WebviewUrl::App("hud.html".into()))
@@ -56,7 +73,11 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
         .skip_taskbar(true)
         .focused(false)
         .visible(false)
-        .resizable(false)
+        // GTK sizes a non-resizable window to its content's natural size,
+        // and a WebKit view's is 200px tall: the HUD would come out 400x200
+        // with the pill hanging off the bottom of the screen. Frameless, it
+        // can't be resized by hand anyway.
+        .resizable(cfg!(target_os = "linux"))
         .maximizable(false)
         .minimizable(false)
         .closable(false)
@@ -64,7 +85,7 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
         .accept_first_mouse(true)
         .inner_size(HUD_WIDTH, HUD_HEIGHT)
         .build()?;
-    let _ = window.set_ignore_cursor_events(true);
+    apply_click_through(&window);
 
     // The pill sits at the very bottom edge, over the Dock area: raise it
     // above the Dock's window level or the Dock would cover it.
@@ -79,6 +100,7 @@ pub fn create_hud(app: &AppHandle, pill: bool) -> tauri::Result<WebviewWindow> {
     position_hud(app, &window);
     if pill {
         let _ = window.show();
+        apply_click_through(&window);
     }
     Ok(window)
 }
@@ -126,6 +148,7 @@ pub fn show_hud(app: &AppHandle) {
     };
     position_hud(app, &window);
     let _ = window.show();
+    apply_click_through(&window);
 }
 
 /// FSM HideHud effect: a no-op in pill mode (the pill just shrinks back to
@@ -147,6 +170,7 @@ pub fn apply_hud_mode(app: &AppHandle, pill: bool) {
     if pill {
         position_hud(app, &window);
         let _ = window.show();
+        apply_click_through(&window);
     } else {
         // Only hide immediately when idle; mid-dictation the FSM's next
         // HideHud effect takes care of it.
@@ -163,8 +187,9 @@ pub fn apply_hud_mode(app: &AppHandle, pill: bool) {
 /// Toggle click-through: the HUD accepts the cursor only in the Error state
 /// (for the Retry button).
 pub fn set_hud_interactive(app: &AppHandle, interactive: bool) {
+    HUD_INTERACTIVE.store(interactive, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window(HUD_LABEL) {
-        let _ = window.set_ignore_cursor_events(!interactive);
+        apply_click_through(&window);
     }
 }
 
@@ -181,8 +206,13 @@ fn position_hud(app: &AppHandle, window: &WebviewWindow) {
     let scale = monitor.scale_factor();
     let mpos = monitor.position();
     let msize = monitor.size();
-    let w = HUD_WIDTH * scale;
-    let h = HUD_HEIGHT * scale;
+    // The window's real size where the platform reports one: the pill is
+    // drawn at the bottom of the page, so the page's bottom edge is what
+    // must meet the screen's.
+    let (w, h) = match window.outer_size() {
+        Ok(size) if size.width > 0 && size.height > 0 => (size.width as f64, size.height as f64),
+        _ => (HUD_WIDTH * scale, HUD_HEIGHT * scale),
+    };
     let x = mpos.x as f64 + (msize.width as f64 - w) / 2.0;
     let y = mpos.y as f64 + msize.height as f64 - h - HUD_BOTTOM_MARGIN * scale;
     let _ = window.set_position(tauri::PhysicalPosition::new(
@@ -336,6 +366,7 @@ pub fn show_settings(app: &AppHandle) {
 /// The Dock icon was clicked. The always-on HUD pill counts as a visible
 /// window to macOS, so decide here: bring forward a correction, review,
 /// history or settings window that is already up, otherwise open the history.
+#[cfg(target_os = "macos")]
 pub fn reopen(app: &AppHandle) {
     let up = [
         CORRECTION_LABEL,

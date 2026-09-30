@@ -26,6 +26,14 @@ use app_state::AppState;
 const AUTOSTART_FLAG: &str = "--autostart";
 
 fn main() {
+    // WebKitGTK's DMA-BUF renderer draws blank or garbled windows on NVIDIA
+    // (Jetson/Tegra included) and on X servers without GBM. Set before any
+    // thread starts; a value the user already exported wins.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -71,11 +79,14 @@ fn main() {
                     wav: f.wav,
                     duration: f.duration,
                 }),
-                AudioResult::Failed { session, message } => controller.event(Event::AudioFailed {
-                    session,
-                    message,
-                    at: std::time::Instant::now(),
-                }),
+                AudioResult::Failed { session, message } => {
+                    tracing::warn!("recording failed: {message}");
+                    controller.event(Event::AudioFailed {
+                        session,
+                        message,
+                        at: std::time::Instant::now(),
+                    })
+                }
             }
         }),
     ));

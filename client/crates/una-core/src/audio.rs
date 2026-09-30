@@ -122,19 +122,37 @@ impl AudioEngine {
         self.levels.clone()
     }
 
-    /// Names of available input devices.
+    /// Names of available input devices, each once.
     pub fn input_devices() -> Vec<String> {
         let host = cpal::default_host();
         let mut names = Vec::new();
         if let Ok(devices) = host.input_devices() {
             for d in devices {
+                if !listable(&d) {
+                    continue;
+                }
                 if let Some(name) = device_name(&d) {
-                    names.push(name);
+                    if !names.contains(&name) {
+                        names.push(name);
+                    }
                 }
             }
         }
         names
     }
+}
+
+/// ALSA also lists every card's raw, plug and mixing devices, many under the
+/// same name; opened directly they go around (and fight) the sound server.
+/// Offer the named devices — the sound server's own among them.
+#[cfg(target_os = "linux")]
+fn listable(d: &cpal::Device) -> bool {
+    d.id().is_ok_and(|id| !id.id().contains(':') && id.id() != "null")
+}
+
+#[cfg(not(target_os = "linux"))]
+fn listable(_: &cpal::Device) -> bool {
+    true
 }
 
 impl Drop for AudioEngine {
@@ -192,8 +210,17 @@ fn worker(
         match cmd {
             Cmd::Start { session } => {
                 if active.is_none() {
+                    let opened = Instant::now();
                     match build_stream(&settings, &level_tx, &self_tx) {
-                        Ok(a) => active = Some(a),
+                        Ok(a) => {
+                            tracing::debug!(
+                                "input stream ({} Hz, {} ch) open in {} ms",
+                                a.sample_rate,
+                                a.channels,
+                                opened.elapsed().as_millis()
+                            );
+                            active = Some(a);
+                        }
                         Err(e) => {
                             on_result(AudioResult::Failed {
                                 session,
@@ -307,7 +334,25 @@ fn pick_device(settings: &AudioSettings) -> Result<cpal::Device, String> {
         }
         // Configured device not present: fall through to auto behavior.
     }
-    if settings.prefer_builtin {
+    // On Linux ALSA's own "default" is whatever the distro wired it to (on a
+    // Jetson, the SoC's I2S card, which records silence), while the
+    // microphone picked in the desktop's sound settings lives in PipeWire or
+    // PulseAudio. Their ALSA plugins follow that choice, so auto means them.
+    #[cfg(target_os = "linux")]
+    if let Ok(devices) = host.input_devices() {
+        let mut devices: Vec<cpal::Device> = devices.collect();
+        for want in ["pipewire", "pulse"] {
+            if let Some(i) = devices
+                .iter()
+                .position(|d| d.id().is_ok_and(|id| id.id() == want))
+            {
+                return Ok(devices.swap_remove(i));
+            }
+        }
+    }
+    // "Built-in" names the Mac's own microphone; on Linux the sound server
+    // above already follows the desktop's choice.
+    if cfg!(target_os = "macos") && settings.prefer_builtin {
         if let Ok(devices) = host.input_devices() {
             for d in devices {
                 if let Some(name) = device_name(&d) {
@@ -329,6 +374,10 @@ fn build_stream(
     self_tx: &std_mpsc::Sender<Cmd>,
 ) -> Result<Active, String> {
     let device = pick_device(settings)?;
+    tracing::info!(
+        "recording from {}",
+        device_name(&device).unwrap_or_else(|| "an unnamed input".into())
+    );
     let supported = device
         .default_input_config()
         .map_err(|e| format!("no default input config: {e}"))?;

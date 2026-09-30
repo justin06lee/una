@@ -73,6 +73,10 @@ make dmg      # or: build a distributable dmg and reveal it in Finder
 make update   # refresh an installed client: stop → remove → build → install → relaunch
 ```
 
+On Linux (tested on Ubuntu 24.04 aarch64, GNOME on Xorg) the same `make` builds, installs
+`una-desktop` + `una` into `~/.local/bin` with an app-grid launcher, and launches it; build
+deps and what differs from macOS are in [docs/linux.md](docs/linux.md).
+
 First launch of a dmg-installed (unsigned) app: right-click → Open (or `xattr -cr /Applications/Una.app`).
 Dev loop instead: `make ui-build && make client-dev` (needs `cargo install tauri-cli --version '^2'`).
 

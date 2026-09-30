@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import Toggle from "../../lib/Toggle.svelte";
+  import { IS_MAC } from "../../lib/keycaps";
   import type { Config, LevelFrame, TestRecordResult } from "../../lib/types";
 
   let {
@@ -63,20 +64,23 @@
         {/each}
       </select>
     </div>
-    <div class="row">
-      <div class="row-copy">
-        <div class="row-title">Prefer the built-in microphone</div>
-        <div class="row-sub">Ignore headsets and AirPods in Automatic mode.</div>
+    <!-- "Built-in" is the Mac's own microphone; elsewhere Automatic follows the system. -->
+    {#if IS_MAC}
+      <div class="row">
+        <div class="row-copy">
+          <div class="row-title">Prefer the built-in microphone</div>
+          <div class="row-sub">Ignore headsets and AirPods in Automatic mode.</div>
+        </div>
+        <Toggle
+          checked={config.audio.prefer_builtin}
+          onchange={(v) => {
+            config.audio.prefer_builtin = v;
+            save();
+          }}
+          label="Prefer the built-in microphone"
+        />
       </div>
-      <Toggle
-        checked={config.audio.prefer_builtin}
-        onchange={(v) => {
-          config.audio.prefer_builtin = v;
-          save();
-        }}
-        label="Prefer the built-in microphone"
-      />
-    </div>
+    {/if}
   </div>
 </div>
 

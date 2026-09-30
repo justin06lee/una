@@ -1,19 +1,22 @@
 //! Linux implementation.
 //!
-//! NOTE: this module is written for Linux targets and cannot be
-//! compile-verified from the macOS development machine. It is deliberately
-//! kept simple; uncertain pieces are structured stubs returning
-//! `Unavailable` with TODO notes.
+//! Run on X11 (GNOME on Xorg, Ubuntu 24.04 aarch64); the Wayland paths are
+//! untested. The macOS development machine can't compile this module, so
+//! build it on Linux after changing it.
 //!
 //! Injection strategy:
 //! - X11: arboard clipboard + XTest Ctrl+V (or a per-app override chord).
 //! - Wayland: arboard clipboard + `ydotool` (if its socket exists), else
 //!   `wtype` (if in PATH), else clipboard-only.
+//!
+//! Single-key hotkeys (X11 only) are in [`keytap`].
 
 pub mod detect;
+pub mod keytap;
 pub mod wayland;
 pub mod x11;
 
+use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::{
@@ -38,17 +41,32 @@ impl PasteChord {
     }
 }
 
+/// One clipboard for the life of the process. On X11 the clipboard is only a
+/// promise: the app that owns the selection must stay around to answer the
+/// paste, and arboard stops answering once its last `Clipboard` is dropped
+/// (handing over to a clipboard manager if one takes it within 100ms). A
+/// clipboard made and dropped per paste left Ctrl+V pasting nothing.
+static CLIPBOARD: Mutex<Option<arboard::Clipboard>> = Mutex::new(None);
+
+fn with_clipboard<T>(
+    f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>,
+) -> Result<T, InjectError> {
+    let mut guard = CLIPBOARD.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_none() {
+        let cb = arboard::Clipboard::new()
+            .map_err(|e| InjectError::Clipboard(format!("clipboard unavailable: {e}")))?;
+        *guard = Some(cb);
+    }
+    let cb = guard.as_mut().expect("clipboard was just created");
+    f(cb).map_err(|e| InjectError::Clipboard(format!("clipboard: {e}")))
+}
+
 fn set_clipboard(text: &str) -> Result<(), InjectError> {
-    let mut cb = arboard::Clipboard::new()
-        .map_err(|e| InjectError::Clipboard(format!("clipboard unavailable: {e}")))?;
-    cb.set_text(text.to_string())
-        .map_err(|e| InjectError::Clipboard(format!("could not set clipboard: {e}")))?;
-    Ok(())
+    with_clipboard(|cb| cb.set_text(text.to_string()))
 }
 
 fn get_clipboard() -> Option<String> {
-    let mut cb = arboard::Clipboard::new().ok()?;
-    cb.get_text().ok()
+    with_clipboard(|cb| cb.get_text()).ok()
 }
 
 pub struct LinuxInjector {

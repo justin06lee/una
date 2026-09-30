@@ -212,7 +212,7 @@
         Cancel <span class="kbd">esc</span>
       </button>
       <button class="btn btn-primary" onclick={submit} disabled={busy || fixing || !canSubmit}>
-        Submit <span class="kbd">⌘↵</span>
+        Submit <span class="kbd">{isMac ? "⌘↵" : "Ctrl ↵"}</span>
       </button>
     </div>
   </footer>

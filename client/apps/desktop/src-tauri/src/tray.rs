@@ -53,7 +53,14 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 
     *state.tray_toggle.lock().unwrap() = Some(toggle);
 
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+    // macOS tints a black template image to suit the menu bar; a Linux
+    // panel (GNOME's is always dark) draws the icon as it is, so it gets the
+    // white one.
+    #[cfg(target_os = "macos")]
+    let png: &[u8] = include_bytes!("../icons/tray.png");
+    #[cfg(not(target_os = "macos"))]
+    let png: &[u8] = include_bytes!("../icons/tray-light.png");
+    let icon = tauri::image::Image::from_bytes(png)?;
     TrayIconBuilder::with_id("una-tray")
         .icon(icon)
         .icon_as_template(true)

@@ -26,6 +26,7 @@ pub fn spawn_forwarders(app: AppHandle) {
         loop {
             match snapshots.recv().await {
                 Ok(snapshot) => {
+                    tracing::debug!(?snapshot, "state");
                     let entered_done = {
                         let mut last = last_snapshot.lock().unwrap();
                         let was_done = matches!(*last, Snapshot::Done { .. });
