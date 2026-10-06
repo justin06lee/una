@@ -37,9 +37,8 @@ inside a window of the app. Its **Settings** item (or ⌘,) opens the app's own
 settings in their smaller window; **Server settings** below it are the server's.
 
 The tray's **Review Dictations…** goes through recent dictations one at a time,
-with both right answers already drafted by the server's teacher — what you said,
-word for word, and how you'd have written it — and the words its second listen
-heard differently shown as chips that play just that moment. Listen, press ⌘↵.
+with both right answers drafted from what una heard and what it pasted — what you
+said, word for word, and how you'd have written it. Listen, fix, press ⌘↵.
 See [docs/personal-model.md](../docs/personal-model.md).
 
 Both windows have **Fix up** (⌘J): once "what you said" is right, it rewrites it

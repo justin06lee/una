@@ -3,20 +3,34 @@
   import { listen } from "@tauri-apps/api/event";
   import { invoke } from "@tauri-apps/api/core";
   import type { LevelFrame, Snapshot } from "../lib/types";
+  import { LevelNormalizer } from "./level";
 
-  const BAR_COUNT = 34;
+  // The waveform: a fixed row of bars, drawn from the centre out. The pill
+  // springs open around it and clips it, so the bars appear from the middle.
+  const BAR_COUNT = 13;
+  const BAR_W = 3;
+  const BAR_GAP = 3;
+  const BARS_W = BAR_COUNT * BAR_W + (BAR_COUNT - 1) * BAR_GAP;
+  const BARS_H = 20;
+  const MID = (BAR_COUNT - 1) / 2;
 
   let snapshot = $state<Snapshot>({ state: "idle" });
   let canvas = $state<HTMLCanvasElement | null>(null);
-  let elapsed = $state("0:00");
 
   // 30Hz level data, interpolated at 60fps in the rAF loop below.
+  const normalizer = new LevelNormalizer();
   let targetLevel = 0;
-  const bars = new Float32Array(BAR_COUNT).fill(0.06);
+  const bars = new Float32Array(BAR_COUNT);
+  // A bell over the row: tall in the middle, dots at the ends.
+  const envelope = new Float32Array(BAR_COUNT);
+  const speeds = new Float32Array(BAR_COUNT);
   const phases = new Float32Array(BAR_COUNT);
-  for (let i = 0; i < BAR_COUNT; i++) phases[i] = Math.random() * Math.PI * 2;
+  for (let i = 0; i < BAR_COUNT; i++) {
+    envelope[i] = 0.22 + 0.78 * (0.5 + 0.5 * Math.cos((Math.PI * (i - MID)) / (MID + 1)));
+    speeds[i] = 5 + ((i * 7) % 5);
+    phases[i] = Math.random() * Math.PI * 2;
+  }
   let raf = 0;
-  let recStart = 0;
 
   const phase = $derived.by(() => {
     switch (snapshot.state) {
@@ -60,45 +74,25 @@
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+    if (canvas.width !== BARS_W * dpr || canvas.height !== BARS_H * dpr) {
+      canvas.width = BARS_W * dpr;
+      canvas.height = BARS_H * dpr;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    if (w <= 0 || h <= 0) return;
+    ctx.clearRect(0, 0, BARS_W, BARS_H);
 
-    const gap = 3;
-    // The pill animates open from 64px, so for the first frames the canvas is
-    // narrower than the gaps alone and the naive bar width goes negative —
-    // roundRect throws on a negative radius and the frame is lost. Clamp.
-    const barW = Math.max(0.5, (w - gap * (BAR_COUNT - 1)) / BAR_COUNT);
-    const now = performance.now();
-    const t = now / 1000;
-
-    // mm:ss timer (state writes are cheap; the string changes once/second).
-    const secs = Math.max(0, Math.floor((now - recStart) / 1000));
-    const next = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
-    if (next !== elapsed) elapsed = next;
-
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    const t = performance.now() / 1000;
     for (let i = 0; i < BAR_COUNT; i++) {
-      // Center-weighted target with per-bar noise; fast attack, slow decay.
-      const centerBias = 1 - Math.abs(i - (BAR_COUNT - 1) / 2) / (BAR_COUNT / 2);
-      const noise = 0.12 * Math.sin(t * (5 + (i % 5)) + phases[i]);
-      const target = Math.max(
-        0.06,
-        Math.min(1, targetLevel * (0.5 + 0.7 * centerBias) + noise * targetLevel),
-      );
-      const k = target > bars[i] ? 0.5 : 0.12;
-      bars[i] += (target - bars[i]) * k;
-      const bh = Math.max(2.5, bars[i] * h);
-      const x = i * (barW + gap);
-      const y = (h - bh) / 2;
+      // Each bar sways a little on its own, so the row reads as a waveform
+      // rather than a block; fast attack, slower release.
+      const sway = 0.68 + 0.32 * (0.5 + 0.5 * Math.sin(t * speeds[i] + phases[i]));
+      const target = targetLevel * envelope[i] * sway;
+      bars[i] += (target - bars[i]) * (target > bars[i] ? 0.45 : 0.14);
+      // At rest a bar is a dot; it brightens as it grows.
+      const bh = BAR_W + bars[i] * (BARS_H - BAR_W);
+      ctx.fillStyle = `rgba(255,255,255,${0.5 + 0.45 * Math.min(1, bars[i] * 3)})`;
       ctx.beginPath();
-      ctx.roundRect(x, y, barW, bh, barW / 2);
+      ctx.roundRect(i * (BAR_W + BAR_GAP), (BARS_H - bh) / 2, BAR_W, bh, BAR_W / 2);
       ctx.fill();
     }
   }
@@ -106,11 +100,14 @@
   // Only run the rAF loop while the waveform is on screen.
   $effect(() => {
     if (phase === "recording") {
-      recStart = performance.now();
-      elapsed = "0:00";
-      bars.fill(0.06);
+      normalizer.reset();
+      targetLevel = 0;
+      bars.fill(0);
       raf = requestAnimationFrame(draw);
-      return () => cancelAnimationFrame(raf);
+      return () => {
+        cancelAnimationFrame(raf);
+        normalizer.save();
+      };
     }
   });
 
@@ -123,8 +120,7 @@
       snapshot = e.payload;
     });
     const unlistenLevel = listen<LevelFrame>("audio-level", (e) => {
-      // Perceptual-ish scaling: mic RMS rarely exceeds ~0.3.
-      targetLevel = Math.min(1, Math.pow(e.payload.rms * 3.2, 0.8));
+      targetLevel = normalizer.push(e.payload.rms);
     });
     return () => {
       unlistenState.then((f) => f());
@@ -140,9 +136,12 @@
     title={snapshot.state === "error" ? snapshot.message : undefined}
   >
     {#if phase === "recording"}
-      <span class="live" aria-hidden="true"></span>
-      <canvas bind:this={canvas} class="bars"></canvas>
-      <span class="timer">{elapsed}</span>
+      <canvas
+        bind:this={canvas}
+        class="bars"
+        style:width="{BARS_W}px"
+        style:height="{BARS_H}px"
+      ></canvas>
     {:else if phase === "busy"}
       <div class="shimmer"></div>
     {:else if phase === "done"}
@@ -171,14 +170,6 @@
       {#if snapshot.state === "error" && snapshot.retryable}
         <button class="retry" onclick={retry}>Retry</button>
       {/if}
-    {:else}
-      <svg class="mini" viewBox="0 0 616 380" aria-hidden="true">
-        <rect x="0" y="0" width="84" height="380" rx="42"/>
-        <rect x="126" y="88" width="84" height="262" rx="42"/>
-        <rect x="252" y="170" width="112" height="150" rx="56"/>
-        <rect x="406" y="88" width="84" height="262" rx="42"/>
-        <rect x="532" y="0" width="84" height="380" rx="42"/>
-      </svg>
     {/if}
   </div>
 </div>
@@ -243,64 +234,29 @@
   }
 
   /* -------------------------------------------------------------- Idle */
-  /* The resting pill carries the app icon's bow, small and dimmed. */
+  /* At rest: a small, empty pill. */
   .pill.idle {
-    width: 56px;
-    height: 14px;
-    opacity: 0.9;
-  }
-
-  .mini {
-    width: 16px;
-    height: 9.9px;
-    flex: none;
-    fill: rgba(255, 255, 255, 0.6);
+    width: 40px;
+    height: 10px;
+    opacity: 0.85;
   }
 
   /* --------------------------------------------------------- Recording */
+  /* Just the waveform, centred. */
   .pill.recording {
-    width: 300px;
-    height: 40px;
-    padding: 0 14px 0 15px;
-  }
-
-  /* "On air": a breathing white dot. No colour anywhere in the app. */
-  .live {
-    width: 7px;
-    height: 7px;
-    flex: none;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
-    animation: breathe 1.6s ease-in-out infinite;
-  }
-
-  @keyframes breathe {
-    50% {
-      opacity: 0.55;
-    }
+    width: 96px;
+    height: 32px;
   }
 
   .bars {
-    width: 216px;
-    height: 28px;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .timer {
     flex: none;
-    font-size: 11.5px;
-    font-weight: 550;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.55);
   }
 
   /* -------------------------------------------- Transcribing/Inserting */
   .pill.busy {
-    width: 240px;
-    height: 34px;
-    padding: 0 16px;
+    width: 96px;
+    height: 32px;
+    padding: 0 18px;
   }
 
   .shimmer {
@@ -335,7 +291,7 @@
 
   /* -------------------------------------------------------------- Done */
   .pill.done {
-    width: 80px;
+    width: 64px;
     height: 32px;
     border-color: rgba(255, 255, 255, 0.4);
     animation: pulse 0.7s ease-out;
@@ -441,7 +397,6 @@
       animation: none;
     }
     .shimmer,
-    .live,
     .check path {
       animation: none;
     }

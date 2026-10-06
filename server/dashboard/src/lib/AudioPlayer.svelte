@@ -27,7 +27,6 @@
 
   export function toggle(): void {
     if (!el) return;
-    stopAt = null;
     if (el.paused) el.play().catch(() => {});
     else el.pause();
   }
@@ -35,17 +34,6 @@
   export function replay(): void {
     if (!el) return;
     el.currentTime = 0;
-    el.play().catch(() => {});
-  }
-
-  /** Where to stop when playing one stretch of the recording. */
-  let stopAt: number | null = null;
-
-  /** Play just [t0, t1] seconds, with a little room either side. */
-  export function playRange(t0: number, t1: number): void {
-    if (!el) return;
-    el.currentTime = Math.max(0, t0 - 0.35);
-    stopAt = t1 + 0.35;
     el.play().catch(() => {});
   }
 
@@ -97,10 +85,6 @@
   onended={() => (playing = false)}
   ontimeupdate={() => {
     if (!seeking && el) current = el.currentTime;
-    if (el && stopAt !== null && el.currentTime >= stopAt) {
-      el.pause();
-      stopAt = null;
-    }
   }}
   ondurationchange={() => {
     if (el && Number.isFinite(el.duration)) duration = el.duration;

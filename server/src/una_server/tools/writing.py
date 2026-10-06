@@ -1,14 +1,14 @@
 """Import your own writing as training data for the cleanup model.
 
     uv run python -m una_server.tools.writing --server http://tenet.local:8100 \\
-        --llm http://127.0.0.1:8787            # optional: back-translate here
+        --llm http://127.0.0.1:8787            # the default: a local yagami
 
 Reads what you have typed to coding agents on this machine — Claude Code and Codex
 histories — keeps what looks typed by you rather than pasted or generated, splits it into
-dictation-sized pieces, and uploads them to the una server. With --llm (an Anthropic
-Messages API endpoint, e.g. a local yagami) each piece is back-translated here into what
-Whisper would have heard had you said it; without it, the server's teacher does that
-once it has an LLM. Idempotent: pieces the server already has finished are skipped.
+dictation-sized pieces, and uploads them to the una server. Each piece is back-translated
+here, through --llm (an Anthropic Messages API endpoint, e.g. a local yagami), into what
+Whisper would have heard had you said it. Idempotent: pieces the server already has
+finished are skipped, and ones the LLM couldn't finish are tried again next time.
 
 `make import-writing` wraps this.
 """
@@ -232,16 +232,12 @@ async def main_async(args: argparse.Namespace) -> int:
     if not todo:
         return 0
 
-    pairs: dict[str, bt.Pair] = {}
-    if args.llm:
-        llm = Llm(args.llm, "", args.llm_model, timeout_s=300.0)
-        try:
-            pairs = await translate(llm, todo, calibration, batch=args.batch, parallel=args.parallel)
-        finally:
-            await llm.aclose()
-    totals = upload(
-        args.server, todo, pairs, args.llm_model if args.llm else None, replace=args.refresh
-    )
+    llm = Llm(args.llm, "", args.llm_model, timeout_s=300.0)
+    try:
+        pairs = await translate(llm, todo, calibration, batch=args.batch, parallel=args.parallel)
+    finally:
+        await llm.aclose()
+    totals = upload(args.server, todo, pairs, args.llm_model, replace=args.refresh)
     print(f"uploaded: {dict(totals)}")
     return 0
 
@@ -252,7 +248,10 @@ def main(argv: list[str] | None = None) -> int:
         "--server", default=os.environ.get("UNA_SERVER", "http://tenet.local:8100"),
         help="una server URL (default: $UNA_SERVER, else tenet.local)",
     )
-    parser.add_argument("--llm", default="", help="Messages API URL to back-translate with here")
+    parser.add_argument(
+        "--llm", default="http://127.0.0.1:8787",
+        help="Messages API URL to back-translate with (default: a local yagami)",
+    )
     parser.add_argument("--llm-model", default="claude-haiku-4-5")
     parser.add_argument(
         "--source", action="append", choices=sorted(SOURCES),

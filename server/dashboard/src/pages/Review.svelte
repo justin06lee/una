@@ -34,10 +34,6 @@
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   const dirty = $derived(item !== null && editor.trim() !== item.raw_text.trim());
-  /** The transcript editor starts from the teacher's reading rather than what una heard. */
-  const guessed = $derived(
-    !!item?.teacher?.literal_guess && item.teacher.literal_guess.trim() !== item.raw_text.trim(),
-  );
   const isMac = navigator.platform.toLowerCase().includes('mac');
 
   async function refreshBacklog(): Promise<void> {
@@ -53,13 +49,9 @@
     error = null;
     try {
       item = await api.reviewNext(after ?? undefined);
-      // The teacher's guesses, when there are any, are the drafts to confirm.
-      editor = item?.teacher?.literal_guess ?? item?.raw_text ?? '';
+      editor = item?.raw_text ?? '';
       polishEditor = item
-        ? (item.polished_text ??
-          item.teacher?.polished_guess ??
-          (item.cleanup_diverged ? null : item.cleaned_text) ??
-          item.raw_text)
+        ? (item.polished_text ?? (item.cleanup_diverged ? null : item.cleaned_text) ?? item.raw_text)
         : '';
       if (item === null) eligibility = await api.trainingEligibility();
     } catch (e) {
@@ -281,24 +273,6 @@
           <span class="label">What una heard</span>
           <span class="text-[12px] text-faint">Fix what was said, not what you wish you'd said</span>
         </div>
-        {#if item.teacher && item.teacher.disagreements.length > 0}
-          <div class="mb-2 flex flex-wrap items-center gap-1.5 text-[12px]">
-            <span class="text-faint">The second listen heard</span>
-            {#each item.teacher.disagreements as span, i (i)}
-              <button
-                type="button"
-                class="chip dispute cursor-pointer gap-1"
-                title="Play this moment"
-                onclick={() => span.t0 != null && player?.playRange(span.t0, span.t1 ?? span.t0 + 1)}
-              >
-                <span class="text-faint line-through">{item.raw_text.slice(span.start, span.end) || '—'}</span>
-                <span class="text-faint">→</span>
-                <span>{span.alt || '—'}</span>
-                <Icon name="play" size={9} />
-              </button>
-            {/each}
-          </div>
-        {/if}
         <textarea
           bind:this={textareaEl}
           bind:value={editor}
@@ -309,15 +283,6 @@
           aria-label="Transcript editor"
           onkeydown={onRawKeydown}
         ></textarea>
-
-        {#if guessed && editor.trim() === item.teacher?.literal_guess?.trim()}
-          <p class="mt-1 text-[12px] text-faint">
-            Pre-filled with Claude's reading of both listens ·
-            <button type="button" class="underline underline-offset-2 hover:text-fg" onclick={() => (editor = item?.raw_text ?? '')}>
-              use what una heard
-            </button>
-          </p>
-        {/if}
 
         {#if item.cleaned_text}
           <div class="mt-5">
@@ -412,12 +377,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  /* Disputed words need attention: a darker edge and a grey wash, since the
-     interface has no colour to spend on it. */
-  .dispute {
-    border-color: color-mix(in oklab, var(--fg) 40%, var(--line));
-    background: color-mix(in oklab, var(--fg) 7%, transparent);
-  }
-</style>

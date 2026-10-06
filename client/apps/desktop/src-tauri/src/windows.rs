@@ -309,7 +309,7 @@ pub fn return_focus(pid: Option<i32>) {
 }
 
 /// Create the review window: a regular window for going through recent
-/// dictations with the teacher's guesses. Kept alive and hidden between uses.
+/// dictations. Kept alive and hidden between uses.
 pub fn create_review(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let builder =
         WebviewWindowBuilder::new(app, REVIEW_LABEL, WebviewUrl::App("review.html".into()))

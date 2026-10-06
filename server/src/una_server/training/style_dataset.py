@@ -4,14 +4,13 @@ Pure stdlib so the runner (and tests) can build datasets without torch installed
 Each sample carries an app_name so training reconstructs the same system prompt the
 cleaner uses at inference time.
 
-Pairs come from three places, in decreasing order of trust:
+Pairs come from two places, in decreasing order of trust:
 
 - confirmed: a dictation's polished text as the user gave or confirmed it. The only
   source of held-out eval pairs once there are enough of them, and repeated in training.
 - writing:   the user's own writing, back-translated into what Whisper would have heard
   (training/backtranslate.py). Its frozen holdout stands in as the eval set until there
   are enough confirmed pairs.
-- silver:    the teacher's polished guess for dictations nobody has confirmed. Train only.
 
 Preference pairs for DPO come from confirmed polished texts that differ from what was
 pasted: the user's version is preferred over the model's.
@@ -38,14 +37,6 @@ FROM corrections c JOIN dictations d ON d.id = c.dictation_id
 WHERE c.polished_text IS NOT NULL AND d.deleted = 0 AND c.action != 'excluded'
 """
 
-SILVER_SQL = """
-SELECT d.raw_text, t.polished_guess, d.app_name
-FROM teacher_labels t JOIN dictations d ON d.id = t.dictation_id
-LEFT JOIN corrections c ON c.dictation_id = d.id
-WHERE t.polished_guess IS NOT NULL AND d.deleted = 0 AND d.eval_holdout = 0
-  AND c.polished_text IS NULL AND COALESCE(c.action, '') != 'excluded'
-"""
-
 WRITING_SQL = """
 SELECT id, spoken_text, target_text, app_name, eval_holdout FROM style_corpus
 WHERE spoken_text IS NOT NULL AND target_text IS NOT NULL
@@ -69,7 +60,7 @@ class StyleSample:
     raw_text: str
     polished_text: str
     app_name: str | None
-    origin: str = "confirmed"  # confirmed | writing | silver
+    origin: str = "confirmed"  # confirmed | writing
 
 
 @dataclass
@@ -141,7 +132,6 @@ def build_style_datasets(
     db: sqlite3.Connection,
     *,
     use_writing: bool = True,
-    use_silver: bool = True,
     gold_repeat: int = 1,
     augment: bool = False,
 ) -> StyleSplit:
@@ -165,14 +155,6 @@ def build_style_datasets(
                 spoken = disfluent(spoken, row["id"])
             sample = StyleSample(spoken, row["target_text"].strip(), row["app_name"], "writing")
             (split.writing_eval if row["eval_holdout"] else split.train).append(sample)
-
-    if use_silver:
-        for row in db.execute(SILVER_SQL):
-            raw = (row["raw_text"] or "").strip()
-            if raw:
-                split.train.append(
-                    StyleSample(raw, row["polished_guess"].strip(), row["app_name"], "silver")
-                )
 
     for row in db.execute(PREFERENCE_SQL):
         raw = (row["raw_text"] or "").strip()

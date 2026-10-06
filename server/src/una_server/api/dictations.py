@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Annotated
@@ -21,7 +20,6 @@ from ..schemas import (
     DictationResponse,
     DictationSummary,
     ReviewQueue,
-    TeacherLabel,
     Timings,
 )
 from ..services import storage
@@ -162,8 +160,6 @@ async def create_dictation(
     await state.db.commit()
     await _bump_hit_counts(state, phrases, result.text)
     state.last_dictation_at = time.monotonic()
-    if state.teacher is not None:
-        state.teacher.wake()
 
     final_text = cleanup.text if cleanup and cleanup.applied else result.text
     return DictationResponse(
@@ -198,12 +194,8 @@ def _summary(row) -> DictationSummary:
 
 LIST_SQL = """
 SELECT d.*, c.action AS review_action, c.corrected_text, c.polished_text, c.training_eligible,
-       c.eligibility_reason, c.source AS correction_source,
-       t.status AS teacher_status, t.second_text, t.second_model, t.disagreements_json,
-       t.literal_guess, t.polished_guess, t.llm_model AS teacher_llm_model,
-       t.llm_error AS teacher_llm_error, t.needs_review, t.error AS teacher_error
+       c.eligibility_reason, c.source AS correction_source
 FROM dictations d LEFT JOIN corrections c ON c.dictation_id = d.id
-LEFT JOIN teacher_labels t ON t.dictation_id = d.id
 WHERE d.deleted = 0
 """
 
@@ -245,28 +237,16 @@ async def list_dictations(
 
 @router.get("/review/queue", response_model=ReviewQueue)
 async def review_queue(state: State, limit: int = 20) -> ReviewQueue:
-    """Unreviewed dictations, most worth a look first.
-
-    Dictations the teacher flagged (the second pass heard something else, or the
-    guesses differ from what was pasted) come first, then ones it hasn't labeled
-    yet, then ones where every opinion agreed; newest first within each.
-    """
-    sql = LIST_SQL + UNREVIEWED + """
-        ORDER BY COALESCE(t.needs_review, 1) DESC, (t.dictation_id IS NULL) ASC, d.id DESC
-        LIMIT ?"""
+    """Unreviewed dictations, newest first."""
+    sql = LIST_SQL + UNREVIEWED + " ORDER BY d.id DESC LIMIT ?"
     async with state.db.execute(sql, (max(1, min(limit, 100)),)) as cur:
         rows = await cur.fetchall()
     async with state.db.execute(
-        "SELECT COUNT(*) AS pending, COALESCE(SUM(COALESCE(t.needs_review, 1)), 0) AS flagged "
-        "FROM dictations d LEFT JOIN corrections c ON c.dictation_id = d.id "
-        "LEFT JOIN teacher_labels t ON t.dictation_id = d.id WHERE d.deleted = 0" + UNREVIEWED
+        "SELECT COUNT(*) AS pending FROM dictations d "
+        "LEFT JOIN corrections c ON c.dictation_id = d.id WHERE d.deleted = 0" + UNREVIEWED
     ) as cur:
         counts = await cur.fetchone()
-    return ReviewQueue(
-        items=[_detail(row, state) for row in rows],
-        pending=counts["pending"],
-        needs_review=counts["flagged"],
-    )
+    return ReviewQueue(items=[_detail(row, state) for row in rows], pending=counts["pending"])
 
 
 @router.get("/review/next", response_model=DictationDetail | None)
@@ -302,24 +282,6 @@ def _detail(row, state: AppState) -> DictationDetail:
         eligibility_reason=row["eligibility_reason"],
         correction_source=row["correction_source"],
         eval_holdout=bool(row["eval_holdout"]),
-        teacher=_teacher(row),
-    )
-
-
-def _teacher(row) -> TeacherLabel | None:
-    if row["teacher_status"] is None:
-        return None
-    return TeacherLabel(
-        status=row["teacher_status"],
-        second_text=row["second_text"],
-        second_model=row["second_model"],
-        disagreements=json.loads(row["disagreements_json"] or "[]"),
-        literal_guess=row["literal_guess"],
-        polished_guess=row["polished_guess"],
-        llm_model=row["teacher_llm_model"],
-        llm_error=row["teacher_llm_error"],
-        needs_review=bool(row["needs_review"]),
-        error=row["teacher_error"],
     )
 
 

@@ -4,12 +4,9 @@
    * right answers already drafted — what was literally said (trains Whisper)
    * and how it should read (trains the cleanup model).
    *
-   * The drafts come from the server's teacher: a second, slower listen to the
-   * audio, and Claude reconciling the two transcripts. Words the two listens
-   * heard differently are listed above the transcript and play just that moment
-   * when clicked, so attention goes where the doubt is. Most of the time the
-   * review is: listen, press ⌘↵. Fix up (F, ⌘J) redoes the written version
-   * from the transcript once that is right.
+   * The drafts are what una heard and what it pasted (or your own earlier fix).
+   * Most of the time the review is: listen, press ⌘↵. Fix up (F, ⌘J) redoes the
+   * written version from the transcript once that is right.
    */
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
@@ -18,18 +15,6 @@
   import Icon from "../lib/Icon.svelte";
   import Mark from "../lib/Mark.svelte";
 
-  type Span = { start: number; end: number; alt: string; t0: number | null; t1: number | null };
-  type Teacher = {
-    status: "done" | "partial" | "failed";
-    second_text: string | null;
-    second_model: string | null;
-    disagreements: Span[];
-    literal_guess: string | null;
-    polished_guess: string | null;
-    llm_model: string | null;
-    llm_error: string | null;
-    needs_review: boolean;
-  };
   type Item = {
     id: string;
     created_at: string;
@@ -40,9 +25,8 @@
     cleanup_diverged?: boolean;
     polished_text: string | null;
     correction_source: string | null;
-    teacher: Teacher | null;
   };
-  type Queue = { items: Item[]; pending: number; needs_review: number };
+  type Queue = { items: Item[]; pending: number };
   type Saved = { training_eligible?: boolean; eligibility_reason?: string | null };
 
   const isMac = navigator.userAgent.includes("Mac");
@@ -50,7 +34,6 @@
 
   let items = $state<Item[]>([]);
   let pending = $state(0);
-  let flagged = $state(0);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -68,10 +51,7 @@
   let fixing = $state(false);
 
   const item = $derived(items[0] ?? null);
-  const literalDraft = $derived(item ? (item.teacher?.literal_guess ?? item.raw_text) : "");
-  const guessed = $derived(
-    !!item?.teacher?.literal_guess && item.teacher.literal_guess.trim() !== item.raw_text.trim(),
-  );
+  const literalDraft = $derived(item ? item.raw_text : "");
   const pasted = $derived(item ? (item.cleaned_text ?? item.raw_text) : "");
 
   /** What una pasted, unless that was a reply rather than a cleanup. */
@@ -86,8 +66,6 @@
   let current = $state(0);
   let duration = $state(0);
   let rate = $state(1);
-  /** When playing one disputed span, where to stop. */
-  let stopAt: number | null = null;
 
   async function loadAudio(id: string) {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -109,14 +87,12 @@
 
   function toggle() {
     if (!audio) return;
-    stopAt = null;
     if (audio.paused) void audio.play();
     else audio.pause();
   }
 
   function replay() {
     if (!audio) return;
-    stopAt = null;
     audio.currentTime = 0;
     void audio.play();
   }
@@ -126,27 +102,10 @@
     if (audio) audio.playbackRate = value;
   }
 
-  function playSpan(span: Span) {
-    if (!audio || span.t0 == null) return;
-    audio.currentTime = Math.max(0, span.t0 - 0.35);
-    stopAt = (span.t1 ?? span.t0 + 1) + 0.35;
-    void audio.play();
-  }
-
-  function onTime() {
-    if (!audio) return;
-    current = audio.currentTime;
-    if (stopAt !== null && current >= stopAt) {
-      audio.pause();
-      stopAt = null;
-    }
-  }
-
   function seek(event: MouseEvent) {
     if (!audio || !duration) return;
     const bar = event.currentTarget as HTMLElement;
     const rect = bar.getBoundingClientRect();
-    stopAt = null;
     audio.currentTime = ((event.clientX - rect.left) / rect.width) * duration;
   }
 
@@ -155,10 +114,8 @@
   // -- queue --------------------------------------------------------------------
 
   function prime(next: Item | null) {
-    literal = next ? (next.teacher?.literal_guess ?? next.raw_text) : "";
-    polished = next
-      ? (next.polished_text ?? next.teacher?.polished_guess ?? usableCleanup(next) ?? next.raw_text)
-      : "";
+    literal = next ? next.raw_text : "";
+    polished = next ? (next.polished_text ?? usableCleanup(next) ?? next.raw_text) : "";
     fixer?.reset();
     if (next) void loadAudio(next.id);
   }
@@ -170,7 +127,6 @@
       const queue = await invoke<Queue>("review_queue", { limit: 40 });
       items = queue.items.filter((i) => !skipped.has(i.id));
       pending = queue.pending;
-      flagged = queue.needs_review;
       prime(items[0] ?? null);
     } catch (e) {
       error = String(e);
@@ -211,7 +167,6 @@
     try {
       const saved = await invoke<Saved>("review_submit", args);
       pending = Math.max(0, pending - 1);
-      if (item.teacher?.needs_review) flagged = Math.max(0, flagged - 1);
       if (action === "exclude") say(true, "Excluded from training");
       else if (saved.training_eligible) say(true, "Saved · trains your voice and your style");
       else say(false, `Saved for style · ${saved.eligibility_reason ?? "not used for Whisper"}`);
@@ -298,7 +253,6 @@
       void load();
     });
     const closed = listen("review-closed", () => {
-      stopAt = null;
       audio?.pause();
     });
     return () => {
@@ -322,7 +276,7 @@
     <span class="title" data-tauri-drag-region><Mark size={18} /> Review dictations</span>
     {#if !loading && !error}
       <span class="count" data-tauri-drag-region>
-        {pending} left{#if flagged > 0}<span class="sep">·</span>{flagged} to check{/if}
+        {pending} left
       </span>
     {/if}
   </header>
@@ -348,11 +302,6 @@
         <span>{when(item.created_at)}</span><span>·</span>
         <span class="num">{fmt(item.duration_ms / 1000)}</span>
         <span class="chips">
-          {#if item.teacher?.needs_review}
-            <span class="chip warn"><span class="dot warn"></span>Worth a check</span>
-          {:else if item.teacher}
-            <span class="chip"><span class="dot ok"></span>Everything agreed</span>
-          {/if}
           {#if item.correction_source === "auto" || item.correction_source === "popup"}
             <span class="chip" title="Pre-filled with the fix you made after it was pasted">
               Your edit
@@ -387,7 +336,7 @@
             onplay={() => (playing = true)}
             onpause={() => (playing = false)}
             onended={() => (playing = false)}
-            ontimeupdate={onTime}
+            ontimeupdate={() => (current = audio?.currentTime ?? 0)}
             onloadedmetadata={() => (duration = audio?.duration ?? 0)}
           ></audio>
         {/if}
@@ -398,19 +347,6 @@
           <span class="label">What you said</span>
           <span class="hint">Word for word — ums and all. Trains your voice.</span>
         </div>
-        {#if item.teacher && item.teacher.disagreements.length > 0}
-          <div class="disputes">
-            <span class="hint">The second listen heard</span>
-            {#each item.teacher.disagreements as span, i (i)}
-              <button class="dispute" onclick={() => playSpan(span)} title="Play this moment">
-                <span class="was">{item.raw_text.slice(span.start, span.end) || "—"}</span>
-                <span class="arrow">→</span>
-                <span class="alt">{span.alt || "—"}</span>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.52.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5Z" /></svg>
-              </button>
-            {/each}
-          </div>
-        {/if}
         <textarea
           class="literal"
           bind:this={literalEl}
@@ -422,14 +358,9 @@
           aria-label="What you said"
         ></textarea>
         <div class="under">
-          {#if guessed && literal === literalDraft}
-            <span class="hint">Pre-filled with Claude's reading of both listens.</span>
-            <button class="link" onclick={() => (literal = item?.raw_text ?? "")}>Use what una heard</button>
-          {:else if literal !== literalDraft}
+          {#if literal !== literalDraft}
             <span class="hint">Edited.</span>
             <button class="link" onclick={() => (literal = literalDraft)}>Undo</button>
-          {:else if item.teacher?.status === "partial"}
-            <span class="hint">Claude hasn't weighed in on this one yet.</span>
           {/if}
           <FixUp
             from={literal}
@@ -521,9 +452,6 @@
     right: 16px;
     color: var(--faint);
     font-variant-numeric: tabular-nums;
-  }
-  .sep {
-    margin: 0 5px;
   }
 
   .body {
@@ -647,36 +575,6 @@
   .hint {
     font-size: 11.5px;
     color: var(--faint);
-  }
-
-  .disputes {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-  }
-  .dispute {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 22px;
-    padding: 0 8px;
-    border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--line));
-    border-radius: var(--radius-sm);
-    background: var(--warn-soft);
-    color: var(--fg);
-    font-size: 12px;
-  }
-  .dispute .was {
-    color: var(--muted);
-    text-decoration: line-through;
-    text-decoration-color: color-mix(in oklab, var(--muted) 60%, transparent);
-  }
-  .dispute .arrow {
-    color: var(--faint);
-  }
-  .dispute svg {
-    color: var(--muted);
   }
 
   textarea {

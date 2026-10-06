@@ -1,4 +1,4 @@
-"""Anthropic Messages API access for the teacher. Optional, and never on the dictation path.
+"""Anthropic Messages API access for the writing import tool. Never on the dictation path.
 
 Works against the real API with a key, or against yagami — a local server that fronts a
 signed-in Claude Code with the same API — so a Claude subscription can stand in for a key.

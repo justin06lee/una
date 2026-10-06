@@ -6,9 +6,7 @@ None of this needs torch or a live LLM.
 import json
 import sqlite3
 
-from una_server.config import CleanupConfig, TeacherConfig
 from una_server.db import MIGRATIONS_DIR
-from una_server.services.teacher import Teacher
 from una_server.tools import writing
 from una_server.training import backtranslate as bt
 from una_server.training.style_dataset import build_style_datasets
@@ -195,7 +193,7 @@ def _writing(conn, wid, spoken, target, holdout=0):
     )
 
 
-def test_dataset_mixes_confirmed_writing_and_silver_with_preferences():
+def test_dataset_mixes_confirmed_and_writing_with_preferences():
     conn = _db()
     _dictation(conn, "d1", "um fix the page", cleaned="Fix the page.")
     _correction(conn, "d1", "fix the page")  # differs from what was pasted -> a preference
@@ -203,21 +201,17 @@ def test_dataset_mixes_confirmed_writing_and_silver_with_preferences():
     _correction(conn, "d2", "Same thing.")  # identical to what was pasted -> no preference
     _dictation(conn, "d3", "held out", holdout=1)
     _correction(conn, "d3", "held out.")
-    _dictation(conn, "d4", "unconfirmed words")
-    conn.execute(
-        """INSERT INTO teacher_labels (dictation_id, status, polished_guess, created_at, updated_at)
-           VALUES ('d4', 'done', 'unconfirmed words', ?, ?)""", (TS, TS))
     _writing(conn, "w1", "Make it faster, please.", "make it faster pls")
     _writing(conn, "w2", "Um, ship it.", "ship it", holdout=1)
 
     split = build_style_datasets(conn, gold_repeat=2)
-    assert split.counts() == {"confirmed": 4, "writing": 1, "silver": 1}
+    assert split.counts() == {"confirmed": 4, "writing": 1}
     assert [s.polished_text for s in split.eval] == ["held out."]
     assert [s.polished_text for s in split.writing_eval] == ["ship it"]
     (pref,) = split.preferences
     assert (pref.chosen, pref.rejected, pref.origin) == ("fix the page", "Fix the page.", "edit")
 
-    bare = build_style_datasets(conn, use_writing=False, use_silver=False)
+    bare = build_style_datasets(conn, use_writing=False)
     assert bare.counts() == {"confirmed": 2}
     assert bare.writing_eval == []
 
@@ -247,7 +241,7 @@ def test_probe_gate_never_lets_a_candidate_answer_more():
     assert not ok and "reply probes" in reason
 
 
-# -- the teacher back-translates imported writing ----------------------------------------
+# -- the import tool back-translates writing ---------------------------------------------
 
 
 class FakeLlm:
@@ -263,28 +257,18 @@ class FakeLlm:
         pass
 
 
-async def test_teacher_backtranslates_pending_writing(client):
-    state = client.app.state.una
-    items = [
-        {"source": "claude-code", "app_name": "Claude Code", "written_text": "make it faster pls"},
-        {"source": "claude-code", "app_name": "Claude Code", "written_text": "ship it"},
+async def test_translate_keeps_only_the_pieces_the_llm_handled():
+    samples = [
+        writing.Sample("claude-code", "Claude Code", "make it faster pls"),
+        writing.Sample("claude-code", "Claude Code", "ship it"),
     ]
-    client.post("/v1/style/corpus", json={"items": items})
     key = bt.content_hash("make it faster pls")[:12]
-    teacher = Teacher(TeacherConfig(enabled=True, second_asr=False), CleanupConfig(), state.db, "en")
-    teacher.llm = FakeLlm([{"id": key, "target": "make it faster pls", "spoken": "Make it faster, please."}])
-    state.teacher = teacher
+    llm = FakeLlm([{"id": key, "target": "make it faster pls", "spoken": "Make it faster, please."}])
 
-    assert await teacher.tick()
-    stats = client.get("/v1/style/corpus/stats").json()
-    assert stats == {"samples": 2, "finished": 1, "holdout": stats["holdout"]}
-    # the one the LLM left out is marked, not retried forever
-    assert not await teacher.tick()
-
-    # finished writing now shows up as style examples for apps with the same tone
-    examples = await teacher.examples("nope", "Alacritty")
-    assert [e.wrote for e in examples if e.said is None] == ["make it faster pls"]
-    assert await teacher.examples("nope", "Mail") == []
+    pairs = await writing.translate(llm, samples, [], batch=8, parallel=1)
+    assert list(pairs) == [key]
+    assert (pairs[key].target, pairs[key].spoken) == ("make it faster pls", "Make it faster, please.")
+    assert len(llm.prompts) == 1
 
 
 # -- the typo-fix reply shape, augmentation, refresh ---------------------------------------

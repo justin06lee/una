@@ -110,7 +110,6 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
     split = style_dataset.build_style_datasets(
         run.conn,
         use_writing=bool(hp["style_use_writing"]),
-        use_silver=bool(hp["style_use_silver"]),
         gold_repeat=int(hp["style_gold_repeat"]),
         augment=bool(hp.get("style_augment_disfluency", False)),
     )

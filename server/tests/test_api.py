@@ -223,6 +223,37 @@ def test_review_queue(client):
     assert client.get("/v1/review/next").json() is None
 
 
+def test_review_queue_lists_unreviewed_newest_first(client):
+    older = post_dictation(client).json()["id"]
+    newer = post_dictation(client).json()["id"]
+    queue = client.get("/v1/review/queue").json()
+    assert [item["id"] for item in queue["items"]] == [newer, older]
+    assert queue["pending"] == 2
+
+    # reviewing takes it out of the queue
+    client.put(f"/v1/dictations/{newer}/correction", json={"action": "accepted"})
+    queue = client.get("/v1/review/queue").json()
+    assert [item["id"] for item in queue["items"]] == [older]
+    assert queue["pending"] == 1
+
+
+async def test_a_reply_pasted_as_cleanup_is_flagged(client):
+    state = client.app.state.una
+    dictation = post_dictation(client).json()["id"]
+    await state.db.execute(
+        "UPDATE dictations SET cleaned_text = ?, cleanup_applied = 1 WHERE id = ?",
+        ("The OnePlus 2 was released in July 2016.", dictation),
+    )
+    await state.db.commit()
+    assert client.get(f"/v1/dictations/{dictation}").json()["cleanup_diverged"] is True
+    await state.db.execute(
+        "UPDATE dictations SET cleaned_text = ? WHERE id = ?",
+        ("so this is a test dictation", dictation),
+    )
+    await state.db.commit()
+    assert client.get(f"/v1/dictations/{dictation}").json()["cleanup_diverged"] is False
+
+
 def test_dictionary_biases_initial_prompt(client):
     entry = client.post("/v1/dictionary", json={"phrase": "Anthropic"}).json()
     assert entry["phrase"] == "Anthropic"
@@ -292,3 +323,11 @@ async def test_client_field_is_stored(client):
 def test_settings_reject_bool_for_float(client):
     resp = client.put("/v1/settings", json={"cleanup.timeout_s": True})
     assert resp.status_code == 400
+
+
+def test_an_old_config_with_a_teacher_section_still_loads(tmp_path):
+    from una_server.config import load_config
+
+    path = tmp_path / "una.toml"
+    path.write_text("[teacher]\nenabled = true\n\n[asr]\nbeam_size = 2\n")
+    assert load_config(path).asr.beam_size == 2

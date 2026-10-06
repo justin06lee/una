@@ -20,80 +20,16 @@ the cleanup model to leave them in. So an edit you make to pasted text (which wa
 *polished* version) only ever becomes a polished target, and the literal is confirmed in
 review.
 
-## The teacher
-
-Confirming two texts per dictation by typing them out would never happen. The teacher
-drafts both, so review is mostly pressing ↵.
-
-It runs in the background after every dictation, never on the dictation path:
-
-1. **A second listen.** A slower, more accurate Whisper (`large-v3` with beam search by
-   default, on the CPU so it never competes with serving for VRAM) transcribes the stored
-   audio again, with word timings. Wherever it heard different words from the transcript
-   una served, that span is recorded along with where in the audio it happened, so review
-   can mark it and play just that moment.
-2. **A reconciliation.** If an LLM endpoint is configured, the LLM gets both transcripts,
-   the spans they disagree on, your dictionary, the app, and examples of how you have wanted
-   earlier dictations to read. It returns a *literal* guess and a *polished* guess.
-
-The LLM never hears the audio. That is why the second pass exists: it is the only other
-thing that listened, and the literal guess has to stay close to one of the two transcripts
-or it is thrown away. A polished guess that drifts too far from the transcript reads like
-an answer rather than a cleanup and is thrown away too.
-
-A dictation where every opinion agrees with what was pasted is marked as not needing
-review, and sorts to the back of the queue. Guesses are never training data until you
-confirm them.
-
-### Reviewing
+## Reviewing
 
 The desktop app's tray → **Review Dictations…** (and the dashboard's Review page) shows
-one dictation at a time, flagged ones first: the audio, **What you said** pre-filled with
-the literal guess, and **How you'd have written it** pre-filled with your own earlier fix
-if you made one, else the polished guess. The words the second listen heard differently
-sit above the transcript as chips — `LAMA 3.2b → Llama 3.2B ▶` — and clicking one plays
-just that moment. ⌘↵ confirms both: the literal becomes the Whisper target (subject to
-the usual edit-distance filter) and the polished text the style target. S skips for now,
-X excludes the dictation from training.
+unreviewed dictations one at a time: the audio, **What you said** pre-filled
+with the transcript una served, and **How you'd have written it** pre-filled with your own
+earlier fix if you made one, else what una pasted. ⌘↵ confirms both: the literal becomes
+the Whisper target (subject to the usual edit-distance filter) and the polished text the
+style target. S skips for now, X excludes the dictation from training.
 
-### Using Claude without an API key
-
-The LLM part speaks the Anthropic Messages API, so it works with an API key or with
-[yagami](https://github.com/justin06lee/yagami), which serves a signed-in Claude Code over the
-same API. Run yagami on the server box and point the teacher at it; the key is read from
-yagami's own config, so nothing needs copying:
-
-```toml
-[teacher]
-enabled = true
-llm_base_url = "http://127.0.0.1:8787"   # yagami
-llm_model = "claude-haiku-4-5"
-```
-
-If the LLM is unreachable or signed out, the second listen still runs and review still
-marks the disputed words; the LLM part is retried with a growing backoff (up to an hour)
-and fills in the guesses once it answers.
-
-Only transcript text reaches the LLM — never audio.
-
-### Settings
-
-| Setting | Default | What it does |
-|---|---|---|
-| `teacher.enabled` | `false` | Master switch. Off, una behaves exactly as without it. |
-| `teacher.second_asr` | `true` | Run the second listen. |
-| `teacher.second_asr_model` | `large-v3` | Any faster-whisper model. |
-| `teacher.second_asr_device` | `cpu` | `cuda` if the card has room next to serving. |
-| `teacher.second_asr_compute_type` | `int8` | |
-| `teacher.second_asr_cpu_threads` | `4` | Keeps the box responsive while it works. |
-| `teacher.second_asr_beam_size` | `5` | |
-| `teacher.llm_base_url` | `""` | Messages API endpoint; empty skips the LLM part. |
-| `teacher.llm_api_key` | `""` | Else `ANTHROPIC_API_KEY`, else yagami's key. |
-| `teacher.llm_model` | `claude-haiku-4-5` | |
-| `teacher.backfill` | `true` | Also label dictations from before it was on. |
-
-`GET /v1/teacher` reports how many dictations are waiting and the last LLM error.
-`GET /v1/review/queue` returns unreviewed dictations with their labels, flagged ones first.
+`GET /v1/review/queue` returns unreviewed dictations, newest first.
 
 ## Your own writing
 
@@ -125,9 +61,8 @@ reads what you have typed to Claude Code and Codex on this machine, keeps what l
 typed rather than pasted (no code blocks, logs, bullet lists, JSON, secrets, or prompts
 a script sent three or more times), splits it into dictation-sized pieces of up to ~90
 words, back-translates them through a local yagami, and uploads them. It is idempotent;
-run it again whenever you want it to pick up newer writing. Without an LLM on the Mac, the
-tool uploads the writing as-is and the server's teacher back-translates it once its own
-LLM answers.
+run it again whenever you want it to pick up newer writing, and pieces the LLM couldn't
+finish are tried again then.
 
 Writing is labelled with the app it was typed in (`Claude Code`, `Codex`), which picks the
 cleanup tone it is trained under. Those, and the terminals and agent apps you dictate into
@@ -147,7 +82,6 @@ onto the Ollama model that serves cleanup.
 |---|---|---|
 | Confirmed dictations — polished text you gave or confirmed | highest | training (repeated `style_gold_repeat` = 3×) and, once there are 20, the eval set |
 | Your writing, back-translated | high | training; its ~10% holdout is the eval set until there are enough confirmed dictations |
-| The teacher's polished guesses nobody confirmed | lower | training only (`style_use_silver`) |
 
 **Stage 1 — supervised.** The model learns to produce the target for each transcript.
 
@@ -179,7 +113,6 @@ While a run trains, the cleanup model is unloaded and not re-warmed, and with
 | `training.style_use_writing` | `true` | Train on your back-translated writing. |
 | `training.style_augment_disfluency` | `true` | Add fillers and doubled words to its spoken side. |
 | `training.style_writing_threshold` | `200` | Finished pieces that make a run worthwhile. |
-| `training.style_use_silver` | `true` | Train on unconfirmed teacher guesses. |
 | `training.style_gold_repeat` | `3` | Weight of confirmed pairs. |
 | `training.style_dpo` | `true` | Run stage 2. |
 | `training.style_dpo_synthetic` | `150` | On-policy preference pairs sampled per run. |

@@ -559,7 +559,7 @@ async fn live_server(state: &AppState) -> Result<String, String> {
     state.live_server().await
 }
 
-/// Unreviewed dictations with the teacher's guesses, flagged ones first.
+/// Unreviewed dictations, newest first.
 /// Passed through as the server's JSON — the window reads it directly.
 #[tauri::command]
 pub async fn review_queue(

@@ -101,13 +101,9 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    leave it alone and it is recorded as a correct transcription. In apps whose text macOS will
    let una read, this happens silently; in terminals and canvas editors it asks with a small
    editor window. See [docs/learning.md](docs/learning.md).
-3. **An optional teacher pre-fills review.** In the background, a slower, more accurate
-   Whisper pass re-transcribes each dictation, and an LLM (Claude, via an API key or a
-   signed-in Claude Code through [yagami](https://github.com/justin06lee/yagami)) reconciles
-   the two transcripts into a guess at what you literally said and how it should read.
-   Review shows both guesses filled in, with the words the two passes disagreed on marked,
-   and asks about the dictations where something disagrees first. The **Review** page is
-   where the literal transcript and *How you'd have written it* get confirmed. See
+3. **Review confirms both answers.** The **Review** page goes through unreviewed
+   dictations one at a time, with what una heard and what it pasted drafted in: confirm
+   the literal transcript and *How you'd have written it*. See
    [docs/personal-model.md](docs/personal-model.md).
 4. Corrections that diverge too far from the raw transcript (normalized edit distance > 0.30)
    are auto-excluded as content rewrites. Accepted-as-is dictations count as gold pairs for
@@ -123,7 +119,7 @@ silently kills remote access months later: [docs/remote-access.md](docs/remote-a
    rollback from the model registry, always.
 
 7. The same loop learns your **style**. The cleanup LLM is trained on (transcript → how you'd
-   have written it) pairs: dictations you confirmed, the teacher's guesses, and — so it
+   have written it) pairs: dictations you confirmed and — so it
    knows your style from day one — **your own writing**: `make import-writing` takes what
    you've typed to Claude Code and Codex, has an LLM work out what Whisper would have heard
    had you said it, and trains on (that → what you actually typed), casual shorthand and
