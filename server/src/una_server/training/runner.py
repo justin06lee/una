@@ -73,6 +73,20 @@ def _install_sigterm_handler(db_path: Path, run_id: str) -> None:
     signal.signal(signal.SIGTERM, handler)
 
 
+def _unload_ollama_models(cfg: Config) -> None:
+    """Best-effort: ask Ollama to release resident models so training gets the VRAM."""
+    try:
+        with httpx.Client(base_url=cfg.cleanup.ollama_url, timeout=10.0) as client:
+            resp = client.get("/api/ps")
+            for model in resp.json().get("models", []):
+                client.post(
+                    "/api/generate", json={"model": model["name"], "keep_alive": 0}
+                )
+                log.info("asked ollama to unload %s", model["name"])
+    except (httpx.HTTPError, ValueError):
+        log.info("could not query ollama for resident models (continuing)")
+
+
 def _setup_logging(log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -161,6 +175,10 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
     )
 
     # -- training -------------------------------------------------------------
+    if cfg.training.pause_serving:
+        # Dictation is off for the run, so the cleanup model has nothing to do; on a
+        # Jetson its memory is the same memory the training needs.
+        _unload_ollama_models(cfg)
     run.update(status="training", progress=0.1)
     last_progress = 0.1
 

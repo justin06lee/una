@@ -23,12 +23,16 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import httpx
-
 from ..config import Config, load_config
 from ..db import utcnow
 from . import style_dataset, style_eval, style_promote
-from .runner import RunContext, _install_sigterm_handler, _setup_logging, connect
+from .runner import (
+    RunContext,
+    _install_sigterm_handler,
+    _setup_logging,
+    _unload_ollama_models,
+    connect,
+)
 
 log = logging.getLogger("una_server.training.style_runner")
 
@@ -42,20 +46,6 @@ def _hyperparams(row: sqlite3.Row, cfg: Config) -> dict:
 
 def style_settings(training) -> dict:
     return {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
-
-
-def _unload_ollama_models(cfg: Config) -> None:
-    """Best-effort: ask Ollama to release resident models so QLoRA gets the VRAM."""
-    try:
-        with httpx.Client(base_url=cfg.cleanup.ollama_url, timeout=10.0) as client:
-            resp = client.get("/api/ps")
-            for model in resp.json().get("models", []):
-                client.post(
-                    "/api/generate", json={"model": model["name"], "keep_alive": 0}
-                )
-                log.info("asked ollama to unload %s", model["name"])
-    except (httpx.HTTPError, ValueError):
-        log.info("could not query ollama for resident models (continuing)")
 
 
 def _cleanup(run_dir: Path) -> None:
