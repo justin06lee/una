@@ -22,6 +22,7 @@ data/
 *.wav
 !server/tests/fixtures/*.wav
 una.toml
+!server/deploy/jetson/una.toml
 
 # OS
 .DS_Store

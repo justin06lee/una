@@ -21,6 +21,7 @@ enabled = true
 ollama_url = "http://localhost:11434"
 model = "qwen3:8b"           # any instruct model; use a 3-4B model on small GPUs
 timeout_s = 3.0              # cleanup slower than this -> raw transcript is returned instead
+# num_gpu = 99               # layers Ollama puts on the GPU (default: its guess); 99 = all
 max_divergence = 0.65        # output this far from the transcript is a reply, not a cleanup -> raw
 
 # app-name substring -> tone hint (first match wins)
@@ -33,7 +34,7 @@ terminal = "verbatim; do not alter punctuation inside commands"
 threshold_minutes = 30.0     # eligible corrected audio needed before training is offered
 auto = false                 # true: start a run automatically once over threshold (when idle)
 auto_idle_minutes = 30.0     # dictation must be quiet this long before an auto run may start
-pause_serving = false        # true on <16GB cards: unload ASR while training
+pause_serving = false        # true on <16GB cards: unload ASR and the cleanup model while training
 max_edit_distance = 0.30     # corrections further than this from raw are content rewrites -> excluded
 promotion_margin_wer = 0.5   # candidate must beat baseline WER by this many absolute points
 

@@ -23,12 +23,19 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import httpx
-
-from ..config import Config, load_config
+from ..config import CleanupConfig, Config, load_config
 from ..db import utcnow
 from . import style_dataset, style_eval, style_promote
-from .runner import RunContext, _install_sigterm_handler, _setup_logging, connect
+from .runner import (
+    RunContext,
+    _install_sigterm_handler,
+    _log_path,
+    _setup_logging,
+    _unload_ollama_models,
+    connect,
+    in_training_process,
+    progress_reporter,
+)
 
 log = logging.getLogger("una_server.training.style_runner")
 
@@ -44,18 +51,21 @@ def style_settings(training) -> dict:
     return {k: v for k, v in training.model_dump().items() if k.startswith("style_")}
 
 
-def _unload_ollama_models(cfg: Config) -> None:
-    """Best-effort: ask Ollama to release resident models so QLoRA gets the VRAM."""
+def _train(
+    db_path: Path, run_id: str, samples: list, run_dir: Path, hp: dict,
+    cleanup_cfg: CleanupConfig, device: str, preferences: list,
+) -> tuple[Path, dict]:
+    """The training stage, run by in_training_process; reports progress on the run row."""
+    from . import train_style_lora  # torch and friends: only in the training process
+
+    run = RunContext(connect(db_path), run_id)
     try:
-        with httpx.Client(base_url=cfg.cleanup.ollama_url, timeout=10.0) as client:
-            resp = client.get("/api/ps")
-            for model in resp.json().get("models", []):
-                client.post(
-                    "/api/generate", json={"model": model["name"], "keep_alive": 0}
-                )
-                log.info("asked ollama to unload %s", model["name"])
-    except (httpx.HTTPError, ValueError):
-        log.info("could not query ollama for resident models (continuing)")
+        return train_style_lora.train_style_adapter(
+            samples, run_dir, hp, cleanup_cfg,
+            device=device, on_progress=progress_reporter(run), preferences=preferences,
+        )
+    finally:
+        run.conn.close()
 
 
 def _cleanup(run_dir: Path) -> None:
@@ -98,8 +108,6 @@ def _on_policy_preferences(
 
 
 def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> None:
-    from . import train_style_lora  # heavy deps live behind this module
-
     hp = _hyperparams(row, cfg)
     log.info("style run %s starting with hyperparams %s", run.run_id, hp)
     baseline_model = hp.get("style_baseline_model") or cfg.cleanup.model
@@ -137,18 +145,10 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
     # -- training -------------------------------------------------------------
     _unload_ollama_models(cfg)
     run.update(status="training", progress=0.1)
-    last_progress = 0.1
-
-    def on_progress(fraction: float) -> None:
-        nonlocal last_progress
-        progress = 0.1 + 0.6 * min(max(fraction, 0.0), 1.0)
-        if progress - last_progress >= 0.005:
-            last_progress = progress
-            run.update(progress=round(progress, 4))
-
-    adapter_dir, dpo_stats = train_style_lora.train_style_adapter(
-        split.train, run_dir, hp, cfg.cleanup,
-        device=cfg.asr.device, on_progress=on_progress, preferences=preferences,
+    # The trainer's memory is gone before Ollama loads the candidate and the baseline.
+    adapter_dir, dpo_stats = in_training_process(
+        _log_path(row, run_dir), _train, cfg.db_path, run.run_id, split.train, run_dir, hp,
+        cfg.cleanup, cfg.asr.device, preferences,
     )
     if dpo_stats.get("error"):
         notes.append(f"dpo: failed, kept the supervised adapter ({dpo_stats['error']})")
@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir = cfg.runs_dir / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    _setup_logging(Path(row["log_path"]) if row["log_path"] else run_dir / "train.log")
+    _setup_logging(_log_path(row, run_dir))
     _install_sigterm_handler(cfg.db_path, args.run_id)
 
     run = RunContext(conn, args.run_id)

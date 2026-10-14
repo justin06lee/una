@@ -10,6 +10,7 @@ import numpy as np
 
 from ..config import AsrConfig
 from ..errors import AsrFailed
+from ..memory import release_freed_memory
 
 
 @dataclass
@@ -29,6 +30,7 @@ class Transcriber:
         self.model = WhisperModel(
             model_path_or_alias, device=cfg.device, compute_type=cfg.compute_type
         )
+        release_freed_memory()
 
     def transcribe_sync(
         self,

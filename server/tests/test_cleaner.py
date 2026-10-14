@@ -36,3 +36,11 @@ def test_sane_rejects_empty_and_wild_lengths():
     cleaner = _cleaner()
     assert not cleaner._sane("hello there", "   ")
     assert not cleaner._sane("hello there friend", "hi")
+
+
+def test_num_gpu_rides_on_every_request_when_set():
+    # A num_gpu that differs between warm-up and cleanup makes Ollama reload the model.
+    assert "num_gpu" not in _cleaner()._options(num_predict=1)
+    pinned = Cleaner(CleanupConfig(num_gpu=99))
+    assert pinned._options(num_predict=1) == {"num_predict": 1, "num_gpu": 99}
+    assert pinned._options(temperature=0.1)["num_gpu"] == 99
