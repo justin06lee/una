@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from ..config import AsrConfig
+from ..services.transcriber import release_freed_memory
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ def smoke_test(ct2_dir: Path, wav_path: str, cfg: AsrConfig) -> str:
 
     log.info("smoke testing %s on %s", ct2_dir, wav_path)
     model = WhisperModel(str(ct2_dir), device=cfg.device, compute_type=cfg.compute_type)
+    release_freed_memory()
     try:
         segments, _info = model.transcribe(
             wav_path,

@@ -234,3 +234,9 @@ def test_ensure_feature_extractor_config(tmp_path):
     (out / "preprocessor_config.json").write_text("keep")
     convert.ensure_feature_extractor_config(merged, out)
     assert (out / "preprocessor_config.json").read_text() == "keep"
+
+
+def test_release_freed_memory_is_safe_without_glibc():
+    from una_server.services.transcriber import release_freed_memory
+
+    release_freed_memory()  # macOS has no libc.so.6; must be a no-op, not an error

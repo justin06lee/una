@@ -11,6 +11,7 @@ import logging
 from collections.abc import Sequence
 
 from ..config import AsrConfig
+from ..services.transcriber import release_freed_memory
 from .dataset import Sample
 from .filters import normalize_text
 
@@ -46,6 +47,7 @@ def transcribe_all(source: str, samples: Sequence[Sample], cfg: AsrConfig) -> li
     from faster_whisper import WhisperModel  # deferred: heavy import
 
     model = WhisperModel(source, device=cfg.device, compute_type=cfg.compute_type)
+    release_freed_memory()
     hypotheses: list[str] = []
     try:
         for sample in samples:
