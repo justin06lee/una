@@ -46,6 +46,9 @@ class CleanupConfig(BaseModel):
     model: str = "qwen3:8b"
     timeout_s: float = 3.0
     keep_alive: str = "30m"
+    # Layers Ollama puts on the GPU; None lets it decide. On a Jetson it guesses low and
+    # keeps a CPU copy of the rest in the same shared memory: 99 puts it all on the GPU.
+    num_gpu: int | None = None
     # app-name substring (lowercased) -> tone hint; first match wins
     tone_map: dict[str, str] = {
         "slack": "casual chat; lowercase is fine",

@@ -37,6 +37,12 @@ class Cleaner:
     async def aclose(self) -> None:
         await self.client.aclose()
 
+    def _options(self, **options) -> dict:
+        # The same placement on every request: Ollama reloads a model whose num_gpu changed.
+        if self.cfg.num_gpu is not None:
+            options["num_gpu"] = self.cfg.num_gpu
+        return options
+
     async def warm(self) -> None:
         """Load the cleanup model into VRAM and keep it resident so real requests
         never pay the cold-load (which blows the timeout budget and degrades to raw)."""
@@ -47,7 +53,7 @@ class Cleaner:
             "stream": False,
             "keep_alive": self.cfg.keep_alive,
             "messages": [{"role": "user", "content": "ok"}],
-            "options": {"num_predict": 1},
+            "options": self._options(num_predict=1),
         }
         try:
             await self.client.post("/api/chat", json=payload, timeout=180.0)
@@ -106,10 +112,7 @@ class Cleaner:
             "stream": False,
             "keep_alive": self.cfg.keep_alive,
             "think": False,
-            "options": {
-                "temperature": 0.1,
-                "num_predict": max(64, len(raw_text) * 2),
-            },
+            "options": self._options(temperature=0.1, num_predict=max(64, len(raw_text) * 2)),
             "messages": [
                 {"role": "system", "content": build_system_prompt(self.cfg, phrases, app_name)},
                 {"role": "user", "content": raw_text},
