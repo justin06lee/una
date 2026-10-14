@@ -7,11 +7,11 @@
 
   // The waveform: a fixed row of bars, drawn from the centre out. The pill
   // springs open around it and clips it, so the bars appear from the middle.
-  const BAR_COUNT = 13;
+  const BAR_COUNT = 9;
   const BAR_W = 3;
   const BAR_GAP = 3;
   const BARS_W = BAR_COUNT * BAR_W + (BAR_COUNT - 1) * BAR_GAP;
-  const BARS_H = 20;
+  const BARS_H = 16;
   const MID = (BAR_COUNT - 1) / 2;
 
   let snapshot = $state<Snapshot>({ state: "idle" });
@@ -244,8 +244,8 @@
   /* --------------------------------------------------------- Recording */
   /* Just the waveform, centred. */
   .pill.recording {
-    width: 96px;
-    height: 32px;
+    width: 76px;
+    height: 26px;
   }
 
   .bars {
@@ -253,10 +253,11 @@
   }
 
   /* -------------------------------------------- Transcribing/Inserting */
+  /* The recording pill's size, so releasing the key doesn't grow it. */
   .pill.busy {
-    width: 96px;
-    height: 32px;
-    padding: 0 18px;
+    width: 76px;
+    height: 26px;
+    padding: 0 15px;
   }
 
   .shimmer {
@@ -291,15 +292,15 @@
 
   /* -------------------------------------------------------------- Done */
   .pill.done {
-    width: 64px;
-    height: 32px;
+    width: 52px;
+    height: 26px;
     border-color: rgba(255, 255, 255, 0.4);
     animation: pulse 0.7s ease-out;
   }
 
   .check {
-    width: 17px;
-    height: 17px;
+    width: 15px;
+    height: 15px;
     flex: none;
     color: #ffffff;
   }
