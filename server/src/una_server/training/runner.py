@@ -11,14 +11,19 @@ Conversion runs before the final eval so both models are scored through CTransla
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import logging
+import multiprocessing
 import os
 import shutil
 import signal
 import sqlite3
 import sys
+from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import TypeVar
 
 import httpx
 
@@ -27,6 +32,9 @@ from ..db import utcnow
 from . import dataset, promote
 
 log = logging.getLogger("una_server.training.runner")
+
+PR_SET_PDEATHSIG = 1
+T = TypeVar("T")
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -85,6 +93,60 @@ def _unload_ollama_models(cfg: Config) -> None:
                 log.info("asked ollama to unload %s", model["name"])
     except (httpx.HTTPError, ValueError):
         log.info("could not query ollama for resident models (continuing)")
+
+
+def _trainer_process_setup(log_path: Path) -> None:
+    """In the training process: log to the run's log, and die with the runner."""
+    _setup_logging(log_path)
+    try:
+        ctypes.CDLL("libc.so.6").prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+    except (OSError, AttributeError):
+        pass  # not Linux: a cancelled run's trainer runs on to the end of its stage
+
+
+def in_training_process(log_path: Path, fn: Callable[..., T], *args) -> T:
+    """Run a training stage in a process of its own and return its result.
+
+    torch holds ~3 GB (CUDA context, kernels, its cache) for as long as the process that
+    trained lives; on a Jetson that is the memory the next stages (CT2 eval, Ollama) need.
+    The process is gone when this returns, and everything it held with it.
+    """
+    with ProcessPoolExecutor(
+        max_workers=1, mp_context=multiprocessing.get_context("spawn"),
+        initializer=_trainer_process_setup, initargs=(log_path,),
+    ) as pool:
+        return pool.submit(fn, *args).result()
+
+
+def progress_reporter(run: RunContext) -> Callable[[float], None]:
+    """Map a training fraction onto the run row's 0.1-0.7 band, writing every 0.5%."""
+    last_progress = 0.1
+
+    def on_progress(fraction: float) -> None:
+        nonlocal last_progress
+        progress = 0.1 + 0.6 * min(max(fraction, 0.0), 1.0)
+        if progress - last_progress >= 0.005:
+            last_progress = progress
+            run.update(progress=round(progress, 4))
+
+    return on_progress
+
+
+def _train(
+    db_path: Path, run_id: str, samples: list, run_dir: Path, hp: dict,
+    device: str, language: str | None,
+) -> Path:
+    """The training stage, run by in_training_process; reports progress on the run row."""
+    from . import train_lora  # torch and friends: only in the training process
+
+    run = RunContext(connect(db_path), run_id)
+    try:
+        return train_lora.train_adapter(
+            samples, run_dir, hp,
+            device=device, language=language, on_progress=progress_reporter(run),
+        )
+    finally:
+        run.conn.close()
 
 
 def _setup_logging(log_path: Path) -> None:
@@ -157,8 +219,12 @@ def _cleanup(run_dir: Path) -> None:
         shutil.rmtree(checkpoint, ignore_errors=True)
 
 
+def _log_path(row: sqlite3.Row, run_dir: Path) -> Path:
+    return Path(row["log_path"]) if row["log_path"] else run_dir / "train.log"
+
+
 def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> None:
-    from . import convert, evaluate, train_lora  # heavy deps live behind these modules
+    from . import convert, evaluate  # heavy deps live behind these modules
 
     hp = _hyperparams(row, cfg)
     log.info("run %s starting with hyperparams %s", run.run_id, hp)
@@ -180,18 +246,9 @@ def _execute(run: RunContext, cfg: Config, row: sqlite3.Row, run_dir: Path) -> N
         # Jetson its memory is the same memory the training needs.
         _unload_ollama_models(cfg)
     run.update(status="training", progress=0.1)
-    last_progress = 0.1
-
-    def on_progress(fraction: float) -> None:
-        nonlocal last_progress
-        progress = 0.1 + 0.6 * min(max(fraction, 0.0), 1.0)
-        if progress - last_progress >= 0.005:
-            last_progress = progress
-            run.update(progress=round(progress, 4))
-
-    adapter_dir = train_lora.train_adapter(
-        split.train, run_dir, hp,
-        device=cfg.asr.device, language=cfg.asr.language, on_progress=on_progress,
+    adapter_dir = in_training_process(
+        _log_path(row, run_dir), _train, cfg.db_path, run.run_id, split.train, run_dir, hp,
+        cfg.asr.device, cfg.asr.language,
     )
 
     # -- converting (before eval, so both models are scored through CT2) ------
@@ -257,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir = cfg.runs_dir / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    _setup_logging(Path(row["log_path"]) if row["log_path"] else run_dir / "train.log")
+    _setup_logging(_log_path(row, run_dir))
     _install_sigterm_handler(cfg.db_path, args.run_id)
 
     run = RunContext(conn, args.run_id)

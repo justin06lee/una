@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import ctypes
 import logging
 from dataclasses import dataclass
 
@@ -11,19 +10,7 @@ import numpy as np
 
 from ..config import AsrConfig
 from ..errors import AsrFailed
-
-
-def release_freed_memory() -> None:
-    """Hand memory freed while loading a model back to the OS.
-
-    CTranslate2 reads the weights through malloc on several threads and frees them once
-    they are on the GPU, but glibc keeps what was freed in its per-thread arenas: ~760 MB
-    for large-v3-turbo. On a Jetson that RAM is the GPU's memory too.
-    """
-    try:
-        ctypes.CDLL("libc.so.6").malloc_trim(0)
-    except (OSError, AttributeError):
-        pass  # not glibc (macOS, musl): nothing to hand back this way
+from ..memory import release_freed_memory
 
 
 @dataclass

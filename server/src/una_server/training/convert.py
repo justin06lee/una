@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from ..config import AsrConfig
-from ..services.transcriber import release_freed_memory
+from ..memory import release_freed_memory
 
 log = logging.getLogger(__name__)
 
