@@ -59,12 +59,11 @@ itself (WebKitGTK draws blank windows on NVIDIA/Tegra without it).
 
 ## Which server
 
-The client needs a una server, and a small ARM board is a client, not a
-server: CTranslate2 (under faster-whisper) ships CPU-only wheels for aarch64,
-a Jetson comes without the CUDA toolkit, and large-v3-turbo plus an 8B cleanup
-model don't fit next to a desktop in 8 GB of shared memory. Point it at your
-GPU box in Settings → Server (LAN address plus a VPN/mesh one — see
-[remote-access.md](remote-access.md)).
+The client needs a una server: your GPU box, or a Jetson, which can be both
+(see [jetson-server.md](jetson-server.md) — PyPI has no GPU build of
+CTranslate2 for aarch64 and a Jetson has no CUDA toolkit, so its install
+script builds one). Point the client at it in Settings → Server (LAN address
+plus a VPN/mesh one — see [remote-access.md](remote-access.md)).
 
 ## Hotkey
 

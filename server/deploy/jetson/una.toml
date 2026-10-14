@@ -1,0 +1,25 @@
+# una on a Jetson Orin Nano: 8 GB of memory shared by the CPU, the GPU and the desktop.
+# install.sh copies this to server/una.toml once; edit that copy, not this one.
+# Everything not set here keeps the default in server/una.toml.example.
+
+[server]
+# SECURITY: no authentication. Keep it on your LAN or a private mesh.
+bind = "0.0.0.0"
+port = 8100
+data_dir = "./data"
+
+[asr]
+model = "large-v3-turbo"
+device = "cuda"
+compute_type = "int8_float16"   # ~0.9 GB of weights instead of 1.6
+language = "en"
+
+[cleanup]
+model = "llama3.2:3b"           # the base the style trainer puts your adapter on
+timeout_s = 4.0
+num_gpu = 99                    # all of it on the GPU: a CPU share costs RAM twice here
+
+[training]
+pause_serving = true            # Whisper and the cleanup model step aside while a run trains
+batch_size = 2                  # with grad_accum, the same 16 clips a step as the defaults
+grad_accum = 8

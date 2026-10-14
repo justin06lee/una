@@ -52,6 +52,9 @@ model (~1.6 GB) into the `hf-cache` volume.
 
 Without Docker: `cd server && uv sync --extra training && uv run uvicorn una_server.main:app --host 0.0.0.0 --port 8100`.
 
+On an NVIDIA Jetson (Orin, JetPack 7) there is no Docker step: `server/deploy/jetson/install.sh`
+sets up the server, Ollama and training without root — see [docs/jetson-server.md](docs/jetson-server.md).
+
 Configuration: copy `server/una.toml.example` to `una.toml` (or use `UNA__SECTION__KEY` env
 vars — see the example file for everything tunable).
 
