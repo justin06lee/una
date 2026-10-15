@@ -17,6 +17,7 @@ language = "en"
 [cleanup]
 model = "llama3.2:3b"           # the base the style trainer puts your adapter on
 timeout_s = 4.0
+timeout_per_word_s = 0.08       # ~15 words/s out of the 3B here; a 1-minute dictation gets ~17 s
 num_gpu = 99                    # all of it on the GPU: a CPU share costs RAM twice here
 
 [training]

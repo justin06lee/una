@@ -37,6 +37,10 @@ class Cleaner:
     async def aclose(self) -> None:
         await self.client.aclose()
 
+    def budget_s(self, raw_text: str) -> float:
+        """How long this transcript's cleanup may take before the raw text is pasted."""
+        return self.cfg.timeout_s + len(raw_text.split()) * self.cfg.timeout_per_word_s
+
     def _options(self, **options) -> dict:
         # The same placement on every request: Ollama reloads a model whose num_gpu changed.
         if self.cfg.num_gpu is not None:
@@ -118,8 +122,9 @@ class Cleaner:
                 {"role": "user", "content": raw_text},
             ],
         }
+        timeout = self.budget_s(raw_text)
         try:
-            resp = await self.client.post("/api/chat", json=payload)
+            resp = await self.client.post("/api/chat", json=payload, timeout=timeout)
         except httpx.HTTPError as exc:
             return fail(f"ollama unreachable: {type(exc).__name__}")
         if resp.status_code != 200:
@@ -127,7 +132,7 @@ class Cleaner:
             if "think" in payload:
                 payload.pop("think")
                 try:
-                    resp = await self.client.post("/api/chat", json=payload)
+                    resp = await self.client.post("/api/chat", json=payload, timeout=timeout)
                 except httpx.HTTPError as exc:
                     return fail(f"ollama unreachable: {type(exc).__name__}")
             if resp.status_code != 200:

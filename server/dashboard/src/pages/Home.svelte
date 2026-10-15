@@ -41,6 +41,16 @@
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** Why una pasted the raw transcript, in words (cleanup_error is the server's note). */
+  function rawReason(error: string | null | undefined): string {
+    if (!error) return 'cleanup is off';
+    if (/timeout/i.test(error)) return 'the cleanup model took too long';
+    if (/sanity|diverg/i.test(error)) return "the cleanup model's version didn't look like a cleanup";
+    if (error === 'circuit_open') return 'cleanup was paused after a few failures in a row';
+    if (/unreachable|status/i.test(error)) return "the cleanup model couldn't be reached";
+    return `cleanup failed (${error})`;
+  }
+
   function params(cursor?: string) {
     return {
       limit: PAGE,
@@ -382,12 +392,16 @@
                           <div class="label mb-1.5">What una heard</div>
                           <p class="text-[13px] leading-relaxed">{detail.raw_text || '—'}</p>
                         </div>
-                        {#if detail.cleaned_text}
-                          <div>
-                            <div class="label mb-1.5">What una pasted</div>
+                        <div>
+                          <div class="label mb-1.5">What una pasted</div>
+                          {#if detail.cleanup_applied && detail.cleaned_text}
                             <p class="text-[13px] leading-relaxed">{detail.cleaned_text}</p>
-                          </div>
-                        {/if}
+                          {:else}
+                            <p class="text-[13px] leading-relaxed text-muted">
+                              What it heard, as is: {rawReason(detail.cleanup_error)}.
+                            </p>
+                          {/if}
+                        </div>
                       </div>
 
                       <!-- Your fixes, each under what it fixes: the transcript

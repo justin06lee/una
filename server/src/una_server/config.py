@@ -45,6 +45,9 @@ class CleanupConfig(BaseModel):
     ollama_url: str = "http://localhost:11434"
     model: str = "qwen3:8b"
     timeout_s: float = 3.0
+    # Added to timeout_s for every word of the transcript: the model writes the whole
+    # dictation back out, so a long one needs longer. 0 keeps a flat timeout_s.
+    timeout_per_word_s: float = 0.0
     keep_alive: str = "30m"
     # Layers Ollama puts on the GPU; None lets it decide. On a Jetson it guesses low and
     # keeps a CPU copy of the rest in the same shared memory: 99 puts it all on the GPU.

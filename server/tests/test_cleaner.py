@@ -44,3 +44,11 @@ def test_num_gpu_rides_on_every_request_when_set():
     pinned = Cleaner(CleanupConfig(num_gpu=99))
     assert pinned._options(num_predict=1) == {"num_predict": 1, "num_gpu": 99}
     assert pinned._options(temperature=0.1)["num_gpu"] == 99
+
+
+def test_budget_grows_with_the_dictation_only_when_asked():
+    words = "word " * 100
+    assert _cleaner().budget_s(words) == CleanupConfig().timeout_s
+    scaled = Cleaner(CleanupConfig(timeout_s=4.0, timeout_per_word_s=0.08))
+    assert scaled.budget_s("one two") == 4.0 + 2 * 0.08
+    assert scaled.budget_s(words) == 4.0 + 100 * 0.08
