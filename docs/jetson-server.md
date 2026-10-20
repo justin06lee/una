@@ -80,23 +80,35 @@ for everywhere else. Clients race every address and keep the fastest.
 
 ## Moving from another server
 
-Your history, recordings and trained models are the old server's `server/data/`.
-With una stopped on both, copy it over the Jetson's `~/una/server/data/`. Then:
+Your history, recordings and trained models are in the old server's `server/data/`.
+Don't copy that folder over the new server's: it replaces the new server's database,
+so every dictation made there is lost. Merge it instead. Ids are ULIDs, so rows from
+two servers never collide.
 
-- **Fine-tuned Whisper models** are CTranslate2 directories and run on the Jetson as
-  they are, but the database records them by absolute path. If the repo sat
-  elsewhere on the old server, rewrite those paths:
+```sh
+# on the old server: a consistent copy, safe while una runs
+cd ~/una/server && .venv/bin/python -m una_server.tools.merge_data snapshot data ~/una-snapshot
+# bring ~/una-snapshot to the new server (rsync -a), then from its ~/una/server:
+.venv/bin/python -m una_server.tools.merge_data merge ~/una-snapshot data --dry-run
+.venv/bin/python -m una_server.tools.merge_data merge ~/una-snapshot data
+```
 
-  ```sh
-  cd ~/una/server && .venv/bin/python -c "import sqlite3; db = sqlite3.connect('data/una.db'); \
-    db.execute(\"UPDATE models SET ct2_path = replace(ct2_path, '/old/path/server/', '$PWD/')\"); db.commit()"
-  ```
+`snapshot` takes una.db with SQLite's online backup, along with the recordings, the
+registered fine-tuned models and the training-run folders. A rejected run's model isn't
+registered, so it stays behind. `merge` adds the rows the new server lacks and never
+deletes or replaces its own. It rewrites recording and model paths to the new server's
+layout (Docker's `/data/...` or bare metal's `data/...`) and copies the files across.
+It backs up the new una.db into `data/backups/` first. Where both servers have the
+same setting, the new server's value is kept, and the report lists the conflict.
+Running it again with a newer snapshot merges only what changed since, so take a last
+snapshot just before you switch the clients over. If the new server has no rows yet
+and runs in Docker, pass `--stored-root /data`.
 
-- **A style model** lives in the old server's Ollama, and the database's
-  `cleanup.model` setting names it. Until the Jetson's Ollama has it, cleanup falls
-  back to the raw transcript. Recreate it from its run with
-  `ollama create una-style-xxxx -f data/runs/<run>/Modelfile` (fix the `ADAPTER`
-  path in that file first), or set Server settings → cleanup model back to the
-  base model and train a new one.
+**A style model** lives in the old server's Ollama, and the `cleanup.model` setting
+names it. Until the new server's Ollama has it, cleanup falls back to the raw
+transcript. Recreate it from its run with
+`ollama create una-style-xxxx -f data/runs/<run>/Modelfile` (fix the `ADAPTER` path
+in that file first), or set Server settings → cleanup model back to the base model
+and train a new one.
 
-Then `systemctl --user restart una`.
+Then restart una on the new server (`systemctl --user restart una` here).
