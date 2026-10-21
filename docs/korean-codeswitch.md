@@ -20,7 +20,7 @@ it's measured and gated, and what has to be decided before any GPU time is spent
 | `filters.py` | `normalize_text` keeps Hangul; edit distance is per character | Fixing a forced-English translation back to Korean scores ~1.0, so the pair is dropped as a "content rewrite". These are exactly the Korean pairs training would need |
 | `train_lora.py` | One language prefix for every sample (`en`) | Korean targets would be trained under `<\|en\|>` |
 | `evaluate.py`, Training page | WER only, one language | No CER for Korean, no mixed metric, no script check |
-| Your history | midna: 67 dictations, none with Hangul in any text; language ID on the audio finds **1** Korean/mixed dictation. tenet: not catalogued yet (no access from here) | Almost no Korean of yours to train on |
+| Your history | 67 dictations since 2026-10-14 (midna's, now merged into tenet; tenet was reinstalled on 10-08, so older history is gone). None has Hangul in any text; language ID on the audio finds **1** Korean/mixed dictation | Almost no Korean of yours to train on |
 
 ## The approach
 
@@ -90,10 +90,11 @@ training part.
 
 ### Your own dictations
 
-- midna (2026-10-14 to 10-20): 67 dictations, 0 with Hangul in any text. Language ID on
-  the audio found 1 that is Korean or mixed (01M56K831…, 11 s, which you excluded), plus
-  one hallucination on near-silence.
-- tenet: pending, until there's access or the Server services teammate runs the catalogue.
+- All of it: 67 dictations since 2026-10-14, recorded on midna and merged into tenet's
+  database. tenet was reinstalled on 10-08, so nothing older survives, including the
+  September style model.
+- None has Hangul in any text. Language ID on the audio found 1 that is Korean or mixed
+  (01M56K831…, 11 s, which you excluded), plus one hallucination on near-silence.
 - Going forward: once routing ships, your Korean dictations get Korean transcripts and
   your corrections become training pairs. `filters.py` needs a "script fix" rule for this
   (below).
@@ -143,7 +144,7 @@ loses perhaps 10–20% of Zeroth.
 
 | Share | What | Token |
 |---|---|---|
-| 20% | English replay: all your eligible English corrections, FLEURS en train, optionally a punctuated LibriTTS-R subset | `<\|en\|>` |
+| 20% | English replay: FLEURS en train, optionally a punctuated LibriTTS-R subset. Not your own English: that is held out as EN-YOU (below) | `<\|en\|>` |
 | 30% | Korean: Zeroth (capped), FLEURS ko train, optional Emilia-YODAS subset | `<\|ko\|>` |
 | 40% | Mixed: your training recordings (oversampled up to 5×), TTS (≤ half of this share), CS-FLEURS if allowed | `<\|ko\|>` |
 | 10% | Your Korean dictations, once routing produces them | `<\|ko\|>` |
@@ -161,11 +162,11 @@ can be packed into ~28 s windows for speed (see Compute). Your own clips are nev
 | **MIXED-YOU** | Your ~50 recorded mixed sentences (request below). Never trained on | MER + script check |
 | MIXED-HiKE | HiKE test split (~780 utts), the 70% not used for tuning | MER + script check |
 | KO-FLEURS, KO-Zeroth | FLEURS ko test (382), Zeroth test (457) | CER + script check |
-| **EN-YOU** | una's existing holdout of your dictations (the frozen crc32 10%) | WER, as the gate today |
+| **EN-YOU** | For stage A, all 42 of your eligible English pairs (1.4 + 10 min of audio). una's frozen crc32 holdout has only 4 of them, below the gate's 40, so stage A trains on none of yours. Stage B goes back to the crc32 split once it has 40 | WER, as the gate today |
 | EN-FLEURS | FLEURS en_us test (647) | WER |
 
 **Metrics** (`server/scripts/koen/koen_metrics.py`):
-- **WER** uses una's normalization, so EN-YOU matches today's gate.
+- **WER** uses una's normalization, the same as today's gate.
 - **CER** counts Hangul syllables and Latin letters with spaces removed; Korean spacing is
   loose enough that word scores mostly measure the spaces.
 - **MER** treats one Hangul syllable or one Latin word as one token, the usual unit for
@@ -201,7 +202,7 @@ improve by `promotion_margin_wer` on ≥ `min_eval_samples`. It adds non-regress
 ### Baselines (stock large-v3-turbo, today)
 
 Measured on the Mac's CPU (int8), on random subsets (seed 0), because tenet's GPU is busy
-and there's no tenet access from here. CPU int8 differs slightly from GPU float16; the gate
+with another job. CPU int8 differs slightly from GPU float16; the gate
 measures again on tenet.
 
 Lower is better. "Script" is the share of utterances with at least one span in the wrong
@@ -212,7 +213,8 @@ script.
 | HiKE mixed (60) | MER 53.8, script 43% | MER 36.1, script 57% | **MER 26.7**, script 55% (18 → en, 42 → ko) | MER 35.5, **script 40%** |
 | FLEURS ko (40) | CER 307 (translated), script 98% | **CER 2.7**, script 5% | not run | not run |
 | FLEURS en (40) | **WER 6.3**, script 0% | WER 95 (hallucination loops) | not run | not run |
-| EN-YOU, MIXED-YOU, KO-Zeroth | pending: needs tenet's history, your recordings, and a GPU run | | | |
+| EN-YOU (42) | **WER 5.0**, script 0% | not run | WER 5.0, all 42 → en | not run |
+| MIXED-YOU, KO-Zeroth | pending: your recordings; a GPU run | | | |
 
 What this shows:
 - Today, any Korean you say comes out as English.
@@ -220,7 +222,10 @@ What this shows:
   English inside Korean: told `ko`, it transliterates (patient → 페이션트, scanning
   electron microscopy → 스캐닝 일렉트론 마이크로스커피). Told `en`, it translates the Korean.
 - Forcing `ko` on English speech is unusable (WER 95), so routing is required, and the
-  `<|en|>` path has to stay as it is.
+  `<|en|>` path has to stay as it is. Whisper's own detection sent all 42 of your English
+  dictations to `en`, so routing doesn't touch your English.
+- 31 of EN-YOU's 42 references are transcripts you accepted unchanged, so any change from
+  stock output counts as an error there. That makes "Δ ≤ 0" strict, as today's gate is.
 - Even the best zero-shot setting leaves at least one span in the wrong script in 40–55%
   of mixed sentences. That is the gap training has to close.
 
@@ -242,10 +247,10 @@ now. Each set is re-measured on tenet's GPU before the gate.
 
 ## Compute
 
-- **GPU:** tenet's card couldn't be checked from here (no access). Commit b0aa67d measured
-  "2.66 of 5.63 GiB" on it, which matches the GTX 1660 Ti on record: 6 GB, Turing, fp16
-  without tensor cores (about 11 TFLOPS peak), no bf16. Confirm with
-  `nvidia-smi --query-gpu=name,memory.total --format=csv` once the other job is done.
+- **GPU, confirmed 2026-10-20:** NVIDIA GeForce GTX 1660 Ti, 6144 MiB. That's Turing:
+  fp16 without tensor cores (about 11 TFLOPS peak), no bf16. When checked, another job
+  held 4057 MiB at 100% utilization, so nothing for this plan runs until it ends. The host
+  has 16 cores and 15 GB of RAM.
 - **Does it fit:** yes, with serving paused (`training.pause_serving`). fp16 weights
   (1.6 GB), LoRA and Adam state (~0.2 GB), and activations with gradient checkpointing at
   batch 2 (1.5–2.5 GB) come to about 4–4.5 GB of 5.6.
@@ -261,7 +266,7 @@ now. Each set is re-measured on tenet's GPU before the gate.
   on GPU, and the TTS pilot. A full TTS run of 5–10 h of audio is another 2–5 h.
 - **Disk:** ~16 GB downloads (FLEURS ko/en 3.6 GB, Zeroth 10.3 GB, HiKE 0.24 GB), about
   the same unpacked; optional MUSAN 11 GB, RIRS 1.3 GB, LibriSpeech-100 6.3 GB; up to 75 GB
-  of encoder cache. tenet's free space is unchecked.
+  of encoder cache. tenet has 812 GB free.
 
 ## Prep that needs no GPU
 
@@ -277,17 +282,22 @@ Done, on the Mac (CPU and disk only; scratch at `/Volumes/T7/Stockpile/scratch/u
   - 15 GB under `public/`: FLEURS ko/en (all splits), HiKE, Zeroth.
   - Manifests match the published counts.
   - `SOURCES.tsv` records each set's URL, license, sha256 and fetch time.
-  - It can go to tenet over the LAN instead of being downloaded again:
-    `rsync -a public/ justin06lee@192.168.1.172:una-koen/`. Then run `fetch_public.sh`
-    there: it skips every finished download and rewrites the manifests for tenet's paths.
+  - It went to tenet over the LAN instead of being downloaded again, as
+    `COPYFILE_DISABLE=1 tar -cf - . | ssh … 'ionice -c 3 nice -n 19 tar -xf -'`. Without
+    `COPYFILE_DISABLE`, macOS tar adds `._*` files, which broke the Zeroth reader. Running
+    `fetch_public.sh` there afterwards skips every finished download and rewrites the
+    manifests for tenet's paths.
 - The baselines above.
 - midna's dictations catalogued from a read-only copy.
 
-Ready to run on tenet once access is sorted out with the Server services teammate:
-1. Copy the Mac's `public/` to `~/una-koen` and run `fetch_public.sh ~/una-koen` with
-   `PY=~/una/server/.venv/bin/python` (or let it download everything), at idle priority.
-2. `koen_data.py catalog --server-dir ~/una/server --lid large-v3-turbo` on tenet's
-   history: CPU, `nice`, 2 threads, after the merge.
+On tenet, CPU and disk only, at idle priority:
+- The same 15 GB is at `~/una-koen/`, copied from the Mac over the LAN.
+- The scripts are at `~/una-koen/scripts/`, outside the checkout, until this commit is
+  pulled there.
+- Manifests were rebuilt for tenet's paths in `~/una-koen/manifests/`, with the same
+  counts as the Mac's. The GPU job held 4057 MiB at 100% throughout.
+- Your history wasn't catalogued again: tenet's database holds the same 67 dictations as
+  midna's.
 
 Next, once approved, still without a GPU:
 - The code changes in the training loop and their tests.

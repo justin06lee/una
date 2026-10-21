@@ -55,6 +55,8 @@ def zeroth(args: argparse.Namespace) -> None:
     """Zeroth-Korean (LibriSpeech layout): <spk>/<utt>.flac beside <spk>_*.trans.txt lines 'utt text'."""
     writer = _writer(FIELDS)
     for trans in sorted(Path(args.dir).expanduser().rglob("*.trans.txt")):
+        if trans.name.startswith("._"):
+            continue  # macOS AppleDouble metadata, when the tree was copied with macOS tar
         for line in trans.read_text(encoding="utf-8").splitlines():
             utt, _, text = line.partition(" ")
             audio = trans.parent / f"{utt}.flac"
