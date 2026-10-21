@@ -1,0 +1,17 @@
+[Unit]
+Description=una dictation server
+Wants=ollama.service
+After=ollama.service network-online.target
+
+[Service]
+WorkingDirectory=@SERVER@
+# ollama on PATH: a promoted style model is made with `ollama create`
+Environment=PATH=@SHARE@/ollama/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@SERVER@/run.sh
+# uv run exits 143 when systemd stops it with SIGTERM: that is a clean stop
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

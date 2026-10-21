@@ -50,7 +50,9 @@ Open `http://<box>:8100` for the dashboard — your transcript feed, review queu
 training runs and usage insights, in light or dark. First dictation downloads the Whisper
 model (~1.6 GB) into the `hf-cache` volume.
 
-Without Docker: `cd server && uv sync --extra training && uv run uvicorn una_server.main:app --host 0.0.0.0 --port 8100`.
+Without Docker (or root): `server/deploy/linux/install.sh` sets up the same server, Ollama and
+training as systemd user services, with defaults for a 6 GB card. Re-run it after `git pull`;
+don't run a plain `uv sync` there, because the `cuda12` extra's cuDNN breaks torch's.
 
 On an NVIDIA Jetson (Orin, JetPack 7) there is no Docker step: `server/deploy/jetson/install.sh`
 sets up the server, Ollama and training without root — see [docs/jetson-server.md](docs/jetson-server.md).
