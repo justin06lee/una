@@ -281,7 +281,7 @@ A starting list:
 
 ```text
 http://192.168.1.172:8100        tenet on the home LAN
-http://tenet.local:8100          the same, by mDNS name, if the IP moves
+http://tenet.makima:8100         tenet over makima; only once the phone is on makima (option 1)
 <remote address>                 whatever section 4 decides
 ```
 
@@ -303,9 +303,9 @@ http://tenet.local:8100          the same, by mDNS name, if the IP moves
   - **`NSAllowsArbitraryLoads`** would do too. It's fine for a sideloaded build but needs a
     justification in App Review.
   - The desktop hit the same wall with its WKWebView.
-- **Pin tenet's LAN address.** [remote-access.md](remote-access.md) still shows
-  192.168.1.253 for tenet; today it is 192.168.1.172. A DHCP reservation on the router
-  keeps the LAN entry true.
+- **Pin tenet's LAN address.** There's no name to fall back on at home: `tenet.local`
+  doesn't resolve, because avahi is off on tenet. A DHCP reservation for 192.168.1.172 on
+  the router keeps the LAN entry true.
 - **Setup by QR code (later).** The dashboard could show a QR code holding the address list
   (and a token, if section 4 needs one); the app scans it instead of you typing URLs.
 
