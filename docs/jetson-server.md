@@ -4,6 +4,11 @@ A Jetson Orin Nano (8 GB) can be the whole una server: Whisper on its GPU, the
 cleanup model in Ollama, and both kinds of training. Tested on an Orin Nano Super
 with JetPack 7 (L4T R39, Ubuntu 24.04, CUDA 13.2 driver).
 
+midna, the Jetson this page was written on, served una from 2026-10-14 to 2026-10-21.
+una now runs on tenet, an x86 PC with a 6 GB card (see
+[`server/deploy/linux/install.sh`](../server/deploy/linux/install.sh)), and midna's data
+was merged into tenet's. The page stays as the recipe for a Jetson.
+
 ```sh
 git clone https://github.com/justin06lee/una.git ~/una
 ~/una/server/deploy/jetson/install.sh
@@ -74,9 +79,10 @@ rewrites what you said instead of cleaning it. MAXN SUPER power mode
 
 ## Pointing clients at it
 
-Add the Jetson in each client's Settings → Server, for example
-`http://midna.local:8100` on the LAN and its mesh name (`http://midna.makima:8100`)
-for everywhere else. Clients race every address and keep the fastest.
+Add the Jetson in each client's Settings → Server: its LAN address, for example
+`http://<jetson>.local:8100`, and a mesh or VPN name for everywhere else. Replace the
+old server's addresses rather than adding to them. Clients race every address and keep
+the fastest, so two live servers would split your dictations between them.
 
 ## Moving from another server
 

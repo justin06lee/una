@@ -12,11 +12,17 @@ uses whichever one answers first. Nothing to switch when you move:
 ```toml
 [server]
 urls = [
-    "http://192.168.1.253:8100",              # LAN — fastest at home
-    "http://box.tailnet-name.ts.net:8100",    # VPN — works anywhere
+    "http://192.168.1.172:8100",              # LAN — fastest at home
+    "http://tenet.makima:8100",               # private mesh — works anywhere
 ]
 autodiscover = true
 ```
+
+That is the list the una server on tenet is reached by today: its LAN address
+(a DHCP lease, so reserve it on the router) and its name on makima, the mesh this
+setup uses. midna, the Jetson that served una until 2026-10-21, no longer does;
+don't list it beside tenet, or dictations split between the two. A Tailscale name
+(`http://box.tailnet-name.ts.net:8100`) works the same way as the makima one.
 
 All addresses are probed **at the same time**, so an address that is dead right
 now costs nothing — the reachable one still wins in well under a second. The
