@@ -133,7 +133,10 @@ def backup_db(src: Path, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_name(dst.name + ".tmp")
     tmp.unlink(missing_ok=True)
-    source = sqlite3.connect(src)
+    # Read-only, so the copy changes nothing where it comes from. With no -wal file the
+    # server is stopped and una.db is all there is; a running one is read through its WAL.
+    live = src.with_name(src.name + "-wal").exists()
+    source = sqlite3.connect(uri(src) if live else uri(src) + "&immutable=1", uri=True)
     target = sqlite3.connect(tmp)
     try:
         source.backup(target)

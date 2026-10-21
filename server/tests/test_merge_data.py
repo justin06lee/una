@@ -230,3 +230,20 @@ def test_bare_metal_target_and_an_older_schema(tmp_path, servers):
     assert report["layout"]["models"] == str(Path("data").resolve())
     paths = [r[0] for r in rows(tgt_data, "SELECT audio_path FROM dictations")]
     assert all(p.startswith("data/audio/2026/10/") for p in paths)
+
+
+def test_a_snapshot_changes_nothing_on_the_source(tmp_path):
+    data = tmp_path / "data"
+    live = make_db(data)  # held open: a running server, with rows only in its WAL
+    live.execute("PRAGMA wal_autocheckpoint=0")
+    add_dictation(live, data, "data", "01LIVE00000000000000000001")
+    md.snapshot(data, tmp_path / "snap-live")
+    assert rows(tmp_path / "snap-live", "SELECT id FROM dictations") == [
+        ("01LIVE00000000000000000001",)
+    ]
+    live.close()  # a stopped server: una.db alone, no -wal or -shm
+
+    before = {p.name: p.stat().st_mtime_ns for p in data.iterdir()}
+    md.snapshot(data, tmp_path / "snap-stopped")
+    assert {p.name: p.stat().st_mtime_ns for p in data.iterdir()} == before
+    assert rows(tmp_path / "snap-stopped", "SELECT count(*) FROM dictations") == [(1,)]
