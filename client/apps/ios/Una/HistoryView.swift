@@ -25,16 +25,21 @@ struct HistoryView: View {
                 Section("Recent") {
                     if let e = m.historyError { Text(e).foregroundStyle(.secondary) }
                     ForEach(m.history) { d in
-                        Button { m.copy(d.text) } label: {
+                        NavigationLink(value: d) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(d.text.isEmpty ? "(nothing heard)" : d.text).foregroundStyle(.primary)
-                                Text("\(d.createdAt.prefix(16).replacingOccurrences(of: "T", with: " ")) · \(d.durationMs / 100 % 10 == 0 ? "\(d.durationMs / 1000)" : String(format: "%.1f", Double(d.durationMs) / 1000)) s")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(d.text.isEmpty ? "(nothing heard)" : d.text).foregroundStyle(.primary).lineLimit(3)
+                                HStack(spacing: 6) {
+                                    Text("\(d.createdAt.prefix(16).replacingOccurrences(of: "T", with: " ")) · \(String(format: "%.1f", Double(d.durationMs) / 1000)) s")
+                                    if m.pendingCorrections.contains(d.id) { Label("Fix waiting to send", systemImage: "arrow.up.circle") }
+                                    else if d.reviewed { Label("Fixed", systemImage: "checkmark.circle") }
+                                }
+                                .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
                 }
             }
+            .navigationDestination(for: DictationSummary.self) { FixView(summary: $0) }
             .navigationTitle("History")
             .refreshable { await m.loadHistory(); m.refreshSpool() }
             .task { await m.loadHistory(); m.refreshSpool() }

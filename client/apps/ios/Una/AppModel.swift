@@ -16,12 +16,14 @@ final class AppModel: Transcribing {
     var history: [DictationSummary] = []
     var historyError: String?
     var spooled: [Spool.Item] = []
+    var pendingCorrections: [String] = []
     var activeServer: ServerEntry?
     var onboarded: Bool = UserDefaults.standard.bool(forKey: "onboarded")
 
     let recorder = Recorder()
     let race = EndpointRace()
     let spool: Spool
+    let outbox: CorrectionOutbox
     private var ticker: Task<Void, Never>?
 
     // Keyboard dictation: the engine answers the keyboard's commands (see UnaKit Handoff).
@@ -38,6 +40,8 @@ final class AppModel: Transcribing {
         let group = Handoff.appGroup()
         let shared = group.flatMap { g in FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: g) }
         spool = Spool(directory: (shared ?? URL.applicationSupportDirectory).appendingPathComponent("spool"))
+        outbox = CorrectionOutbox(file: (shared ?? URL.applicationSupportDirectory).appendingPathComponent("corrections.json"))
+        pendingCorrections = outbox.list().map(\.dictationId)
         if let d = UserDefaults.standard.data(forKey: "servers"),
            let s = try? JSONDecoder().decode([ServerEntry].self, from: d), !s.isEmpty { servers = s }
         else { servers = [] }
@@ -193,8 +197,52 @@ final class AppModel: Transcribing {
         guard let server = await race.resolve(servers), let base = server.baseURL else {
             historyError = "No server answered."; return
         }
-        do { history = try await UnaClient(baseURL: base).listDictations(limit: 50).items; historyError = nil }
+        do { history = try await UnaClient(baseURL: base).listDictations(limit: 50).items; historyError = nil; await flushCorrections() }
         catch { historyError = error.localizedDescription }
+    }
+
+    // MARK: corrections
+
+    private func client() async -> UnaClient? {
+        guard let server = await race.resolve(servers), let base = server.baseURL else { return nil }
+        activeServer = server
+        return UnaClient(baseURL: base)
+    }
+
+    func loadDetail(id: String) async throws -> DictationDetail {
+        guard let c = await client() else { throw UnaError.unreachable("No server answered.") }
+        return try await c.dictation(id: id)
+    }
+
+    func loadAudio(id: String) async throws -> Data {
+        guard let c = await client() else { throw UnaError.unreachable("No server answered.") }
+        return try await c.audio(id: id)
+    }
+
+    enum SubmitResult: Equatable { case sent(CorrectionResponse), queued(String) }
+
+    /// Sends the fix now, or keeps it on the phone and sends it when the server next answers.
+    func submitCorrection(id: String, _ req: CorrectionRequest) async throws -> SubmitResult {
+        if let c = await client() {
+            do {
+                let r = try await c.correct(id: id, req)
+                outbox.remove(id: id); pendingCorrections = outbox.list().map(\.dictationId)
+                await loadHistory()
+                return .sent(r)
+            } catch let e as UnaError where e.isRetryable { await race.invalidate(); return queue(id, req, e.localizedDescription) }
+        }
+        return queue(id, req, "No server answered.")
+    }
+
+    private func queue(_ id: String, _ req: CorrectionRequest, _ why: String) -> SubmitResult {
+        outbox.add(id: id, req); pendingCorrections = outbox.list().map(\.dictationId)
+        return .queued(why)
+    }
+
+    func flushCorrections() async {
+        guard !outbox.list().isEmpty, let c = await client() else { return }
+        _ = await outbox.flush(using: c)
+        pendingCorrections = outbox.list().map(\.dictationId)
     }
 
     func copy(_ text: String) { UIPasteboard.general.string = text }

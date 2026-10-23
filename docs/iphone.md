@@ -703,10 +703,25 @@ The mic key is live. The keyboard cannot record, so it is a remote: the containi
 
 Verified in the simulator: the keyboard renders and types, the mic key shows the Full Access notice when Full Access is off (screenshot `una-kb-fullaccess-notice.png`), and the debug-WAV flow uploads and returns text. Not verified in the simulator: the keyboard-mic to engine to upload run, because the simulator keyboard could not be given Full Access (the Settings navigation would not respond to scripted clicks). The simulator's Core Audio also deadlocks on AVAudioEngine start, so the DEBUG-only feed skips the real session there.
 
-### Needs the device
-1. Allow Full Access: Settings > General > Keyboard > Keyboards > Una.
-2. Real mic and background audio: arm in Una, switch to Notes, tap mic, speak, tap mic: text is inserted. Leave idle 5+ minutes to see the idle timeout; lock the phone and repeat.
-3. App-hop prompt: disarm, tap mic, tap "Open Una" (`una://arm` via the responder chain; on iOS 26 it needs Full Access), return with the status-bar back link.
-4. Interruptions (call, Siri) disarm; route change (AirPods); orange mic dot.
-5. First-arm microphone permission prompt.
-6. Keyboard memory with Instruments; Darwin notification latency with a foreground host app.
+## Step 3 status (built)
+
+History rows open a fix screen (`Una/FixView.swift`): raw transcript ("What you said") and cleaned text ("How it should read") in two editors, a live word diff of the final text, a Play button for the stored audio, and a status row showing whether a correction is already filed. Save sends `PUT /v1/dictations/{id}/correction` (the same route the desktop popup and dashboard use; source `popup`). If the server can't be reached the fix goes into a one-per-dictation JSON outbox in the shared container and is retried whenever History reloads; a 4xx answer drops it. UnaKit (`Corrections.swift`, 73 tests in all) holds the diff, the request building and the outbox.
+
+Verified in the simulator against a throwaway dictation on the server: open row, edit "Oona" to "Una", diff shown, Save, the server then showed `reviewed: true` with the polished text, and History showed the Fixed badge. Screenshots: `una-step3-history.png`, `una-step3-fix-diff.png`, `una-step3-history-fixed.png` in the scratch folder. The test dictation was deleted afterwards.
+
+Not built: the keyboard's "fix the last dictation" chip. The keyboard sits near 44 MB and an in-place swap needs `documentContextBeforeInput` behaviour that only a real host app shows. Corrections are made in the app's History.
+
+## Needs the device (one sitting)
+
+Install on the phone, then run these in order.
+1. Full Access: Settings > General > Keyboard > Keyboards > Una > Allow Full Access.
+2. Mic permission: first arm in Una shows the microphone prompt; allow it.
+3. Real mic and background audio: arm in Una, switch to Notes, tap the keyboard mic, speak, tap mic again; the text is inserted. Leave it idle 5+ minutes for the idle timeout, then lock the phone and repeat.
+4. App-hop prompt: disarm in Una, tap the keyboard mic, tap "Open Una" (`una://arm`; on iOS 26 it needs Full Access), return with the status-bar back link.
+5. Interruptions: a call or Siri should disarm; switch to AirPods mid-session; watch for the orange mic dot.
+6. Haptics: with Full Access on, key presses click; with it off, nothing and no crash.
+7. 2a leftovers: hold delete (repeat), double-tap shift (caps lock), double space (period), rotate to landscape.
+8. Memory: attach Instruments to the keyboard process while typing and dictating (simulator showed ~44 MB; limit ~77 MB). Check Darwin notification latency with a foreground host app.
+9. Tailscale: install the Tailscale app, join the tailnet, add `http://tenet.tailddc9d9.ts.net:8100` in Servers, run Test all on mobile data.
+10. Fix screen: open a dictation, tap Play (audio plays through the speaker), edit, Save; turn on airplane mode, Save again (the "saved on this phone" note), turn it off, reload History (it sends).
+11. Keyboard fix chip: not built; skip.

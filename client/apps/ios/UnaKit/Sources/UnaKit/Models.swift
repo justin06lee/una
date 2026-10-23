@@ -21,7 +21,7 @@ public struct DictationResponse: Codable, Sendable, Equatable {
     public let llmModel: String?
 }
 
-public struct DictationSummary: Codable, Sendable, Equatable, Identifiable {
+public struct DictationSummary: Codable, Sendable, Equatable, Hashable, Identifiable {
     public let id: String
     public let createdAt: String
     public let appName: String?
