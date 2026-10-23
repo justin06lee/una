@@ -439,15 +439,14 @@ iPad yet", `internal/migrate/plan.go` in the makima repo). It could gain one of 
    8100 (`sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0`
    on firewalld; with ufw, `sudo ufw allow in on tailscale0 to any port 8100`). Check from
    the phone with Tailscale on and Wi-Fi off.
-4. **The app's server list** holds three addresses, raced as today: `http://192.168.1.172:8100`
-   (home), `http://tenet.<tailnet>.ts.net:8100` (MagicDNS), and `http://100.x.y.z:8100`
+4. **The app's server list** (entered by the user in onboarding; the app preconfigures
+   nothing) holds three addresses, raced as today: the LAN address, `http://tenet.<tailnet>.ts.net:8100` (MagicDNS), and `http://100.x.y.z:8100`
    (the tailnet IP, which works if MagicDNS is off). The first answer wins, so at home the
    LAN address wins and away the tailnet ones do. No client change: they are ordinary
    entries. The second name needs the tailnet name filled in once tenet has joined.
-5. **ATS and plain http.** ATS doesn't apply to IP literals, so the `100.x` entry needs
-   nothing. The MagicDNS name is a real domain, so `Config/Una-Info.plist` carries an
-   exception for `ts.net` (`NSIncludesSubdomains` + `NSExceptionAllowsInsecureHTTPLoads`),
-   next to the existing one for `tenet.makima`. Plain http is acceptable here because
+5. **ATS and plain http.** `Config/Una-Info.plist` sets `NSAllowsArbitraryLoads` (see the
+   checklist in section 5), which covers the MagicDNS name and any other hostname the user
+   enters; the `ts.net` and `tenet.makima` exceptions it replaces are gone. Plain http is acceptable here because
    WireGuard already encrypts the hop. Reaching a LAN or `100.x` address from the app also
    triggers the **Local Network** prompt once.
 6. **Optional hardening:** an ACL that limits the phone to `tenet:8100`, and VPN On Demand
@@ -630,7 +629,33 @@ client/apps/ios/
                        encoder, spool, App Group IPC, models matching schemas.py
 ```
 
-Swift only, no third-party packages, iOS 18 minimum (to confirm against your phone). Unit
+Swift only, no third-party packages, **iOS 17 minimum** (Justin, 2026-10-22: iOS 17 and 18
+run on the same iPhones, XS/XR and newer, so 17 costs no devices). Nothing that needs iOS 18
+may be used without an `if #available` fallback (the new Tab API, mesh gradients and the
+like).
+
+**General-purpose rule.** Anyone should be able to download the app, so nothing in it names
+Justin: no server addresses, hostnames, personal ids, paths or sample data. The server
+address, the away-from-home setup and (later) pairing all go through first-run
+onboarding (`Una/OnboardingView.swift`), and the server list starts empty. The bundle id and
+App Group id live in one place, `Config/Una.xcconfig` (`UNA_BUNDLE_ID`, default
+`org.example.una`; the group is `group.$(UNA_BUNDLE_ID)`), and are changed there when
+signing. Test fixtures use neutral placeholders such as `http://192.168.1.10:8100`.
+
+**App Store-ready checklist**, even while it sideloads:
+
+- [x] Privacy usage strings: microphone and local network (in the build settings).
+- [x] `Una/PrivacyInfo.xcprivacy`: no tracking, no collected data types (audio goes only to
+  the user's own server), and the required-reason APIs declared (UserDefaults `CA92.1`,
+  file timestamps `C617.1`).
+- [x] A Full Access explanation in the app (onboarding and the Servers tab, one shared text).
+- [ ] The same explanation in the keyboard itself (step 2).
+- [x] No analytics, no third-party packages. No private APIs (keep it so).
+- [ ] ATS: the app sets `NSAllowsArbitraryLoads` because the user's own server is plain
+  http at an address nobody can predict. App Review asks for a justification for that key;
+  the answer is "the app connects only to a server address the user types". Revisit if
+  review pushes back (the fallback is `NSAllowsLocalNetworking` plus per-domain exceptions).
+- [ ] Real bundle id, App Group, signing and an app icon, once the paid account exists. Unit
 tests for UnaKit (WAV header, endpoint race, response decoding against fixtures captured
 from the real server); the mic, background audio and the keyboard only behave truthfully on
 a device, so those are checked by hand on your iPhone.
