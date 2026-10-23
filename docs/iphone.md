@@ -187,10 +187,26 @@ The keyboard is a remote control; the app is the recorder.
 - **Every dictation after that, until the session ends**: tap, talk, tap. The text lands
   about as fast as on the desktop (tenet takes ~1.8 s for a typical dictation, plus the
   upload). Tap-and-hold-to-talk works as well as tap-to-toggle.
-- **The keyboard itself** is a dictation pad, not a QWERTY keyboard: a big mic key, space,
-  delete, return, the next-keyboard key, and the last result with *Fix*. You type with
-  Apple's keyboard and flick to una to speak. A full typing keyboard is weeks of work of its
-  own (layout, autocorrect, every language) and isn't needed for dictation.
+- **The keyboard itself** is a **full typing keyboard with dictation built in** (Justin's
+  call, 2026-10-22), matching Apple's as closely as a third party can:
+  - Letter layout (QWERTY, 10/9/7 rows), Apple's key sizes and spacing for the device
+    width, rounded keys with the shadow line, and light and dark appearance following
+    `traitCollection`.
+  - Press popups on letter keys, haptics on each key (needs Full Access:
+    `UIImpactFeedbackGenerator`), and the click sound via `UIDevice.playInputClick()`.
+  - Shift with double-tap caps lock and auto-capitalise from
+    `documentContextBeforeInput`; delete with press-and-hold repeat (accelerating).
+  - The numbers page and the symbols page, return (label follows `returnKeyType`), space
+    (long-press for the trackpad cursor, double-space for a period), and the globe key
+    (`handleInputModeList`, `needsInputModeSwitchKey`).
+  - The **mic is a first-class key** beside the space bar; a suggestion strip above the
+    keys holds the last result with *Fix* and an error line.
+  - Out of scope for the first cut: autocorrect and the suggestion engine, emoji, and
+    languages beyond English layouts. The system offers none of these to third parties for
+    free, so what you get is typing without Apple's predictions; say so before it surprises.
+
+  The keyboard stays a remote control for the recording (section above); it adds drawing
+  and key handling, not audio or networking.
 - **Where it can't go**: password fields and phone-number pads always get Apple's keyboard,
   and an app may refuse third-party keyboards altogether.
 
@@ -311,7 +327,8 @@ http://tenet.makima:8100         tenet over makima; only once the phone is on ma
 
 ## 4. Reaching tenet away from home
 
-**This one is your call; the note doesn't pick.** At home the phone reaches
+**Decided: option 2, Tailscale** (Justin, 2026-10-22; see the end-to-end checklist under
+option 2). The other options stay below as the record of what was weighed. At home the phone reaches
 `http://192.168.1.172:8100` directly. Away from home, something has to carry it there. The
 options fall into two families:
 
@@ -397,7 +414,46 @@ iPad yet", `internal/migrate/plan.go` in the makima repo). It could gain one of 
 - *Cost:* $0 for 1b; 1a needs the $99 account. A clearnet relay on a VPS is ~$4–6 a month,
   which both shapes likely need.
 
-### Option 2: Tailscale
+### Option 2: Tailscale — CHOSEN
+
+**End to end, what it takes:**
+
+1. **tenet joins the tailnet.** Needs sudo, so Justin or the lead runs it on tenet (Arch
+   commands, as in [remote-access.md](remote-access.md#tailscale-setup)):
+
+   ```sh
+   sudo pacman -S tailscale && sudo systemctl enable --now tailscaled
+   sudo tailscale up
+   ```
+
+   `tailscale up` prints a login URL; sign in as the account the phone will use. Then, in
+   the admin console, **disable key expiry** for tenet. Read off its names with
+   `tailscale ip -4` (the `100.x.y.z`) and `tailscale status --json | grep -i dnsname`
+   (the `tenet.<tailnet>.ts.net` MagicDNS name). If tenet already runs Tailscale, only the
+   last step is needed.
+2. **The phone** installs Tailscale from the App Store and signs into the same tailnet.
+   Free signing is fine: Tailscale's own app carries the VPN entitlement, not una's.
+3. **una listens on all interfaces.** `bind` defaults to `0.0.0.0`
+   (`server/src/una_server/config.py`), so traffic arriving on `tailscale0` reaches port
+   8100 with no change. If tenet's firewall is on, `tailscale0` must be allowed to reach
+   8100 (`sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0`
+   on firewalld; with ufw, `sudo ufw allow in on tailscale0 to any port 8100`). Check from
+   the phone with Tailscale on and Wi-Fi off.
+4. **The app's server list** holds three addresses, raced as today: `http://192.168.1.172:8100`
+   (home), `http://tenet.<tailnet>.ts.net:8100` (MagicDNS), and `http://100.x.y.z:8100`
+   (the tailnet IP, which works if MagicDNS is off). The first answer wins, so at home the
+   LAN address wins and away the tailnet ones do. No client change: they are ordinary
+   entries. The second name needs the tailnet name filled in once tenet has joined.
+5. **ATS and plain http.** ATS doesn't apply to IP literals, so the `100.x` entry needs
+   nothing. The MagicDNS name is a real domain, so `Config/Una-Info.plist` carries an
+   exception for `ts.net` (`NSIncludesSubdomains` + `NSExceptionAllowsInsecureHTTPLoads`),
+   next to the existing one for `tenet.makima`. Plain http is acceptable here because
+   WireGuard already encrypts the hop. Reaching a LAN or `100.x` address from the app also
+   triggers the **Local Network** prompt once.
+6. **Optional hardening:** an ACL that limits the phone to `tenet:8100`, and VPN On Demand
+   so the VPN is up only off home Wi-Fi.
+
+**Details of the option:**
 
 - *How:* the Tailscale app on the phone (App Store) and `tailscaled` on tenet, in one
   tailnet. The app's list gains `http://tenet.<tailnet>.ts.net:8100` and tenet's `100.x`
@@ -585,12 +641,14 @@ Rough sizes, in focused working days, for one developer:
 |---|---|---|
 | 0 | **Spike on your phone, under free signing**: app + keyboard install side by side, App Group shared between them, keyboard opens the app, recording carries on after you go back, Darwin notifications both ways. Everything else rests on this. | 1–2 |
 | 1 | **App MVP**: server list with *Test all*, record → 16 kHz WAV → upload, result copied to the clipboard, history, spool and retry. Usable at home on its own. | 3–4 |
-| 2 | **Keyboard**: dictation pad (mic, space, delete, return, next-keyboard), session hand-off to the app, live level meter, insert, errors (no server, Full Access off, training running), session timeout. | 4–6 |
+| 2a | **Typing keyboard**: letters, shift and caps lock, delete with repeat, numbers and symbols pages, return, space, globe, popups, haptics, light and dark, device-size metrics. Measure memory in the simulator against the extension limit and record the headroom. | 6–9 |
+| 2b | **Mic as remote control**: mic key, session hand-off to the app (`una://listen`), App Group and Darwin notifications, live level meter, insert, errors (no server, Full Access off, training running), session timeout. | 4–6 |
 | 3 | **Corrections**: fix chip and in-place swap, fix sheet with playback, review tab. | 3–4 |
-| 4 | **Away from home**: depends on the pick — see the last column of the table in section 4. | ½ – 20+ |
+| 4 | **Away from home: Tailscale** (chosen): tenet joins the tailnet, the phone installs the app, two addresses added to the list (section 4, option 2). | ½ |
 | 5 | **Polish**: onboarding, haptics, path-change re-probe, this doc rewritten as a how-to. | 2–3 |
 
-About three weeks to a keyboard you'd use daily at home, plus whatever section 4 costs.
+About four to five weeks to a keyboard you'd use daily (the full typing keyboard roughly
+doubles step 2), plus half a day for Tailscale.
 With the paid account, step 0's re-signing chores go away and TestFlight replaces the
 weekly cable reinstall; nothing in steps 1–3 changes.
 
@@ -600,10 +658,9 @@ Mode** on (Settings → Privacy & Security, after the first install attempt).
 
 ## What's needed from you
 
-- **The pick for section 4.** If it's option 1, also whether a phone may join makima at
-  all, and on what terms (a scoped auth key, the network lock).
+- **Section 4 is decided: Tailscale.** Still needed: the sudo commands on tenet (option 2,
+  step 1), and the tailnet name once tenet has joined.
 - **The phone.** Which iPhone, and which iOS version.
-- **The keyboard.** Is a dictation pad enough, or do you want a full typing keyboard?
 - **Xcode** on this Mac, signed into the Apple ID you'll use (it isn't installed today).
 - **Home network**, for options 3 and 5: whether the ISP uses CGNAT (compare the router's
   WAN IP with your public IP), and a DHCP reservation for tenet.
