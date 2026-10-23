@@ -692,3 +692,7 @@ Mode** on (Settings → Privacy & Security, after the first install attempt).
 - **Home network**, for options 3 and 5: whether the ISP uses CGNAT (compare the router's
   WAN IP with your public IP), and a DHCP reservation for tenet.
 - **A domain**, for option 4: whether you have one on Cloudflare.
+
+## Step 2a status (built)
+
+The typing keyboard is built in pure UIKit (`client/apps/ios/UnaKeyboard/`, logic and tests in UnaKit `KeyboardLogic`). Measured footprint in the iOS 26.5 simulator after typing: about 42 MB, roughly 35 MB under the ~77 MB jetsam figure reported on devices (device numbers differ; re-measure with Instruments on the iPhone). Full Access is requested for haptics now and the app link in 2b; the keyboard has no network code. The mic key is a placeholder until 2b.
