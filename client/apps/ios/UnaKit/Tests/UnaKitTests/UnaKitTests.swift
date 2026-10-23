@@ -105,7 +105,7 @@ final class RaceTests: XCTestCase {
         let r = await race.testAll([a, b]); XCTAssertEqual(r.map(\.entry), [a, b])
     }
     func testServerEntryURL() {
-        XCTAssertEqual(ServerEntry(name: "x", url: "192.168.1.172:8100/").baseURL?.absoluteString, "http://192.168.1.172:8100")
+        XCTAssertEqual(ServerEntry(name: "x", url: "192.168.1.10:8100/").baseURL?.absoluteString, "http://192.168.1.10:8100")
     }
 }
 private actor Counter { var n = 0; func bump() { n += 1 } }
@@ -158,7 +158,7 @@ final class ClientTests: XCTestCase {
     private func client() -> UnaClient {
         let c = URLSessionConfiguration.ephemeral; c.protocolClasses = [StubProtocol.self]
         StubProtocol.calls = 0
-        return UnaClient(baseURL: URL(string: "http://tenet:8100")!, session: URLSession(configuration: c))
+        return UnaClient(baseURL: URL(string: "http://una.example:8100")!, session: URLSession(configuration: c))
     }
 
     func testUploadBuildsMultipartAndDecodes() async throws {

@@ -33,6 +33,10 @@ struct ServersView: View {
                         HStack { Label("Test all", systemImage: "bolt.horizontal"); if m.testing { Spacer(); ProgressView() } }
                     }
                 }
+                Section("Privacy") {
+                    Text("Audio goes only to the servers listed above. No analytics, no accounts, nothing sent anywhere else.").font(.callout)
+                    Text(FullAccessText.explanation).font(.callout)
+                }
             }
             .navigationTitle("Servers")
             .toolbar { EditButton() }

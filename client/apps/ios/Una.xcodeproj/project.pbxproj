@@ -12,6 +12,7 @@
 
 /* Begin PBXFileReference section */
 		A10000000000000000000002 /* Una.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Una.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000099 /* Una.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Una.xcconfig; sourceTree = "<group>"; };
 		A10000000000000000000003 /* Una-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Una-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -48,6 +49,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000003 /* Una-Info.plist */,
+				A10000000000000000000099 /* Una.xcconfig */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -147,7 +149,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -161,7 +163,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
@@ -170,6 +172,7 @@
 		};
 		A10000000000000000000017 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000099 /* Una.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -177,14 +180,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Una-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Una;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Una talks to your dictation server on your home network.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Una records your voice to transcribe it on your own server.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Una connects to the dictation server you configured, which may be on your local network. Your audio goes only to that server.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Una records your voice to transcribe it. The audio is sent only to the dictation server you configured, and nowhere else.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.tenet.una;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(UNA_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -193,6 +196,7 @@
 		};
 		A10000000000000000000018 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000099 /* Una.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -200,14 +204,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Una-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Una;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Una talks to your dictation server on your home network.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Una records your voice to transcribe it on your own server.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Una connects to the dictation server you configured, which may be on your local network. Your audio goes only to that server.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Una records your voice to transcribe it. The audio is sent only to the dictation server you configured, and nowhere else.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.tenet.una;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(UNA_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;

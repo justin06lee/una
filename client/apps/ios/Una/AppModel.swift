@@ -17,6 +17,7 @@ final class AppModel {
     var historyError: String?
     var spooled: [Spool.Item] = []
     var activeServer: ServerEntry?
+    var onboarded: Bool = UserDefaults.standard.bool(forKey: "onboarded")
 
     let recorder = Recorder()
     let race = EndpointRace()
@@ -28,7 +29,7 @@ final class AppModel {
         spool = Spool(directory: dir)
         if let d = UserDefaults.standard.data(forKey: "servers"),
            let s = try? JSONDecoder().decode([ServerEntry].self, from: d), !s.isEmpty { servers = s }
-        else { servers = ServerEntry.homeDefaults }
+        else { servers = [] }
     }
 
     private func saveServers() {
@@ -42,6 +43,12 @@ final class AppModel {
             await debugFeed(path: path)
         }
         #endif
+    }
+
+    func finishOnboarding(adding entry: ServerEntry?) {
+        if let entry { servers.append(entry) }
+        onboarded = true
+        UserDefaults.standard.set(true, forKey: "onboarded")
     }
 
     func refreshSpool() { spooled = spool.list() }

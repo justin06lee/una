@@ -6,10 +6,6 @@ public struct ServerEntry: Codable, Sendable, Equatable, Identifiable, Hashable 
     public var url: String
     public init(id: UUID = UUID(), name: String, url: String) { self.id = id; self.name = name; self.url = url }
 
-    public static let homeDefaults = [
-        ServerEntry(name: "tenet (home LAN)", url: "http://192.168.1.172:8100"),
-        ServerEntry(name: "tenet (makima)", url: "http://tenet.makima:8100"),
-    ]
     public var baseURL: URL? {
         var t = url.trimmingCharacters(in: .whitespaces)
         if !t.contains("://") { t = "http://" + t }
