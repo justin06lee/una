@@ -1,4 +1,4 @@
 // The one place the app's identity lives. Change these when signing with your own team;
 // nothing else in the project names a bundle or app group id.
-UNA_BUNDLE_ID = org.example.una
+UNA_BUNDLE_ID = com.justin06lee.una
 UNA_APP_GROUP = group.$(UNA_BUNDLE_ID)

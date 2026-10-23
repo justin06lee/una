@@ -725,3 +725,11 @@ Install on the phone, then run these in order.
 9. Tailscale: install the Tailscale app, join the tailnet, add `http://tenet.tailddc9d9.ts.net:8100` in Servers, run Test all on mobile data.
 10. Fix screen: open a dictation, tap Play (audio plays through the speaker), edit, Save; turn on airplane mode, Save again (the "saved on this phone" note), turn it off, reload History (it sends).
 11. Keyboard fix chip: not built; skip.
+
+## Free Personal Team install (no App Group)
+
+A free Personal Team cannot get the App Groups capability: automatic signing fails with "profile doesn't match the entitlements file's value for com.apple.security.application-groups", even with the capability in the project. `UNA_BUNDLE_ID` is `com.justin06lee.una` in `Config/Una.xcconfig`. To install on a free team, build with the entitlements dropped and the team on the command line:
+
+`xcodebuild -project Una.xcodeproj -scheme Una -configuration Release -destination id=<device> -derivedDataPath /tmp/dd-una -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CODE_SIGN_ENTITLEMENTS= build`, then `xcrun devicectl device install app --device <id> .../Una.app`.
+
+Without the group, the keyboard and app share no container, so the mic-key handoff and shared settings will not work on that build; typing works. A paid team restores them (drop the `CODE_SIGN_ENTITLEMENTS=` override).
