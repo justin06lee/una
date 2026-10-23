@@ -8,6 +8,13 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
+			<key>ts.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
 			<key>tenet.makima</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
