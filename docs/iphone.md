@@ -443,7 +443,9 @@ iPad yet", `internal/migrate/plan.go` in the makima repo). It could gain one of 
    nothing) holds three addresses, raced as today: the LAN address, `http://tenet.<tailnet>.ts.net:8100` (MagicDNS), and `http://100.x.y.z:8100`
    (the tailnet IP, which works if MagicDNS is off). The first answer wins, so at home the
    LAN address wins and away the tailnet ones do. No client change: they are ordinary
-   entries. The second name needs the tailnet name filled in once tenet has joined.
+   entries. Justin's example, now live: tailnet `tailddc9d9.ts.net`, machine `tenet`, key
+   expiry off, so the second entry is `http://tenet.tailddc9d9.ts.net:8100` (answers 200 from
+   the Mac). Other users type their own; the app preconfigures nothing.
 5. **ATS and plain http.** `Config/Una-Info.plist` sets `NSAllowsArbitraryLoads` (see the
    checklist in section 5), which covers the MagicDNS name and any other hostname the user
    enters; the `ts.net` and `tenet.makima` exceptions it replaces are gone. Plain http is acceptable here because
