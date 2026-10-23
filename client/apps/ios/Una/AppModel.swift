@@ -38,9 +38,9 @@ final class AppModel: Transcribing {
 
     init() {
         let group = Handoff.appGroup()
-        let shared = group.flatMap { g in FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: g) }
-        spool = Spool(directory: (shared ?? URL.applicationSupportDirectory).appendingPathComponent("spool"))
-        outbox = CorrectionOutbox(file: (shared ?? URL.applicationSupportDirectory).appendingPathComponent("corrections.json"))
+        let base = Handoff.localBase(group: group)
+        spool = Spool(directory: base.appendingPathComponent("spool"))
+        outbox = CorrectionOutbox(file: base.appendingPathComponent("corrections.json"))
         pendingCorrections = outbox.list().map(\.dictationId)
         if let d = UserDefaults.standard.data(forKey: "servers"),
            let s = try? JSONDecoder().decode([ServerEntry].self, from: d), !s.isEmpty { servers = s }
@@ -57,7 +57,7 @@ final class AppModel: Transcribing {
             recorder.onInterrupted = { [weak e] in e?.disarm() }
             e.startListening()
             engine = e
-        } else { armError = "The shared container is unavailable, so the keyboard can't talk to the app." }
+        } else { armError = "The shared container is unavailable, so the keyboard can't talk to the app. (Free Apple account: typing works, the mic key doesn't.)" }
     }
 
     // MARK: keyboard dictation

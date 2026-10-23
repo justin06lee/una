@@ -313,3 +313,24 @@ final class MicRemoteTests: XCTestCase {
         XCTAssertEqual(m.statusChanged(Status(phase: .idle, at: 100), now: 101), [])
     }
 }
+
+final class LocalBaseTests: XCTestCase {
+    func testNilContainerFallsBack() {
+        let fb = URL(fileURLWithPath: "/tmp/una-fallback")
+        XCTAssertEqual(Handoff.localBase(group: "group.una.example", fallback: fb, container: { _ in nil }), fb)
+        XCTAssertEqual(Handoff.localBase(group: nil, fallback: fb, container: { _ in URL(fileURLWithPath: "/x") }), fb)
+    }
+    func testContainerWinsWhenPresent() {
+        let c = URL(fileURLWithPath: "/tmp/una-container")
+        XCTAssertEqual(Handoff.localBase(group: "group.una.example", fallback: URL(fileURLWithPath: "/tmp/fb"), container: { _ in c }), c)
+    }
+    func testSpoolAndOutboxWorkInFallbackDir() throws {
+        let d = FileManager.default.temporaryDirectory.appendingPathComponent("una-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: d) }
+        let base = Handoff.localBase(group: "group.una.example", fallback: d, container: { _ in nil })
+        let spool = Spool(directory: base.appendingPathComponent("spool"))
+        _ = try spool.add(wav: Data([1, 2, 3]), utteranceId: "u1")
+        XCTAssertEqual(spool.list().count, 1)
+        XCTAssertTrue(CorrectionOutbox(file: base.appendingPathComponent("corrections.json")).list().isEmpty)
+    }
+}

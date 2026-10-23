@@ -35,6 +35,16 @@ public enum Handoff {
         return (v?.isEmpty == false && v?.hasPrefix("$(") == false) ? v : nil
     }
 
+    /// Where the app keeps its spool and correction outbox: the group container when the
+    /// entitlement exists, else the app's own Application Support (free-team builds).
+    public static func localBase(group: String?, fallback: URL = .applicationSupportDirectory,
+                                 container: (String) -> URL? = { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }) -> URL {
+        group.flatMap(container) ?? fallback
+    }
+
+    /// Shown on the keyboard's mic key when the build has no App Group.
+    public static let noGroupNotice = "Dictation needs the Una app group, which a free Apple account can't sign. Typing works."
+
     /// `<group container>/handoff`, or nil when the entitlement is missing.
     public static func directory(group: String) -> URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?

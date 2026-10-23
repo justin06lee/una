@@ -90,7 +90,7 @@ final class KeyboardViewController: UIInputViewController {
         case .nextKeyboard: advanceToNextInputMode()
         case .mic:
             let id = UUID().uuidString.lowercased()
-            if store == nil, hasFullAccess { remote.fail("Dictation isn't set up in this build.") }
+            if store == nil { remote.fail(Handoff.noGroupNotice) }
             else { run(remote.tapMic(fullAccess: hasFullAccess, status: store?.readStatus(), now: now, newId: id)) }
         case .none: break
         }

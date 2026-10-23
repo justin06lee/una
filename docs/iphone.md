@@ -732,4 +732,9 @@ A free Personal Team cannot get the App Groups capability: automatic signing fai
 
 `xcodebuild -project Una.xcodeproj -scheme Una -configuration Release -destination id=<device> -derivedDataPath /tmp/dd-una -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CODE_SIGN_ENTITLEMENTS= build`, then `xcrun devicectl device install app --device <id> .../Una.app`.
 
-Without the group, the keyboard and app share no container, so the mic-key handoff and shared settings will not work on that build; typing works. A paid team restores them (drop the `CODE_SIGN_ENTITLEMENTS=` override).
+**Works on a free team:** the typing keyboard; in the app, onboarding, Record, upload, transcript, copy, History and the fix screen. The spool and correction outbox fall back to the app's own Application Support (`Handoff.localBase`; the group container is still used when it exists).
+**Doesn't:** the keyboard's mic key (the app/keyboard hand-off needs the shared container). It shows "Dictation needs the Una app group, which a free Apple account can't sign. Typing works."
+
+Ways forward:
+1. Paid account: drop the `CODE_SIGN_ENTITLEMENTS=` override; everything works unchanged.
+2. Keychain-access-group hand-off (not built): the keyboard and app share a keychain item group (`keychain-access-groups` is signable on a free team, to be confirmed on the device). Commands, status and the result would be written as small keychain items instead of files in the container; the Darwin notifications are unchanged. Needs: a keychain-backed `SharedStore`, a keychain entitlement in both targets, the extension's Full Access rules re-checked. Rough estimate: 1 to 2 days including device testing, with the risk that iOS blocks keychain sharing for a free team's profile.
