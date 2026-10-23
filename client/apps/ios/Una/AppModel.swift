@@ -3,7 +3,7 @@ import UIKit
 import UnaKit
 
 @MainActor @Observable
-final class AppModel {
+final class AppModel: Transcribing {
     enum Phase: Equatable { case idle, recording, uploading, done, failed(String) }
 
     var servers: [ServerEntry] { didSet { saveServers() } }
@@ -24,12 +24,67 @@ final class AppModel {
     let spool: Spool
     private var ticker: Task<Void, Never>?
 
+    // Keyboard dictation: the engine answers the keyboard's commands (see UnaKit Handoff).
+    private(set) var engine: DictationEngine?
+    var keyboardPhase: Status.Phase = .disarmed
+    var armError: String?
+    /// Minutes the armed audio session may sit idle before it closes; 0 = never.
+    var idleMinutes: Int = UserDefaults.standard.object(forKey: "idleMinutes") as? Int ?? 5 {
+        didSet { UserDefaults.standard.set(idleMinutes, forKey: "idleMinutes"); engine?.idleTimeout = idleMinutes > 0 ? Double(idleMinutes) * 60 : nil }
+    }
+    var keyboardArmed: Bool { keyboardPhase != .disarmed }
+
     init() {
-        let dir = URL.applicationSupportDirectory.appendingPathComponent("spool")
-        spool = Spool(directory: dir)
+        let group = Handoff.appGroup()
+        let shared = group.flatMap { g in FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: g) }
+        spool = Spool(directory: (shared ?? URL.applicationSupportDirectory).appendingPathComponent("spool"))
         if let d = UserDefaults.standard.data(forKey: "servers"),
            let s = try? JSONDecoder().decode([ServerEntry].self, from: d), !s.isEmpty { servers = s }
         else { servers = [] }
+        if let group, let dir = Handoff.directory(group: group) {
+            var capture: AudioCapture = recorder
+            #if DEBUG
+            if let p = UserDefaults.standard.string(forKey: "UnaDebugWAV") { capture = DebugFeedCapture(real: recorder, path: p) }
+            #endif
+            let e = DictationEngine(capture: capture, uploader: self, clock: SystemClock(), store: SharedStore(directory: dir),
+                                    notifier: DarwinNotifier(), group: group)
+            e.idleTimeout = idleMinutes > 0 ? Double(idleMinutes) * 60 : nil
+            e.onChange = { [weak self, weak e] in if let e { self?.keyboardPhase = e.armed ? e.status.phase : .disarmed } }
+            recorder.onInterrupted = { [weak e] in e?.disarm() }
+            e.startListening()
+            engine = e
+        } else { armError = "The shared container is unavailable, so the keyboard can't talk to the app." }
+    }
+
+    // MARK: keyboard dictation
+
+    func armKeyboard() async {
+        guard let engine else { return }
+        do { try await engine.arm(); armError = nil } catch { armError = error.localizedDescription }
+        keyboardPhase = engine.armed ? engine.status.phase : .disarmed
+    }
+
+    func disarmKeyboard() { engine?.disarm(); keyboardPhase = .disarmed }
+
+    /// Used by the engine when the keyboard asked for a dictation.
+    func transcribe(samples: [Int16], utteranceId: String) async throws -> String {
+        guard WAV.durationMs(sampleCount: samples.count) >= 300 else { throw DictationFailure("Too short. Speak a little longer.") }
+        let wav = WAV.encode(samples)
+        guard let server = await race.resolve(servers), let base = server.baseURL else {
+            _ = try? spool.add(wav: wav, utteranceId: utteranceId); refreshSpool()
+            throw DictationFailure("No server answered. Saved in Una for Retry.")
+        }
+        activeServer = server
+        do {
+            let r = try await UnaClient(baseURL: base).createDictation(wav: wav, utteranceId: utteranceId)
+            last = r
+            await loadHistory()
+            return r.text
+        } catch let e as UnaError {
+            await race.invalidate()
+            if e.isRetryable { _ = try? spool.add(wav: wav, utteranceId: utteranceId); refreshSpool() }
+            throw DictationFailure(e.localizedDescription + (e.isRetryable ? " Saved in Una for Retry." : ""))
+        }
     }
 
     private func saveServers() {
@@ -39,6 +94,7 @@ final class AppModel {
     func start() async {
         refreshSpool()
         #if DEBUG
+        if UserDefaults.standard.bool(forKey: "UnaDebugArm") { await armKeyboard() }
         if let path = UserDefaults.standard.string(forKey: "UnaDebugWAV"), UserDefaults.standard.bool(forKey: "UnaDebugAutorun") {
             await debugFeed(path: path)
         }
@@ -60,8 +116,13 @@ final class AppModel {
         case .recording: await finishRecording()
         case .uploading: break
         default:
+            guard engine?.status.phase != .recording, engine?.status.phase != .transcribing else {
+                phase = .failed("The keyboard is dictating right now."); return
+            }
             do {
-                try await recorder.start { [weak self] l in Task { @MainActor in self?.level = l } }
+                recorder.onLevel = { [weak self] l in Task { @MainActor in self?.level = l } }
+                try await recorder.arm()
+                try await recorder.begin()
                 phase = .recording; seconds = 0
                 let t0 = Date()
                 ticker = Task { [weak self] in
@@ -72,13 +133,15 @@ final class AppModel {
                         if self.seconds >= 300 { await self.finishRecording(); return }
                     }
                 }
-            } catch { phase = .failed(error.localizedDescription) }
+            } catch { if !keyboardArmed { recorder.disarm() }; phase = .failed(error.localizedDescription) }
         }
     }
 
     private func finishRecording() async {
         ticker?.cancel(); level = 0
-        let samples = recorder.stop()
+        let samples = recorder.finish()
+        recorder.onLevel = nil
+        if !keyboardArmed { recorder.disarm() }
         await upload(samples: samples)
     }
 

@@ -24,5 +24,7 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
 	</dict>
+	<key>UnaAppGroup</key>
+	<string>$(UNA_APP_GROUP)</string>
 </dict>
 </plist>

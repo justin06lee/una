@@ -8,6 +8,10 @@ struct UnaApp: App {
     var body: some Scene {
         WindowGroup {
             RootView().environment(model).task { await model.start() }
+                .onOpenURL { url in
+                    // una://arm, from the keyboard's "Open Una" prompt: start the audio session while we're frontmost.
+                    if url.host == "arm" { Task { await model.armKeyboard() } }
+                }
         }
     }
 }

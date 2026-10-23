@@ -56,7 +56,3 @@ struct OnboardingView: View {
         testing = false
     }
 }
-
-enum FullAccessText {
-    static let explanation = "Una's keyboard asks for Full Access so it can talk to the Una app, which does the recording and sends the audio to your server. Full Access also lets the keyboard use haptics. Audio goes only to the server you configured. Nothing is sent to us or anyone else, and the keyboard never reads what you type."
-}

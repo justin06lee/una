@@ -17,5 +17,18 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>UnaAppGroup</key>
+	<string>$(UNA_APP_GROUP)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(UNA_BUNDLE_ID)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>una</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

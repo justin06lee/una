@@ -13,6 +13,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     var landscape = false { didSet { if oldValue != landscape { setNeedsLayout() } } }
     var returnTitle = "return" { didSet { updateLabels() } }
     var returnHighlighted = false { didSet { updateLabels() } }
+    /// What the mic key shows: idle, listening (red), or transcribing.
+    var micUI = MicRemote.UI.idle { didSet { if oldValue != micUI { updateLabels() } } }
+    private let notice = NoticeView()
 
     private var page = KeyboardPage.letters
     private var shift = ShiftState.off
@@ -28,6 +31,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         isMultipleTouchEnabled = true
         backgroundColor = Palette.background
         addSubview(popup); popup.isHidden = true
+        addSubview(notice); notice.isHidden = true
         rebuild()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (v: KeyboardView, _) in v.restyleAll() }
     }
@@ -54,14 +58,22 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         for (r, row) in fresh.enumerated() where r < keyViews.count {
             for (i, def) in row.enumerated() where i < keyViews[r].count {
                 keyViews[r][i].def = def
-                keyViews[r][i].apply(shift: shift, returnTitle: returnTitle, returnHighlighted: returnHighlighted)
+                keyViews[r][i].apply(shift: shift, returnTitle: returnTitle, returnHighlighted: returnHighlighted, mic: micUI)
             }
         }
         rows = fresh
     }
 
+    /// A message that covers the keys: the Full Access explanation, the "open Una" prompt, errors.
+    func showNotice(title: String, body: String, primary: String?, secondary: String, onPrimary: @escaping () -> Void, onSecondary: @escaping () -> Void) {
+        notice.set(title: title, body: body, primary: primary, secondary: secondary, onPrimary: onPrimary, onSecondary: onSecondary)
+        notice.isHidden = false; bringSubviewToFront(notice); setNeedsLayout()
+    }
+    func hideNotice() { notice.isHidden = true }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        notice.frame = bounds
         let m = KeyboardLayout.metrics(width: Double(bounds.width), landscape: landscape)
         var y = m.topBottom
         for (r, row) in rows.enumerated() {
@@ -195,15 +207,23 @@ final class KeyView: UIView {
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: 5).cgPath
     }
 
-    func apply(shift: ShiftState, returnTitle: String, returnHighlighted: Bool) {
-        highlighted = false; shifted = shift != .off
+    private var micUI = MicRemote.UI.idle
+
+    func apply(shift: ShiftState, returnTitle: String, returnHighlighted: Bool, mic: MicRemote.UI = .idle) {
+        highlighted = false; shifted = shift != .off; micUI = mic
         var symbol: String?
         switch def.kind {
         case .char(let c): title = c; label.text = c; label.font = .systemFont(ofSize: 25)
         case .shift: symbol = shift == .caps ? "capslock.fill" : shift == .on ? "shift.fill" : "shift"
         case .delete: symbol = "delete.left"
         case .globe: symbol = "globe"
-        case .mic: symbol = "mic"
+        case .mic:
+            switch mic {
+            case .recording: symbol = "mic.fill"
+            case .transcribing: symbol = "ellipsis"
+            case .starting: symbol = "mic.fill"
+            case .needsAccess, .needsArm, .failed, .idle: symbol = "mic"
+            }
         case .space: label.text = "space"; label.font = .systemFont(ofSize: 16)
         case .return: label.text = returnTitle; label.font = .systemFont(ofSize: 16); highlighted = returnHighlighted
         case .page(let p): label.text = p == .letters ? "ABC" : p == .numbers ? "123" : "#+="; label.font = .systemFont(ofSize: 16)
@@ -222,10 +242,78 @@ final class KeyView: UIView {
         if def.kind == .shift, shifted { fill = Palette.letterKey }
         var text = Palette.text
         if def.kind == .return, highlighted { fill = Palette.accent; text = .white }
+        if def.kind == .mic {
+            switch micUI {
+            case .recording: fill = .systemRed; text = .white
+            case .transcribing: fill = Palette.accent; text = .white
+            case .starting: fill = .systemRed.withAlphaComponent(0.55); text = .white
+            default: break
+            }
+            updatePulse(micUI == .recording)
+        }
         if isPressed { fill = isLetter ? Palette.specialKey : Palette.letterKey }
         layer.backgroundColor = fill.resolvedColor(with: traitCollection).cgColor
         layer.shadowColor = Palette.shadow.resolvedColor(with: traitCollection).cgColor
         label.textColor = text; icon.tintColor = text
+    }
+}
+
+extension KeyView {
+    /// A slow fade on the red key so "listening" reads at a glance without a timer.
+    fileprivate func updatePulse(_ on: Bool) {
+        if on, layer.animation(forKey: "pulse") == nil {
+            let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0.65
+            a.duration = 0.8; a.autoreverses = true; a.repeatCount = .infinity
+            layer.add(a, forKey: "pulse")
+        } else if !on { layer.removeAnimation(forKey: "pulse") }
+    }
+}
+
+/// A card laid over the keys with a title, a few lines of text and one or two buttons.
+final class NoticeView: UIView {
+    private let title = UILabel(), body = UILabel()
+    private let primary = UIButton(type: .system), secondary = UIButton(type: .system)
+    private var onPrimary: (() -> Void)?, onSecondary: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = Palette.background
+        title.font = .boldSystemFont(ofSize: 16); title.textAlignment = .center; title.textColor = Palette.text
+        body.font = .systemFont(ofSize: 13); body.textAlignment = .center; body.numberOfLines = 0
+        body.textColor = .secondaryLabel; body.adjustsFontSizeToFitWidth = true; body.minimumScaleFactor = 0.7
+        var p = UIButton.Configuration.filled(); p.cornerStyle = .medium; p.title = "Open"
+        primary.configuration = p
+        var s = UIButton.Configuration.plain(); s.title = "Not now"
+        secondary.configuration = s
+        primary.addAction(UIAction { [weak self] _ in self?.onPrimary?() }, for: .touchUpInside)
+        secondary.addAction(UIAction { [weak self] _ in self?.onSecondary?() }, for: .touchUpInside)
+        [title, body, primary, secondary].forEach(addSubview)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (v: NoticeView, _) in v.backgroundColor = Palette.background }
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func set(title t: String, body b: String, primary p: String?, secondary s: String, onPrimary op: @escaping () -> Void, onSecondary os: @escaping () -> Void) {
+        title.text = t; body.text = b
+        primary.configuration?.title = p; primary.isHidden = p == nil
+        secondary.configuration?.title = s
+        onPrimary = op; onSecondary = os
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let w = bounds.width - 32, compact = bounds.height < 190
+        var y: CGFloat = compact ? 8 : 14
+        title.frame = CGRect(x: 16, y: y, width: w, height: 22); y += 24
+        let buttonsH: CGFloat = 38
+        let bodyH = max(30, bounds.height - y - buttonsH - 12)
+        body.frame = CGRect(x: 16, y: y, width: w, height: bodyH); y = bounds.height - buttonsH - 8
+        if primary.isHidden {
+            secondary.frame = CGRect(x: bounds.midX - 70, y: y, width: 140, height: buttonsH)
+        } else {
+            secondary.frame = CGRect(x: 16, y: y, width: w / 2 - 6, height: buttonsH)
+            primary.frame = CGRect(x: 16 + w / 2 + 6, y: y, width: w / 2 - 6, height: buttonsH)
+        }
     }
 }
 
