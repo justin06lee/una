@@ -8,18 +8,51 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* UnaKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000020 /* UnaKit */; };
+		A10000000000000000000030 /* UnaKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000020 /* UnaKit */; };
+		A10000000000000000000031 /* UnaKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000032 /* UnaKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000000000000000000033 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000013 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000034;
+			remoteInfo = UnaKeyboard;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000035 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000031 /* UnaKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000002 /* Una.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Una.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000099 /* Una.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Una.xcconfig; sourceTree = "<group>"; };
 		A10000000000000000000003 /* Una-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Una-Info.plist"; sourceTree = "<group>"; };
+		A10000000000000000000032 /* UnaKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UnaKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000036 /* UnaKeyboard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "UnaKeyboard-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000004 /* Una */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Una;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000037 /* UnaKeyboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UnaKeyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +66,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000038 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000030 /* UnaKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -40,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000004 /* Una */,
+				A10000000000000000000037 /* UnaKeyboard */,
 				A10000000000000000000007 /* Config */,
 				A10000000000000000000008 /* Products */,
 			);
@@ -49,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000003 /* Una-Info.plist */,
+				A10000000000000000000036 /* UnaKeyboard-Info.plist */,
 				A10000000000000000000099 /* Una.xcconfig */,
 			);
 			path = Config;
@@ -58,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000002 /* Una.app */,
+				A10000000000000000000032 /* UnaKeyboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,10 +116,12 @@
 				A10000000000000000000011 /* Sources */,
 				A10000000000000000000005 /* Frameworks */,
 				A10000000000000000000012 /* Resources */,
+				A10000000000000000000035 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000039 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000004 /* Una */,
@@ -87,6 +133,29 @@
 			productName = Una;
 			productReference = A10000000000000000000002 /* Una.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A10000000000000000000034 /* UnaKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000040 /* Build configuration list for PBXNativeTarget "UnaKeyboard" */;
+			buildPhases = (
+				A10000000000000000000041 /* Sources */,
+				A10000000000000000000038 /* Frameworks */,
+				A10000000000000000000042 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000037 /* UnaKeyboard */,
+			);
+			name = UnaKeyboard;
+			packageProductDependencies = (
+				A10000000000000000000020 /* UnaKit */,
+			);
+			productName = UnaKeyboard;
+			productReference = A10000000000000000000032 /* UnaKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -116,12 +185,20 @@
 			projectRoot = "";
 			targets = (
 				A10000000000000000000009 /* Una */,
+				A10000000000000000000034 /* UnaKeyboard */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A10000000000000000000012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000042 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -138,7 +215,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000000000000000000039 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000034 /* UnaKeyboard */;
+			targetProxy = A10000000000000000000033 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A10000000000000000000015 /* Debug */ = {
@@ -218,6 +310,44 @@
 			};
 			name = Release;
 		};
+		A10000000000000000000043 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000099 /* Una.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/UnaKeyboard-Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Una;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(UNA_BUNDLE_ID).keyboard";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A10000000000000000000044 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000099 /* Una.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/UnaKeyboard-Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Una;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(UNA_BUNDLE_ID).keyboard";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -235,6 +365,15 @@
 			buildConfigurations = (
 				A10000000000000000000017 /* Debug */,
 				A10000000000000000000018 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000040 /* Build configuration list for PBXNativeTarget "UnaKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000043 /* Debug */,
+				A10000000000000000000044 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

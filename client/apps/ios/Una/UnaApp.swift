@@ -24,8 +24,23 @@ struct RootView: View {
         TabView(selection: $tab) {
             RecordView().tabItem { Label("Record", systemImage: "mic.fill") }.tag(0)
             HistoryView().tabItem { Label("History", systemImage: "clock") }.tag(1)
+            #if DEBUG
+            DebugFieldView().tabItem { Label("Field", systemImage: "keyboard") }.tag(3)
+            #endif
             ServersView().tabItem { Label("Servers", systemImage: "server.rack") }.tag(2)
         }
         .fullScreenCover(isPresented: .constant(!m.onboarded)) { OnboardingView() }
     }
 }
+
+#if DEBUG
+/// DEBUG ONLY: an autofocused field (`-UnaDebugTab 3`) to try the keyboard in the simulator.
+struct DebugFieldView: View {
+    @State private var text = ""
+    @FocusState private var focus: Bool
+    var body: some View {
+        VStack { TextField("Type here", text: $text, axis: .vertical).focused($focus).padding().textFieldStyle(.roundedBorder); Spacer() }
+            .onAppear { focus = true }
+    }
+}
+#endif
