@@ -651,7 +651,7 @@ signing. Test fixtures use neutral placeholders such as `http://192.168.1.10:810
   the user's own server), and the required-reason APIs declared (UserDefaults `CA92.1`,
   file timestamps `C617.1`).
 - [x] A Full Access explanation in the app (onboarding and the Servers tab, one shared text).
-- [ ] The same explanation in the keyboard itself (step 2).
+- [x] The same explanation in the keyboard itself (the mic key shows it when Full Access is off, 2b).
 - [x] No analytics, no third-party packages. No private APIs (keep it so).
 - [ ] ATS: the app sets `NSAllowsArbitraryLoads` because the user's own server is plain
   http at an address nobody can predict. App Review asks for a justification for that key;
@@ -696,3 +696,17 @@ Mode** on (Settings → Privacy & Security, after the first install attempt).
 ## Step 2a status (built)
 
 The typing keyboard is built in pure UIKit (`client/apps/ios/UnaKeyboard/`, logic and tests in UnaKit `KeyboardLogic`). Measured footprint in the iOS 26.5 simulator after typing: about 42 MB, roughly 35 MB under the ~77 MB jetsam figure reported on devices (device numbers differ; re-measure with Instruments on the iPhone). Full Access is requested for haptics now and the app link in 2b; the keyboard has no network code. The mic key is a placeholder until 2b.
+
+## Step 2b status (built, simulator end to end pending)
+
+The mic key is live. The keyboard cannot record, so it is a remote: the containing app arms a background audio session and records; the keyboard writes commands and reads status through the App Group container, and both sides wake each other with Darwin notifications. Protocol and state machines are in UnaKit (`Handoff`, `MicRemote`, `DictationEngine`) with 58 unit tests (fake recorder, uploader and clock). The keyboard has no audio and no network code. Measured keyboard footprint in the iOS 26.5 simulator: 44 MB (peak 45 MB), about 33 MB under the ~77 MB jetsam figure.
+
+Verified in the simulator: the keyboard renders and types, the mic key shows the Full Access notice when Full Access is off (screenshot `una-kb-fullaccess-notice.png`), and the debug-WAV flow uploads and returns text. Not verified in the simulator: the keyboard-mic to engine to upload run, because the simulator keyboard could not be given Full Access (the Settings navigation would not respond to scripted clicks). The simulator's Core Audio also deadlocks on AVAudioEngine start, so the DEBUG-only feed skips the real session there.
+
+### Needs the device
+1. Allow Full Access: Settings > General > Keyboard > Keyboards > Una.
+2. Real mic and background audio: arm in Una, switch to Notes, tap mic, speak, tap mic: text is inserted. Leave idle 5+ minutes to see the idle timeout; lock the phone and repeat.
+3. App-hop prompt: disarm, tap mic, tap "Open Una" (`una://arm` via the responder chain; on iOS 26 it needs Full Access), return with the status-bar back link.
+4. Interruptions (call, Siri) disarm; route change (AirPods); orange mic dot.
+5. First-arm microphone permission prompt.
+6. Keyboard memory with Instruments; Darwin notification latency with a foreground host app.
