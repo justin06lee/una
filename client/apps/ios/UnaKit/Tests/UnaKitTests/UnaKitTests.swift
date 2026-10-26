@@ -85,6 +85,19 @@ final class RaceTests: XCTestCase {
         let race = EndpointRace(probe: { e in ProbeResult(entry: e, health: nil, error: "x", latencyMs: 0) })
         let w = await race.resolve([a]); XCTAssertNil(w)
     }
+    func testSlowServerAnswersTheSecondPass() async {
+        // Under load the quick probe times out; the patient pass must still find the server.
+        let a = entry("a")
+        let race = EndpointRace(probe: { e in ProbeResult(entry: e, health: nil, error: "timed out", latencyMs: 0) },
+                                patientProbe: { e in ok(e) })
+        let w = await race.resolve([a]); XCTAssertEqual(w, a)
+    }
+    func testManualTestUsesThePatientProbe() async {
+        let a = entry("a")
+        let race = EndpointRace(probe: { e in ProbeResult(entry: e, health: nil, error: "timed out", latencyMs: 0) },
+                                patientProbe: { e in ok(e) })
+        let r = await race.testAll([a]); XCTAssertTrue(r[0].ok)
+    }
     func testCacheTTLAndInvalidate() async {
         let a = entry("a")
         let counter = Counter()

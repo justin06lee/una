@@ -29,6 +29,8 @@ public struct UnaClient: Sendable {
     public static let connectTimeout: TimeInterval = 3
     public static let requestTimeout: TimeInterval = 60
     public static let healthTimeout: TimeInterval = 2.5
+    /// For a busy server (a loaded box answered /v1/health in about 5 s) and for the manual Test buttons.
+    public static let patientHealthTimeout: TimeInterval = 20
 
     public let baseURL: URL
     private let session: URLSession
