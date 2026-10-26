@@ -43,9 +43,16 @@ final class Recorder: AudioCapture {
             throw DictationFailure("Microphone access is off. Enable it in Settings → Una.")
         }
         let s = AVAudioSession.sharedInstance()
-        try s.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
-        try s.setActive(true)
-        try startEngine()
+        do {
+            try s.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
+            try s.setActive(true)
+        } catch {
+            throw DictationFailure("Couldn't open the microphone (\(error.localizedDescription)).")
+        }
+        do { try startEngine() } catch {
+            try? s.setActive(false, options: .notifyOthersOnDeactivation)
+            throw error
+        }
         isArmed = true
         let nc = NotificationCenter.default
         observers = [
@@ -67,14 +74,27 @@ final class Recorder: AudioCapture {
     private func startEngine() throws {
         let input = engine.inputNode
         let fmt = input.outputFormat(forBus: 0)
+        // A zero rate or channel count (no input route) makes installTap raise an uncatchable exception.
+        guard fmt.sampleRate > 0, fmt.channelCount > 0 else {
+            throw DictationFailure("No microphone input is available right now.")
+        }
         rate = fmt.sampleRate
-        let store = self.store
-        input.installTap(onBus: 0, bufferSize: 4096, format: fmt) { buf, _ in
+        input.removeTap(onBus: 0)   // a second tap on the same bus also raises
+        input.installTap(onBus: 0, bufferSize: 4096, format: fmt, block: Self.tapBlock(store))
+        engine.prepare()
+        do { try engine.start() } catch {
+            input.removeTap(onBus: 0)
+            throw DictationFailure("The microphone wouldn't start (\(error.localizedDescription)).")
+        }
+    }
+
+    /// Built outside the main actor on purpose: the tap runs on the audio thread, and in Swift 6 a
+    /// closure written inside this @MainActor class would carry a main-thread check that traps there.
+    private nonisolated static func tapBlock(_ store: Store) -> AVAudioNodeTapBlock {
+        { buf, _ in
             guard let ch = buf.floatChannelData?[0] else { return }
             store.feed(UnsafeBufferPointer(start: ch, count: Int(buf.frameLength)))
         }
-        engine.prepare()
-        try engine.start()
     }
 
     func disarm() {
