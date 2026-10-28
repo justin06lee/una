@@ -166,4 +166,11 @@ public struct KeyboardState: Equatable, Sendable {
         guard sawSpace, let l = s.last else { return false }
         return ".!?".contains(l)
     }
+
+    /// A dictated transcript as it should be typed after `before`: with a space in front when the
+    /// text before the cursor doesn't already end in whitespace, so "word" + "Hello" isn't "wordHello".
+    public static func spacedTranscript(_ text: String, after before: String?) -> String {
+        guard let prev = before?.last, !prev.isWhitespace, let first = text.first, !first.isWhitespace else { return text }
+        return " " + text
+    }
 }

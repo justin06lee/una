@@ -117,7 +117,7 @@ final class KeyboardViewController: UIInputViewController {
                     notifier.post(Handoff.notificationName(group: group, .command))
                 } catch { remote.fail("Couldn't reach the Una app. Is Full Access on?") }
             case .insert(let text):
-                textDocumentProxy.insertText(text)
+                textDocumentProxy.insertText(KeyboardState.spacedTranscript(text, after: textDocumentProxy.documentContextBeforeInput))
                 refresh()
             case .openApp:
                 openUnaApp()

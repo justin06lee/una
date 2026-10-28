@@ -93,4 +93,14 @@ final class KeyboardLogicTests: XCTestCase {
         let f0 = KeyboardLayout.frames(row: rows[0], width: 390, metrics: p)
         XCTAssertEqual(f0[0].w, p.keyWidth, accuracy: 0.001)
     }
+
+    func testTranscriptGetsASpaceOnlyAfterText() {
+        XCTAssertEqual(KeyboardState.spacedTranscript("Hello.", after: "Qq"), " Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript("Hello.", after: "Hi, "), "Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript("Hello.", after: "Line\n"), "Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript("Hello.", after: ""), "Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript("Hello.", after: nil), "Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript(" Hello.", after: "Qq"), " Hello.")
+        XCTAssertEqual(KeyboardState.spacedTranscript("", after: "Qq"), "")
+    }
 }
