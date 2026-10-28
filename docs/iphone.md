@@ -697,11 +697,11 @@ Mode** on (Settings → Privacy & Security, after the first install attempt).
 
 The typing keyboard is built in pure UIKit (`client/apps/ios/UnaKeyboard/`, logic and tests in UnaKit `KeyboardLogic`). Measured footprint in the iOS 26.5 simulator after typing: about 42 MB, roughly 35 MB under the ~77 MB jetsam figure reported on devices (device numbers differ; re-measure with Instruments on the iPhone). Full Access is requested for haptics now and the app link in 2b; the keyboard has no network code. The mic key is a placeholder until 2b.
 
-## Step 2b status (built, simulator end to end pending)
+## Step 2b status (built; simulator end to end verified 2026-10-27)
 
 The mic key is live. The keyboard cannot record, so it is a remote: the containing app arms a background audio session and records; the keyboard writes commands and reads status through the App Group container, and both sides wake each other with Darwin notifications. Protocol and state machines are in UnaKit (`Handoff`, `MicRemote`, `DictationEngine`) with 58 unit tests (fake recorder, uploader and clock). The keyboard has no audio and no network code. Measured keyboard footprint in the iOS 26.5 simulator: 44 MB (peak 45 MB), about 33 MB under the ~77 MB jetsam figure.
 
-Verified in the simulator: the keyboard renders and types, the mic key shows the Full Access notice when Full Access is off (screenshot `una-kb-fullaccess-notice.png`), and the debug-WAV flow uploads and returns text. Not verified in the simulator: the keyboard-mic to engine to upload run, because the simulator keyboard could not be given Full Access (the Settings navigation would not respond to scripted clicks). The simulator's Core Audio also deadlocks on AVAudioEngine start, so the DEBUG-only feed skips the real session there.
+Verified in the simulator: the keyboard renders and types, the mic key shows the Full Access notice when Full Access is off (screenshot `una-kb-fullaccess-notice.png`), and the debug-WAV flow uploads and returns text. On 2026-10-27 the full keyboard-mic run passed in a headless simulator, driven by an XCUITest harness: Full Access turned on through Settings (General > Keyboard > Keyboards > Una > Allow Full Access > Allow), Una launched armed with the DEBUG WAV feed, the mic key went red 0.2 s after the tap, and 5.9 s after the stop tap the keyboard inserted the transcript from tenet. The software keyboard stays hidden in a headless simulator until `com.apple.keyboard.preferences` has `AutomaticMinimizationEnabled` and `HardwareKeyboardLastSeen` set to NO. Still device-only: the real microphone and dictating while Una is in the background. The simulator's Core Audio also deadlocks on AVAudioEngine start, so the DEBUG-only feed skips the real session there.
 
 ## Step 3 status (built)
 
@@ -736,5 +736,19 @@ A free Personal Team cannot get the App Groups capability: automatic signing fai
 **Doesn't:** the keyboard's mic key (the app/keyboard hand-off needs the shared container). It shows "Dictation needs the Una app group, which a free Apple account can't sign. Typing works."
 
 Ways forward:
-1. Paid account: drop the `CODE_SIGN_ENTITLEMENTS=` override; everything works unchanged.
+1. Paid account: drop the `CODE_SIGN_ENTITLEMENTS=` override; everything works unchanged. (Done: see TestFlight below.)
 2. Keychain-access-group hand-off (not built): the keyboard and app share a keychain item group (`keychain-access-groups` is signable on a free team, to be confirmed on the device). Commands, status and the result would be written as small keychain items instead of files in the container; the Darwin notifications are unchanged. Needs: a keychain-backed `SharedStore`, a keychain entitlement in both targets, the extension's Full Access rules re-checked. Rough estimate: 1 to 2 days including device testing, with the risk that iOS blocks keychain sharing for a free team's profile.
+
+## TestFlight (paid team 65UN46K6FA)
+
+The paid team signs the App Group, so builds keep `Config/*.entitlements` and the mic key works. Setup done once on 2026-10-27:
+- Developer portal: App Group `group.com.justin06lee.una`, attached to the App IDs `com.justin06lee.una` and `com.justin06lee.una.keyboard`. Neither the App Store Connect API nor `xcodebuild -allowProvisioningUpdates` can register or attach an app group; it has to be done in the browser.
+- App Store Connect: the app record is "Una Dictation" (Apple ID 6827814588). The keyboard ships inside it and has no record of its own. The TestFlight group "Internal" gets every build, and Justin is its tester.
+- Signing: an Apple Distribution identity is in the login keychain. The App Manager API key may not use Apple's cloud signing, so automatic export fails with "Cloud signing permission error". Export uses manual signing with two App Store profiles made through the API: "Una AppStore" and "Una Keyboard AppStore".
+
+To ship a new build:
+1. Raise `CURRENT_PROJECT_VERSION` (and `MARKETING_VERSION` for a new version) in the project.
+2. Archive: `xcodebuild -project Una.xcodeproj -scheme Una -configuration Release -destination 'generic/platform=iOS' -archivePath <path>/Una.xcarchive -allowProvisioningUpdates <API key flags> DEVELOPMENT_TEAM=65UN46K6FA archive`.
+3. Export and upload: `xcodebuild -exportArchive -archivePath <path>/Una.xcarchive -exportOptionsPlist <plist> -exportPath <dir> -allowProvisioningUpdates <API key flags>`. The plist sets method `app-store-connect`, destination `upload`, `signingStyle` manual, `signingCertificate` "Apple Distribution", the two profiles by bundle id, and `testFlightInternalTestingOnly`.
+
+API key flags: `-authenticationKeyPath <.p8> -authenticationKeyID <id> -authenticationKeyIssuerID <issuer>`. The key file stays outside every repo.
