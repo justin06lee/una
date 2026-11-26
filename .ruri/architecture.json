@@ -1,0 +1,1847 @@
+{
+  "description": "Una is a self-hosted Wispr Flow replacement: hold a hotkey anywhere, speak, and clean text lands in the focused app. Everything runs on your own hardware and it LoRA-fine-tunes Whisper on your voice the longer you use it.",
+  "features": [
+    "Push-to-talk dictation from any app via global hotkey",
+    "Local Whisper transcription via faster-whisper with CUDA",
+    "Local LLM cleanup for filler, punctuation, and per-app tone",
+    "One-click Fix-up polish via yagami LLM with model settings",
+    "Automatic correction capture from pasted text for training pairs",
+    "Review queue and correction editor with audio playback",
+    "Custom dictionary injected into decoding and cleanup prompts",
+    "LoRA voice fine-tuning of Whisper with WER-gated hot-swap",
+    "QLoRA style fine-tuning of cleanup LLM on polished pairs",
+    "Personal style LoRA with Claude teacher drafts",
+    "Model registry with evaluation history and one-click rollback",
+    "Dashboard for transcripts, dictionary, training, and usage insights",
+    "History main window with Settings button for smaller window",
+    "Racing multi-address server list with makima and mDNS discovery",
+    "Hold, toggle, hybrid modes with left/right modifiers, shortcut abort, tray and HUD",
+    "iPhone app on TestFlight: record, upload, corrections, keyboard mic dictation"
+  ],
+  "layers": [
+    {
+      "name": "Desktop windows",
+      "what": "Svelte 5 Tauri windows: HUD, settings, correction editor, review window",
+      "slug": "desktop-windows",
+      "paths": [
+        "client/apps/desktop/ui/"
+      ]
+    },
+    {
+      "name": "Desktop shell",
+      "what": "Tauri Rust shell: commands, hotkey, tray, windows, sounds, correction flow",
+      "slug": "desktop-shell",
+      "paths": [
+        "client/apps/desktop/src-tauri/",
+        "client/scripts/gen_icons.py",
+        "client/apps/desktop/linux/"
+      ]
+    },
+    {
+      "name": "Client core",
+      "what": "Shared Rust core: 16kHz audio, spool, endpoints, net, discovery, state",
+      "slug": "client-core",
+      "paths": [
+        "client/crates/una-core/"
+      ]
+    },
+    {
+      "name": "Platform inject",
+      "what": "OS text injection and reading: macOS AX/eventtap, Linux X11/Wayland",
+      "slug": "platform-inject",
+      "paths": [
+        "client/crates/una-platform/"
+      ]
+    },
+    {
+      "name": "CLI",
+      "what": "una CLI binary wrapping the core",
+      "slug": "cli",
+      "paths": [
+        "client/crates/una-cli/"
+      ]
+    },
+    {
+      "name": "Server API",
+      "what": "FastAPI routes, schemas, config, state, SQLite access",
+      "slug": "server-api",
+      "paths": [
+        "server/src/una_server/api/",
+        "server/src/una_server/main.py",
+        "server/src/una_server/config.py",
+        "server/src/una_server/db.py",
+        "server/src/una_server/schemas.py",
+        "server/src/una_server/state.py",
+        "server/src/una_server/errors.py",
+        "server/migrations/",
+        "server/src/una_server/__init__.py",
+        "server/tests/conftest.py",
+        "server/tests/test_api.py",
+        "server/tests/test_stats.py"
+      ]
+    },
+    {
+      "name": "Server services",
+      "what": "Dictation pipeline: faster-whisper transcriber, Ollama cleaner, storage, jobs, discovery",
+      "slug": "server-services",
+      "paths": [
+        "server/src/una_server/services/",
+        "server/src/una_server/memory.py",
+        "server/deploy/",
+        "server/tests/test_cleaner.py",
+        "server/src/una_server/tools/merge_data.py",
+        "server/tests/test_merge_data.py"
+      ]
+    },
+    {
+      "name": "Training loop",
+      "what": "LoRA/QLoRA dataset, training, eval, WER-gated promote, autotrain",
+      "slug": "training-loop",
+      "paths": [
+        "server/src/una_server/training/",
+        "server/tests/test_filters.py",
+        "server/tests/test_style_training.py",
+        "server/tests/test_training_logic.py",
+        "server/tests/test_training_runs.py",
+        "server/scripts/koen/",
+        "docs/korean-codeswitch.md"
+      ]
+    },
+    {
+      "name": "Dashboard shell and settings",
+      "what": "App frame, hash routing, theming, landing page and settings form with Vite build.",
+      "slug": "dashboard-shell-settings",
+      "paths": [
+        "server/dashboard/index.html",
+        "server/dashboard/src/App.svelte",
+        "server/dashboard/src/main.ts",
+        "server/dashboard/src/router.svelte.ts",
+        "server/dashboard/src/app.css",
+        "server/dashboard/src/lib/theme.svelte.ts",
+        "server/dashboard/src/lib/Logo.svelte",
+        "server/dashboard/src/lib/ThemeToggle.svelte",
+        "server/dashboard/src/pages/Settings.svelte",
+        "server/dashboard/svelte.config.js",
+        "server/dashboard/vite.config.ts",
+        "server/dashboard/src/api.ts"
+      ]
+    },
+    {
+      "name": "Dashboard home and insights",
+      "what": "Home feed and usage-insights pages with activity charts and stat tiles.",
+      "slug": "dashboard-home-insights",
+      "paths": [
+        "server/dashboard/src/pages/Home.svelte",
+        "server/dashboard/src/pages/Insights.svelte",
+        "server/dashboard/src/lib/AppBars.svelte",
+        "server/dashboard/src/lib/DayBars.svelte",
+        "server/dashboard/src/lib/Heatmap.svelte"
+      ]
+    },
+    {
+      "name": "Dashboard review queue",
+      "what": "Review page for listening, editing transcripts, teacher guess pre-fill and disagreement chips, and viewing word diffs.",
+      "slug": "dashboard-review-queue",
+      "paths": [
+        "server/dashboard/src/pages/Review.svelte",
+        "server/dashboard/src/lib/AudioPlayer.svelte",
+        "server/dashboard/src/lib/autosize.ts"
+      ]
+    },
+    {
+      "name": "Dashboard dictionary and training",
+      "what": "Dictionary entries plus training runs with WER charts and run status.",
+      "slug": "dashboard-dictionary-training",
+      "paths": [
+        "server/dashboard/src/pages/Dictionary.svelte",
+        "server/dashboard/src/pages/Training.svelte",
+        "server/dashboard/src/lib/WerChart.svelte",
+        "server/dashboard/src/lib/ProgressBar.svelte",
+        "server/dashboard/src/lib/StatusChip.svelte"
+      ]
+    },
+    {
+      "name": "iOS app",
+      "what": "Swift/SwiftUI, iOS 18+, no third-party packages; build with DEVELOPER_DIR=/Volumes/T7/Stockpile/Xcode.app/Contents/Developer   [client/apps/ios/]",
+      "slug": "ios-app",
+      "paths": [
+        "client/apps/ios/"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "name": "Dictation",
+      "steps": [
+        "global hotkey (client hotkey.rs)",
+        "record 16kHz (una-core audio.rs)",
+        "POST wav (una-core net.rs/endpoint.rs)",
+        "server_api dictations.py",
+        "transcriber.py faster-whisper",
+        "cleaner.py Ollama",
+        "paste-inject (una-platform)",
+        "SQLite + WAV storage.py"
+      ]
+    },
+    {
+      "name": "Correction capture",
+      "steps": [
+        "pasted text watch (una-platform axtext/eventtap)",
+        "correction window (Correction.svelte)",
+        "commands.rs/corrections.rs",
+        "server_api dictations.py",
+        "Review page final-text target",
+        "training pairs (filters.py/dataset.py)"
+      ]
+    },
+    {
+      "name": "Voice self-improvement",
+      "steps": [
+        "Training page (Training.svelte)",
+        "runner.py train_lora.py",
+        "convert.py to CTranslate2",
+        "evaluate.py WER vs production",
+        "promote.py hot-swap/rollback",
+        "model_registry.py"
+      ]
+    },
+    {
+      "name": "iPhone dictation",
+      "steps": [
+        "Keyboard mic key -> Darwin notification + App Group flag (UnaKit MicRemote/Handoff)",
+        "Record tab or keyboard handoff records (client/apps/ios/Una, 16kHz WAV)",
+        "UnaKit endpoint race and spool upload",
+        "server_api dictations.py",
+        "transcriber.py faster-whisper",
+        "cleaner.py Ollama",
+        "app passes transcript to keyboard, which inserts it (space-aware)"
+      ]
+    }
+  ],
+  "layout": [
+    "client/apps/desktop/ — Tauri shell (src-tauri: hotkey, tray, HUD/settings windows, commands) and Svelte UI (ui: HUD, unified Una window with embedded dashboard)",
+    "client/crates/una-core/ — audio, spool, net, discovery, config, state",
+    "client/crates/una-platform/ — macOS/Linux text read + paste injection",
+    "client/crates/una-cli/ — una CLI",
+    "server/src/una_server/api/ — FastAPI routes: dictations, review, training, registry",
+    "server/src/una_server/services/ — transcriber, cleaner, storage, jobs, discovery",
+    "server/src/una_server/training/ — LoRA + style datasets, eval, promote",
+    "server/dashboard/src/pages/ — Home, Review, Dictionary, Training, Insights, Settings",
+    "server/migrations/ — SQLite migrations",
+    "server/tests/ — API, filters, stats, training tests",
+    "docs/ — remote-access, iphone.md (incl. free-team limits), learning, macOS/Linux install, Korean code-switch plan",
+    "server/deploy/ + docker-compose.yml — rootless server installs (jetson, linux), compose with Ollama",
+    "server/scripts/koen/ — Korean code-switch eval: metrics, scoring, test-set builds, data fetch",
+    "server/src/una_server/tools/merge_data.py — snapshot one server's data and merge it into another's (re-runnable, never overwrites)",
+    "client/apps/ios/Una/ + UnaKeyboard/ + UnaKit/ — SwiftUI app, keyboard extension, Swift package; mic-key handoff via App Group, UnaKit Handoff.localBase falls back to app storage without it",
+    "client/apps/ios/Config/ — Una.xcconfig (bundle ID, App Group) and Una-Info.plist (export-compliance key): the places to change for app identity and plist settings"
+  ],
+  "run": [
+    "docker compose up -d --build — server :8100 + Ollama :11434",
+    "docker exec -it una-ollama-1 ollama pull qwen3:8b — fetch cleanup model",
+    "make — build + install + launch the client: Una.app on macOS; on Linux una-desktop + una in ~/.local/bin with an app-grid launcher (golden path)",
+    "make dmg — distributable dmg, revealed in Finder",
+    "make update — refresh installed client",
+    "make ui-build && make client-dev — client dev loop (needs tauri-cli v2)",
+    "server-dev: cd server && uv run uvicorn una_server.main:app --reload — CPU hacking",
+    "server-test: cd server && uv run pytest -q / client-test: cd client && cargo test -p una-core",
+    "Linux client test harness (Jetson): virtual mic via pw-loopback + PIPEWIRE_NODE=una-test-mic, a GTK paste-target window and xdotool on a private Xvfb (:99 is shared and other chats steal focus)",
+    "Jetson server (midna, retired from serving 2026-10-21): server/deploy/jetson/install.sh — no root; re-run after git pull; never plain 'uv sync' there (drops the GPU CTranslate2); see docs/jetson-server.md",
+    "Live server: tenet (x86, 6 GB GTX 1660 Ti), ~/una via server/deploy/linux/install.sh as systemd user units una + ollama; clients use http://192.168.1.172:8100 and http://tenet.makima:8100; re-run install.sh after git pull, never plain 'uv sync'; logs: journalctl --user -u una"
+  ],
+  "layerSheets": {
+    "desktop-windows": {
+      "summary": "Tauri WebviewWindows for history (main home window), settings (small separate window), review, transient HUD pill and correction popup, built as Svelte 5 pages with Svelte runes state. Multi-page Vite build emits app/history, settings, review, hud, and correction entries mounted by per-window main.ts files; History.svelte is a sidebar shell with persistent dashboard iframe for server pages plus local Review, while Settings.svelte lives in its own window opened from the history sidebar Settings button. Strict monochrome design system in src/lib/tokens.css plus shared src/lib/ui.css controls (Geist type, hairline borders, no accent color, filled-vs-ring status dots); all windows talk to Rust only via Tauri invoke/listen and postMessage handshake with the embedded dashboard.",
+      "map": [
+        {
+          "name": "History main window shell and sidebar",
+          "files": [
+            "client/apps/desktop/ui/src/history/History.svelte",
+            "client/apps/desktop/ui/src/history/main.ts",
+            "client/apps/desktop/ui/src/history/history.css"
+          ]
+        },
+        {
+          "name": "Settings window",
+          "files": [
+            "client/apps/desktop/ui/src/settings/Settings.svelte",
+            "client/apps/desktop/ui/src/settings/main.ts",
+            "client/apps/desktop/ui/src/settings/tabs/Hotkey.svelte"
+          ]
+        },
+        {
+          "name": "Recording HUD pill",
+          "files": [
+            "client/apps/desktop/ui/src/hud/Hud.svelte",
+            "client/apps/desktop/ui/src/hud/main.ts",
+            "client/apps/desktop/ui/src/lib/types.ts"
+          ]
+        },
+        {
+          "name": "Correction editor",
+          "files": [
+            "client/apps/desktop/ui/src/correction/Correction.svelte",
+            "client/apps/desktop/ui/src/correction/main.ts"
+          ]
+        },
+        {
+          "name": "Review window",
+          "files": [
+            "client/apps/desktop/ui/src/review/Review.svelte",
+            "client/apps/desktop/ui/src/review/main.ts",
+            "client/apps/desktop/ui/src/review/review.css"
+          ]
+        },
+        {
+          "name": "Shared design tokens and theming",
+          "files": [
+            "client/apps/desktop/ui/src/lib/tokens.css",
+            "client/apps/desktop/ui/src/lib/ui.css",
+            "client/apps/desktop/ui/src/lib/Icon.svelte"
+          ]
+        },
+        {
+          "name": "Window build entries",
+          "files": [
+            "client/apps/desktop/ui/vite.config.ts",
+            "client/apps/desktop/ui/history.html",
+            "client/apps/desktop/ui/settings.html",
+            "client/apps/desktop/ui/review.html"
+          ]
+        },
+        {
+          "name": "Hotkey keycaps and keyboard row (Mac vs PC keycaps, macOS vs X11 keycodes)",
+          "files": [
+            "client/apps/desktop/ui/src/lib/keycaps.ts",
+            "client/apps/desktop/ui/src/lib/KeyboardRow.svelte",
+            "client/apps/desktop/ui/src/settings/tabs/Hotkey.svelte"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "HUD live status render",
+          "steps": [
+            "Snapshot and LevelFrame arrive via Tauri events",
+            "Hud.svelte maps snapshot.state to phase (recording/busy/done/error/idle)",
+            "rAF loop interpolates 30Hz levels into 9 centre-anchored canvas bars in a 76x26 pill (busy matches it so release doesn't grow it)",
+            "Pill shows shimmer, check/warn, retry affordance in monochrome"
+          ]
+        },
+        {
+          "name": "History window navigation and settings open",
+          "steps": [
+            "History.svelte sidebar steers pages without reloading",
+            "Server pages (Home, Review, Dictionary, Training, Insights, Server settings) render in one persistent Dashboard.svelte iframe",
+            "Dashboard.svelte listens for go-to-page messages and refetches; offline server shows retry state",
+            "Settings button (and Cmd-,) at bottom of history sidebar opens the separate small settings window"
+          ]
+        },
+        {
+          "name": "Correction submit or dismiss",
+          "steps": [
+            "Correction.svelte invokes correction_pending on open",
+            "Textarea prefilled, focused, caret at end",
+            "Submit rewrites text in source app and files pair for training; Escape records nothing"
+          ]
+        }
+      ],
+      "files": [
+        "client/apps/desktop/ui/src/history/History.svelte — main home window shell: history sidebar with Settings button, local pages, embedded server pages",
+        "client/apps/desktop/ui/src/history/main.ts — mounts history main window page",
+        "client/apps/desktop/ui/src/history/history.css — history window shell styles",
+        "client/apps/desktop/ui/src/app/App.svelte — Una window shell: sidebar, local pages, embedded server pages",
+        "client/apps/desktop/ui/src/app/Dashboard.svelte — persistent dashboard iframe with offline state and page handshake",
+        "client/apps/desktop/ui/src/settings/Settings.svelte — tabbed config UI in its own small window with server discovery, hotkey capture, and audio test",
+        "client/apps/desktop/ui/src/settings/main.ts — mounts standalone settings window",
+        "client/apps/desktop/ui/src/hud/Hud.svelte — floating recording pill with level canvas, timer, and error/retry states",
+        "client/apps/desktop/ui/src/correction/Correction.svelte — editable pasted-text window with submit/Escape semantics",
+        "client/apps/desktop/ui/src/review/Review.svelte — review page/window"
+      ],
+      "rules": [
+        "Keep windows independent: one Svelte root per html entry defined in vite.config.ts; do not merge HUD pill or correction popup into the Una window.",
+        "Do not redefine backend shapes in UI: types.ts mirrors una-core serde output, so update it when Rust changes.",
+        "HUD must stay transparent and theme-independent; only typeface and accent are shared.",
+        "Correction window must be immediately typeable on open (focus textarea, caret at end) and Escape must record nothing.",
+        "No color anywhere and no theme picker: status is filled dot (fine) vs ring (needs attention), windows follow the OS colour scheme; use tokens.css variables, never colored text, buttons, dots or per-window colors.",
+        "Native hotkey bindings carry the platform's own keycodes (macOS virtual keycodes, X11 keycodes on Linux): keycaps.ts picks its keycode tables, bottom row and modifier list by IS_MAC; never compare a native keycode against the other platform's table."
+      ],
+      "edges": [
+        "Desktop shell — history main window, small settings window, review window, HUD pill, and correction popup are created as WebviewWindows and driven by its Tauri commands and events",
+        "Client core — Snapshot, LevelFrame, Config shapes originate in una-core serde output",
+        "Dashboard server pages — embedded via iframe in Dashboard.svelte with postMessage navigation, embed mode (no sidebar, follows system theme), and offline retry state"
+      ]
+    },
+    "desktop-shell": {
+      "summary": "The desktop shell is the Tauri v2 Rust host for the menu-bar dictation client: it owns app startup, shared AppState, Tauri commands, and bridging of una-core controller effects to windows, audio, network, and injection. It now owns two windows again — the history window as the main home window (Home/Review/Dictionary/Training/Insights plus a Settings button) and the smaller settings window — plus separate Review Dictations and HUD/correction windows. A newcomer must grasp that all dictation logic lives in una-core's FSM; this layer only runs its EffectRunner, forwards snapshots, and manages windows.",
+      "map": [
+        {
+          "name": "Dictation effect execution (record/upload/inject/HUD)",
+          "files": [
+            "client/apps/desktop/src-tauri/src/effects.rs",
+            "client/apps/desktop/src-tauri/src/main.rs",
+            "client/apps/desktop/src-tauri/src/app_state.rs"
+          ]
+        },
+        {
+          "name": "History main window (Home/Review/Dictionary/Training/Insights + Settings button)",
+          "files": [
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/history.rs",
+            "client/apps/desktop/src-tauri/src/commands.rs",
+            "client/apps/desktop/src-tauri/src/main.rs"
+          ]
+        },
+        {
+          "name": "Settings window (smaller Una window, ⌘, shortcut)",
+          "files": [
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/commands.rs",
+            "client/apps/desktop/src-tauri/src/main.rs"
+          ]
+        },
+        {
+          "name": "Correction learning flow (accepted/edited/fix window)",
+          "files": [
+            "client/apps/desktop/src-tauri/src/corrections.rs",
+            "client/apps/desktop/src-tauri/src/commands.rs",
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/app_state.rs"
+          ]
+        },
+        {
+          "name": "HUD window",
+          "files": [
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/events.rs"
+          ]
+        },
+        {
+          "name": "Settings tabs and config changes",
+          "files": [
+            "client/apps/desktop/src-tauri/src/commands.rs",
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/hotkey.rs"
+          ]
+        },
+        {
+          "name": "Global hotkey / push-to-talk binding",
+          "files": [
+            "client/apps/desktop/src-tauri/src/hotkey.rs",
+            "client/apps/desktop/src-tauri/src/main.rs",
+            "client/apps/desktop/src-tauri/src/commands.rs"
+          ]
+        },
+        {
+          "name": "Tray icon and menu",
+          "files": [
+            "client/apps/desktop/src-tauri/src/tray.rs",
+            "client/apps/desktop/src-tauri/src/events.rs"
+          ]
+        },
+        {
+          "name": "State snapshot and audio-level forwarding",
+          "files": [
+            "client/apps/desktop/src-tauri/src/events.rs",
+            "client/apps/desktop/src-tauri/src/windows.rs",
+            "client/apps/desktop/src-tauri/src/tray.rs"
+          ]
+        },
+        {
+          "name": "Feedback sounds",
+          "files": [
+            "client/apps/desktop/src-tauri/src/sounds.rs",
+            "client/apps/desktop/src-tauri/src/effects.rs"
+          ]
+        },
+        {
+          "name": "App icons",
+          "files": [
+            "client/scripts/gen_icons.py"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Dictation turn",
+          "steps": [
+            "Hotkey press or tray toggle sends Command to controller (main.rs hotkey handler, tray.rs, commands.rs)",
+            "Controller FSM emits effects; TauriEffects runs them: audio engine, endpoint resolve, ApiClient upload (effects.rs)",
+            "State snapshots forwarded as state-changed events to HUD webview, tray label, HUD interactivity (events.rs)",
+            "On success Done cue plays, text injected, last_dictation stored and correction watch armed (effects.rs, corrections.rs, app_state.rs)"
+          ]
+        },
+        {
+          "name": "Correction after paste",
+          "steps": [
+            "Upload result sets last_dictation; insert effect consumes it once paste lands (app_state.rs, effects.rs)",
+            "Watch window: no edit key yields accepted signal; edit in readable app reads field back and diffs pasted span yielding edited (corrections.rs)",
+            "Unreadable-app edit opens focused correction window (windows.rs accessory-mode flip)",
+            "Correction command reports result to server for training set (commands.rs, corrections.rs)"
+          ]
+        },
+        {
+          "name": "Settings rebind",
+          "steps": [
+            "Webview calls set_config command with validation of hotkey mode, hud_mode, server URLs (commands.rs)",
+            "Persisted config updates shared RwLock and EndpointResolver (app_state.rs, commands.rs)",
+            "hotkey::apply tears down old registration and registers combo or native backend (hotkey.rs)",
+            "Windows adjust HUD visibility mode and tray launch-at-login state (windows.rs, tray.rs)"
+          ]
+        }
+      ],
+      "files": [
+        "client/apps/desktop/src-tauri/src/main.rs — app startup, controller spawn, plugin and hotkey wiring, history-window-on-launch",
+        "client/apps/desktop/src-tauri/src/effects.rs — EffectRunner bridging FSM effects to audio, HTTP, inject, HUD",
+        "client/apps/desktop/src-tauri/src/windows.rs — history main window plus smaller settings, HUD and correction/fix window creation and focus rules",
+        "client/apps/desktop/src-tauri/src/history.rs — history main window server-page loading, navigation handshake and offline handling",
+        "client/apps/desktop/src-tauri/src/corrections.rs — post-paste accepted/edited/fix-window training-signal watcher",
+        "client/apps/desktop/src-tauri/src/commands.rs — Tauri commands for settings, HUD, history/settings windows, and correction webviews",
+        "client/apps/desktop/src-tauri/src/app_state.rs — shared controller, engine, api, config, endpoints, pending slots",
+        "client/apps/desktop/src-tauri/src/events.rs — snapshot and level forwarders to webviews, tray, HUD",
+        "client/apps/desktop/src-tauri/src/hotkey.rs — combo vs native backend selection and re-registration",
+        "client/apps/desktop/src-tauri/src/tray.rs — menu-bar icon, menu items opening history/settings pages, autostart and opener actions"
+      ],
+      "rules": [
+        "Never put dictation state machine logic here; it lives in una-core state — this layer only runs effects and forwards snapshots.",
+        "Validate config in set_config before persisting (hotkey binding, hold/toggle/hybrid mode, pill/flash hud_mode).",
+        "HUD window must stay fixed-size, frameless, transparent, always-on-top, click-through anchored bottom-center; visual states are CSS only.",
+        "Correction window must flip accessory mode out and back so a menu-bar app can take keyboard focus.",
+        "Sounds are best-effort and silent on failure; never surface them as errors.",
+        "Launching Una or its Dock icon opens the history main window; the smaller settings window opens only via its history sidebar Settings button, ⌘,, or tray Settings…; Review Dictations stays its own window."
+      ],
+      "edges": [
+        "Client core — drives its Controller FSM, AudioEngine, Config, EndpointResolver, ApiClient from effects and commands",
+        "Desktop windows — shell creates the windows and feeds them state-changed and level events; webviews call back via commands",
+        "Platform inject — text injection and field read-back for paste and edited-correction diffing",
+        "Server API — uploads dictations and reports accepted/edited corrections that become training data",
+        "Server dashboard — history window embeds it from AppState live_server() with navigation handshake and offline fallback; build via build.rs and icons from gen_icons.py"
+      ]
+    },
+    "client-core": {
+      "summary": "Shared platform-agnostic Rust core for the desktop dictation client: dictation state machine plus audio capture, server HTTP client, endpoint selection, config, spool, discovery, and IPC. Built around a pure deterministic FSM in state.rs with a tokio Controller actor executing Effects; audio runs on a dedicated cpal worker thread resampled to 16kHz mono. Newcomers must grasp that state.rs owns all timing/transitions and everything else is an effect runner around it.",
+      "map": [
+        {
+          "name": "Dictation state machine and controller",
+          "files": [
+            "client/crates/una-core/src/state.rs"
+          ]
+        },
+        {
+          "name": "Microphone capture and 16kHz WAV encoding",
+          "files": [
+            "client/crates/una-core/src/audio.rs"
+          ]
+        },
+        {
+          "name": "Server HTTP client (dictation upload, health, correction)",
+          "files": [
+            "client/crates/una-core/src/net.rs"
+          ]
+        },
+        {
+          "name": "Endpoint selection and caching",
+          "files": [
+            "client/crates/una-core/src/endpoint.rs"
+          ]
+        },
+        {
+          "name": "TOML config and hotkey bindings",
+          "files": [
+            "client/crates/una-core/src/config.rs"
+          ]
+        },
+        {
+          "name": "Post-paste correction capture",
+          "files": [
+            "client/crates/una-core/src/correction.rs"
+          ]
+        },
+        {
+          "name": "Failed-upload spool and retry",
+          "files": [
+            "client/crates/una-core/src/spool.rs"
+          ]
+        },
+        {
+          "name": "mDNS server discovery",
+          "files": [
+            "client/crates/una-core/src/discovery.rs"
+          ]
+        },
+        {
+          "name": "Unix-socket IPC for CLI/keybinds",
+          "files": [
+            "client/crates/una-core/src/ipc.rs"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Dictation utterance",
+          "steps": [
+            "Controller receives Command (Toggle/Start) via mpsc or ipc socket",
+            "step() advances Machine and emits Effects with at-timestamps",
+            "EffectRunner starts audio worker capture with warm stream reuse",
+            "Audio finalized to 16kHz mono WAV, level frames on watch channel",
+            "EndpointResolver picks cached/probed base URL",
+            "ApiClient POSTs multipart dictation with utterance_id, one retry on connect/reset only",
+            "On failure spool WAV to cache dir; Snapshot broadcast on each change"
+          ]
+        },
+        {
+          "name": "Endpoint resolution",
+          "steps": [
+            "Collect ordered candidate URLs (manual URL wins over discovery)",
+            "Probe candidates concurrently with per-candidate timeout",
+            "First health success wins and is cached for CACHE_TTL",
+            "Steady-state dictations use lock-read cached endpoint",
+            "Invalidate cache on upload failure for roaming"
+          ]
+        },
+        {
+          "name": "Correction capture",
+          "steps": [
+            "Record pasted span range and post-paste text",
+            "Accessibility path recovers edited span via edited_region_text or returns None if outside span",
+            "Keystroke path tracks span length via EditCounter, invalidated by clicks/arrows/undo",
+            "PUT correction to /v1/dictations/{id}/correction for training pair"
+          ]
+        }
+      ],
+      "files": [
+        "client/crates/una-core/src/state.rs — pure deterministic dictation FSM plus tokio Controller actor, Snapshots, timing constants",
+        "client/crates/una-core/src/audio.rs — cpal capture worker, 16kHz resampling, level metering, WAV encoding, warm keepalive",
+        "client/crates/una-core/src/net.rs — server API client: multipart upload, health, correction PUT, timeouts and retry rule",
+        "client/crates/una-core/src/endpoint.rs — concurrent candidate probing, cached winner, TTL and invalidate",
+        "client/crates/una-core/src/config.rs — TOML config, server/discovery settings, Binding combo vs native keycode",
+        "client/crates/una-core/src/correction.rs — edited_region_text and EditCounter pure correction logic",
+        "client/crates/una-core/src/spool.rs — cache-dir WAV spool, newest KEEP=5 pruning, duplicate suppression",
+        "client/crates/una-core/src/discovery.rs — _una._tcp.local mDNS browse, DiscoveredServer with version/api TXT",
+        "client/crates/una-core/src/ipc.rs — Unix-socket newline-JSON toggle/start/stop/cancel server",
+        "client/crates/una-core/src/lib.rs — crate root re-exporting Controller, Machine, Effects, EndpointResolver"
+      ],
+      "rules": [
+        "Never put timing or IO inside step(): all timestamps travel in Events; caller executes Effects.",
+        "Discard utterances under MIN_UTTERANCE (300ms); auto-finalize at MAX_UTTERANCE (5min); Done dismisses after DONE_DISMISS (900ms).",
+        "Audio must be 16kHz mono s16le WAV (TARGET_SAMPLE_RATE); cpal stream stays on its worker thread, never Send.",
+        "Retry uploads exactly once on connect/reset with same utterance_id; never retry on HTTP status errors.",
+        "Manually configured server URL always beats autodiscovery; discovery only when url empty and autodiscover true.",
+        "Spool keeps newest 5 only and must not stack duplicates of a re-spooled retry."
+      ],
+      "edges": [
+        "Desktop shell — drives Controller via Commands and executes Effects (hotkey, tray, windows, sounds, paste)",
+        "Platform inject — performs text paste/reading that correction.rs measures and the FSM triggers",
+        "CLI — drives dictation remotely through unix-socket IPC toggle/start/stop/cancel",
+        "Server API — target of net.rs multipart dictation, health checks, and correction PUTs",
+        "Server services — consumes uploaded WAVs; discovery TXT version/api describes its capability"
+      ]
+    },
+    "platform-inject": {
+      "summary": "OS text injection, focused-app access and single-key hotkeys behind the traits in lib.rs so core and the shell stay platform-agnostic. macOS injects via NSPasteboard save/restore plus a CGEvent Cmd+V chord, reads/edits fields via AX AXValue, and captures hotkeys on an active CGEventTap. Linux selects X11 (XTest, with one long-lived arboard clipboard) vs Wayland (ydotool, else wtype, else clipboard-only) by env vars, and on X11 hears single-key hotkeys through XInput2 raw key events (keytap.rs); una_platform::hotkeys names whichever tap the platform has.",
+      "map": [
+        {
+          "name": "Platform traits and inject contract",
+          "files": [
+            "client/crates/una-platform/src/lib.rs"
+          ]
+        },
+        {
+          "name": "macOS paste injection",
+          "files": [
+            "client/crates/una-platform/src/macos/mod.rs",
+            "client/crates/una-platform/src/lib.rs"
+          ]
+        },
+        {
+          "name": "macOS hotkey tap and capture",
+          "files": [
+            "client/crates/una-platform/src/macos/eventtap.rs",
+            "client/crates/una-platform/src/macos/keys.rs"
+          ]
+        },
+        {
+          "name": "macOS focused-field read/write",
+          "files": [
+            "client/crates/una-platform/src/macos/axtext.rs"
+          ]
+        },
+        {
+          "name": "macOS keycodes and combo names",
+          "files": [
+            "client/crates/una-platform/src/macos/keys.rs",
+            "client/crates/una-platform/src/macos/eventtap.rs"
+          ]
+        },
+        {
+          "name": "macOS permissions and frontmost app",
+          "files": [
+            "client/crates/una-platform/src/macos/mod.rs"
+          ]
+        },
+        {
+          "name": "Linux session detection",
+          "files": [
+            "client/crates/una-platform/src/linux/detect.rs",
+            "client/crates/una-platform/src/linux/mod.rs"
+          ]
+        },
+        {
+          "name": "Linux X11 paste",
+          "files": [
+            "client/crates/una-platform/src/linux/x11.rs",
+            "client/crates/una-platform/src/linux/mod.rs"
+          ]
+        },
+        {
+          "name": "Linux Wayland paste",
+          "files": [
+            "client/crates/una-platform/src/linux/wayland.rs",
+            "client/crates/una-platform/src/linux/mod.rs"
+          ]
+        },
+        {
+          "name": "Linux single-key hotkeys and key recorder (XInput2 raw keys)",
+          "files": [
+            "client/crates/una-platform/src/linux/keytap.rs",
+            "client/crates/una-platform/src/lib.rs"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "macOS inject text",
+          "steps": [
+            "Caller invokes TextInjector with InjectOptions via lib.rs trait",
+            "mod.rs saves pasteboard (skipped past 10MB) and sets transient marker",
+            "mod.rs places dictation text on NSPasteboard",
+            "mod.rs synthesizes Cmd+V CGEvent chord (layout-resolved V keycode, fallback 9)",
+            "axtext.rs optionally snapshots focused AXValue for later edit detection",
+            "mod.rs restores saved pasteboard, returns Injected or ClipboardOnly"
+          ]
+        },
+        {
+          "name": "macOS hotkey match",
+          "steps": [
+            "EventTap runs CFRunLoop with active HID tap on keyDown/keyUp/flagsChanged",
+            "set_binding registers target keycode from keys.rs tables",
+            "Matching keyDown/keyUp is consumed (Drop) and reported via on_hotkey press/release",
+            "Bare modifiers match on flagsChanged keycode and pass through unconsumed",
+            "capture_next resolves next press (or bare-modifier release) to CapturedKey"
+          ]
+        },
+        {
+          "name": "Linux inject text",
+          "steps": [
+            "detect.rs picks Wayland vs X11 vs Unknown from WAYLAND_DISPLAY/DISPLAY",
+            "mod.rs sets arboard clipboard text and parses paste chord (Ctrl+V vs Ctrl+Shift+V)",
+            "X11: x11.rs resolves keysyms via server keymap and sends XTest chord",
+            "Wayland: wayland.rs uses ydotool socket if present, else wtype if in PATH",
+            "No backend available returns ClipboardOnly/Unavailable"
+          ]
+        }
+      ],
+      "files": [
+        "client/crates/una-platform/src/lib.rs — platform-agnostic traits: TextInjector, InjectOptions/Outcome/Probe, Permissions, FrontmostApp",
+        "client/crates/una-platform/src/macos/mod.rs — macOS injector: pasteboard save/restore, Cmd+V chord, frontmost app, TCC checks",
+        "client/crates/una-platform/src/macos/eventtap.rs — active CGEventTap hotkey matching and one-shot key capture",
+        "client/crates/una-platform/src/macos/axtext.rs — AX focused-field value read/write with messaging timeout",
+        "client/crates/una-platform/src/macos/keys.rs — modifier tables, key names via UCKeyTranslate, combo tokens",
+        "client/crates/una-platform/src/linux/mod.rs — Linux injector dispatch, arboard clipboard, PasteChord parsing",
+        "client/crates/una-platform/src/linux/detect.rs — Wayland/X11/Unknown detection from env vars",
+        "client/crates/una-platform/src/linux/wayland.rs — ydotool socket discovery and wtype fallback",
+        "client/crates/una-platform/src/linux/x11.rs — XTest paste with keysym-to-keycode scan",
+        "client/crates/una-platform/src/linux/keytap.rs — X11 single-key hotkeys: XInput2 raw keys on the root (bare modifiers pass through, other keys passively grabbed), shortcut-abort window, one-shot capture for the settings recorder; lib.rs re-exports it with the Mac event tap as una_platform::hotkeys"
+      ],
+      "rules": [
+        "Never run AX calls on the UI thread or inside the event-tap callback; they are blocking IPC with a per-element messaging timeout.",
+        "Every axtext entry returns Option: None (terminals like Ghostty/Alacritty/kitty, canvas editors, password fields) must fall back to the correction window, never unwrap.",
+        "flagsChanged events cannot be consumed; bare-modifier hotkeys must pass through.",
+        "Active tap requires Accessibility permission already held; do not switch to listen-only semantics needing Input Monitoring.",
+        "Only una-platform compiles for Linux from the macOS dev machine ('cargo check --target aarch64-unknown-linux-gnu -p una-platform': pure Rust); build the rest on Linux (the Jetson) after changing Linux code.",
+        "Do not save/restore pasteboards larger than 10MB; always set the TransientType marker so clipboard managers skip dictation text."
+      ],
+      "edges": [
+        "Client core — implements its TextInjector/Permissions traits; core never calls AppKit/CG/X11 directly",
+        "Desktop shell — consumes hotkey press/release and capture results, inject outcomes, frontmost-app and permission states",
+        "Focused applications — paste target via clipboard plus synthesized chord; AX value read/write where the control publishes AXValue"
+      ]
+    },
+    "cli": {
+      "summary": "The CLI layer is the `una` binary: a thin Clap wrapper that drives the running desktop app over its unix socket. It takes one subcommand (toggle/start/stop/cancel), maps it to a wire name, and sends it via una-core socket helpers. There is no audio, state, or server logic here — just command delivery for compositor keybinds and scripts.",
+      "map": [
+        {
+          "name": "Dictation subcommands (toggle/start/stop/cancel)",
+          "files": [
+            "client/crates/una-cli/src/main.rs"
+          ]
+        },
+        {
+          "name": "Socket command delivery",
+          "files": [
+            "client/crates/una-cli/src/main.rs"
+          ]
+        },
+        {
+          "name": "CLI help text / keybind usage",
+          "files": [
+            "client/crates/una-cli/src/main.rs"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Send dictation command",
+          "steps": [
+            "Parse subcommand with Clap (Toggle/Start/Stop/Cancel)",
+            "Map variant to wire name via wire_name()",
+            "Send over desktop unix socket via core helper",
+            "Exit 0 on delivery; non-zero with stderr message on failure"
+          ]
+        }
+      ],
+      "files": [
+        "client/crates/una-cli/src/main.rs — the entire `una` binary: Clap CLI, wire-name mapping, and socket send"
+      ],
+      "rules": [
+        "Never add recording/transcription logic here — it only signals the running desktop app.",
+        "Wire names (toggle/start/stop/cancel) must match what the desktop shell expects; renaming breaks keybinds.",
+        "Commands are fire-and-forget no-ops when inapplicable (e.g. stop while idle); do not add blocking waits.",
+        "Failure mode is stderr message plus non-zero exit so scripts/keybinds can detect it."
+      ],
+      "edges": [
+        "Desktop shell — receives the socket command and runs the actual start/stop/cancel flow",
+        "Client core — provides the unix-socket send helper the CLI calls",
+        "Platform inject — indirectly triggered downstream when dictation produces text (not touched here)"
+      ]
+    },
+    "server-api": {
+      "summary": "The Server API layer is the FastAPI /v1 boundary for Una: routers in `api/`, Pydantic contracts in `schemas.py`, app wiring in `main.py`, config in `config.py`, shared handles in `state.py`, SQLite access in `db.py`, and typed errors in `errors.py`. A newcomer must grasp: routers are thin over services/storage/DB via `AppState`, all responses are schema-typed, and config is `una.toml` overlaid by persisted settings at startup.",
+      "map": [
+        {
+          "name": "Dictation ingest and history",
+          "files": [
+            "server/src/una_server/api/dictations.py",
+            "server/src/una_server/schemas.py",
+            "server/src/una_server/db.py"
+          ]
+        },
+        {
+          "name": "Correction and review queue",
+          "files": [
+            "server/src/una_server/api/dictations.py",
+            "server/src/una_server/schemas.py"
+          ]
+        },
+        {
+          "name": "Personal dictionary CRUD",
+          "files": [
+            "server/src/una_server/api/dictionary.py",
+            "server/src/una_server/schemas.py"
+          ]
+        },
+        {
+          "name": "Runtime settings",
+          "files": [
+            "server/src/una_server/api/settings_api.py",
+            "server/src/una_server/config.py",
+            "server/src/una_server/main.py"
+          ]
+        },
+        {
+          "name": "Health and usage stats",
+          "files": [
+            "server/src/una_server/api/system.py",
+            "server/src/una_server/schemas.py"
+          ]
+        },
+        {
+          "name": "Training runs and eligibility",
+          "files": [
+            "server/src/una_server/api/training.py",
+            "server/src/una_server/schemas.py"
+          ]
+        },
+        {
+          "name": "Model list and activate",
+          "files": [
+            "server/src/una_server/api/model_registry.py",
+            "server/src/una_server/schemas.py"
+          ]
+        },
+        {
+          "name": "Configuration and env overrides",
+          "files": [
+            "server/src/una_server/config.py",
+            "server/src/una_server/api/settings_api.py"
+          ]
+        },
+        {
+          "name": "App factory and lifespan",
+          "files": [
+            "server/src/una_server/main.py",
+            "server/src/una_server/state.py",
+            "server/src/una_server/errors.py"
+          ]
+        },
+        {
+          "name": "Error responses",
+          "files": [
+            "server/src/una_server/errors.py",
+            "server/src/una_server/main.py"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Dictation ingest",
+          "steps": [
+            "POST /v1/dictations multipart audio + app_name/utterance_id hits api/dictations.py",
+            "Dedupe on utterance_id; build Whisper initial_prompt from active dictionary phrases",
+            "Transcribe via state.transcriber, clean via state.cleaner when enabled",
+            "Persist dictation row + wav via services.storage; freeze eval_holdout by ID hash",
+            "Return DictationResponse with timings, asr_model, cleanup flags"
+          ]
+        },
+        {
+          "name": "Correction flow",
+          "steps": [
+            "POST correction with corrected text for a dictation id",
+            "Validate and run training eligibility check (check_pair / edit distance)",
+            "Store corrected/polished text, eligibility, and review action in DB",
+            "Expose via detail, list, and review-queue endpoints"
+          ]
+        },
+        {
+          "name": "Startup",
+          "steps": [
+            "load_config from una.toml + UNA__SECTION__KEY env overrides",
+            "connect SQLite with WAL mode, run migrations/",
+            "apply_stored_settings overlay onto live config",
+            "Seed registry, load/warm ASR, start jobs/discovery; install error handlers"
+          ]
+        }
+      ],
+      "files": [
+        "server/src/una_server/api/dictations.py — dictation ingest, history, corrections, review queue",
+        "server/src/una_server/main.py — app factory, lifespan, router and static mounting",
+        "server/src/una_server/schemas.py — Pydantic request/response contract models",
+        "server/src/una_server/config.py — una.toml + env-override config models",
+        "server/src/una_server/state.py — shared AppState handles (db, config, models, jobs)",
+        "server/src/una_server/db.py — aiosqlite connect, WAL pragmas, migration runner",
+        "server/src/una_server/api/system.py — health and stats aggregation",
+        "server/src/una_server/api/settings_api.py — mutable settings with live appliers",
+        "server/src/una_server/errors.py — typed errors to uniform JSON responses",
+        "server/src/una_server/api/training.py — training run lifecycle and eligibility"
+      ],
+      "rules": [
+        "Never put sounds-like hints in the Whisper initial_prompt; bare phrases only, hints go to the cleaner.",
+        "Only keys in settings_api MUTABLE_KEYS may be changed at runtime; other config needs restart/file change.",
+        "Eval holdout is frozen at insert via is_eval_holdout ID hash; do not recompute or reassign later.",
+        "Training-in-progress must return 503 (TrainingInProgress) on conflicting dictation paths.",
+        "DB must stay WAL mode with busy_timeout and foreign_keys on so the training subprocess can write.",
+        "Raise typed UnaError subclasses, never raw HTTPException, to keep the {error:{code,message}} shape."
+      ],
+      "edges": [
+        "Server services — routers call transcriber, cleaner, storage, jobs, runs, and model manager via AppState",
+        "Training loop — runs as a separate short-lived process that writes to the same SQLite file; dictations/corrections write eligibility fields and training.py reads eligible counts",
+        "Dashboard API client and UI kit — typed fetch client consumes schemas.py contracts over /v1",
+        "Runtime — binds LAN-only unauthenticated port 8100 with data_dir for SQLite/WAV store",
+        "Client core — dictation audio and app_name originate from the Rust core spool/endpoints path"
+      ]
+    },
+    "server-services": {
+      "summary": "This layer implements the server-side dictation pipeline: 16kHz audio ingest, faster-whisper transcription, Ollama text cleanup, active-model management, single-slot training-job launching, run eligibility, idle autotraining, and mDNS discovery. It is built as small stateless helpers plus three stateful owners (Transcriber/ModelManager, Cleaner, JobManager/Discovery) coordinated by the API layer under one inference lock. Newcomers must grasp the degradation contract: transcription is authoritative and cleanup/training must never fail or block dictation.",
+      "map": [
+        {
+          "name": "Audio ingest and resampling",
+          "files": [
+            "server/src/una_server/services/storage.py"
+          ]
+        },
+        {
+          "name": "Speech-to-text transcription",
+          "files": [
+            "server/src/una_server/services/transcriber.py",
+            "server/src/una_server/services/model_manager.py"
+          ]
+        },
+        {
+          "name": "Active-model resolution and hot-swap",
+          "files": [
+            "server/src/una_server/services/model_manager.py",
+            "server/src/una_server/services/transcriber.py"
+          ]
+        },
+        {
+          "name": "LLM transcript cleanup",
+          "files": [
+            "server/src/una_server/services/cleaner.py",
+            "server/src/una_server/services/prompts.py"
+          ]
+        },
+        {
+          "name": "Cleanup timeout budget",
+          "files": [
+            "server/src/una_server/services/cleaner.py",
+            "server/deploy/jetson/una.toml"
+          ]
+        },
+        {
+          "name": "Cleanup prompt and per-app tone",
+          "files": [
+            "server/src/una_server/services/prompts.py",
+            "server/src/una_server/services/cleaner.py"
+          ]
+        },
+        {
+          "name": "Training job launching",
+          "files": [
+            "server/src/una_server/services/jobs.py",
+            "server/src/una_server/services/runs.py"
+          ]
+        },
+        {
+          "name": "Run eligibility counting and launch",
+          "files": [
+            "server/src/una_server/services/runs.py",
+            "server/src/una_server/services/jobs.py"
+          ]
+        },
+        {
+          "name": "Idle auto-training trigger",
+          "files": [
+            "server/src/una_server/services/autotrain.py",
+            "server/src/una_server/services/runs.py"
+          ]
+        },
+        {
+          "name": "LAN discovery advertisement",
+          "files": [
+            "server/src/una_server/services/discovery.py"
+          ]
+        },
+        {
+          "name": "Moving data between servers (snapshot + idempotent merge)",
+          "files": [
+            "server/src/una_server/tools/merge_data.py"
+          ]
+        },
+        {
+          "name": "Server install on x86 Linux without Docker (tenet)",
+          "files": [
+            "server/deploy/linux/install.sh",
+            "server/deploy/linux/una.toml"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Dictation transcribe and clean",
+          "steps": [
+            "storage.py decodes upload to float32 mono 16kHz and persists WAV",
+            "ModelManager lock serializes inference and hot-swaps",
+            "Transcriber runs faster-whisper in a thread and returns text plus language",
+            "Cleaner calls Ollama with system prompt from prompts.py, strips <think> tags, and bounds the call by a timeout that scales with word count",
+            "Safety check rejects output that collapses the dictation; on cleanup failure, timeout, or rejection, return raw transcript with applied=false"
+          ]
+        },
+        {
+          "name": "Model hot-swap",
+          "steps": [
+            "ModelManager looks up models row and resolves ct2_path or hf_source",
+            "Acquire inference lock to drain in-flight transcription",
+            "Free old Transcriber and GC before loading to avoid double VRAM",
+            "Construct new Transcriber for requested model and set active_model_id"
+          ]
+        },
+        {
+          "name": "Idle auto-training",
+          "steps": [
+            "autotrain.py ticks every 60s and re-reads training.auto config",
+            "Check dictation-idle time exceeds auto_idle_minutes",
+            "Check no active JobManager process and no active training_runs row",
+            "Check eligible minutes threshold and FRESH_SQL shows pairs newer than last run",
+            "Launch run via runs.launch_run so unchanged or persistently failing data never retries"
+          ]
+        }
+      ],
+      "files": [
+        "server/src/una_server/services/transcriber.py — owns one loaded faster-whisper model; thread-based transcribe",
+        "server/src/una_server/services/model_manager.py — resolves active model row, serializes inference and swaps with free-then-load",
+        "server/src/una_server/services/cleaner.py — Ollama cleanup client with failure counting, skip-window, warmup, and length-scaled timeout",
+        "server/src/una_server/services/prompts.py — builds cleanup system prompt with dictionary clause and app-name tone",
+        "server/src/una_server/services/storage.py — decodes arbitrary audio to 16k mono, computes duration, saves YYYY/MM WAVs",
+        "server/src/una_server/services/jobs.py — single-slot training subprocess launcher with active-status guard and finish callback",
+        "server/src/una_server/services/runs.py — eligible-minutes, style, and fresh-pair counts plus shared run launcher",
+        "server/src/una_server/services/autotrain.py — idle-triggered auto-training loop gated on freshness and inactivity",
+        "server/src/una_server/services/discovery.py — advertises _una._tcp mDNS service with LAN address and /v1 property",
+        "server/src/una_server/services/__init__.py — package export for services",
+        "server/deploy/jetson/ — install.sh (rootless Jetson server: builds GPU CTranslate2, uv sync on managed Python, Ollama 0.34.0, systemd user units), una.service, ollama.service, una.toml (8 GB shared-memory defaults and per-word cleanup timeout); midna served una with it until 2026-10-21",
+        "server/src/una_server/tools/merge_data.py — stdlib-only snapshot (sqlite online backup + referenced audio/registered models/run dirs) and re-runnable merge by primary key: target wins, newer updated_at or a source delete flows over, paths re-rooted to the target's layout, files never replaced, una.db backed up to data/backups first",
+        "server/deploy/linux/ — install.sh (rootless x86_64 NVIDIA server: uv sync with cuda12 extra minus nvidia-cudnn-cu12, Ollama 0.34.0 amd64, systemd user units; UNA_NO_START=1 installs without touching the GPU), una.service, ollama.service, una.toml (6 GB card: int8_float16 Whisper + llama3.2:3b, pause_serving, batch 2 x 8); runs the live server on tenet since 2026-10-21"
+      ],
+      "rules": [
+        "Dictation never fails because cleanup failed: Cleaner must degrade to raw text with applied=false, using consecutive-failure skip window.",
+        "Cleanup timeout must scale with dictation length: a flat limit sends long dictations to raw text, because the cleanup model writes about 15 words per second.",
+        "Warm the cleanup model into VRAM before real requests; cold-load blows the timeout budget and forces raw fallback.",
+        "Hold ModelManager lock for both inference and swaps, and free-then-load models to avoid double VRAM.",
+        "Never run inference on the event loop: faster-whisper transcribe runs in a thread via transcribe_sync.",
+        "Single training job only: check ACTIVE_STATUSES and JobManager.active before launch; the runner subprocess owns its training_runs row.",
+        "Autotraining must require fresh pairs newer than the last run attempt, plus idle time and eligible minutes, so it never loops on unchanged data or retries a persistently failing run.",
+        "Cleanup output that shrinks a long dictation to a short line fails the safety check and is discarded in favor of the raw transcript.",
+        "Never move a server by copying server/data over another's: it replaces the target's una.db. Use tools/merge_data.py (snapshot on the source, merge on the target), and take a last delta snapshot at cutover.",
+        "deploy/*/una.toml is caught by .gitignore's una.toml pattern: add it with git add -f or the installer ships without its defaults."
+      ],
+      "edges": [
+        "Server API — routes call storage, ModelManager/Transcriber, Cleaner, runs, jobs, and discovery via AppState and config",
+        "Training loop — jobs.py spawns the runner subprocess and runs.py supplies eligibility counts and launch; finish callback reloads ASR",
+        "Runtime — faster-whisper CUDA model, Ollama service, and SQLite/WAV store provide inference, cleanup, and persistence",
+        "Client core — discovery.py advertises _una._tcp so LAN clients auto-discover the /v1 endpoint",
+        "Dashboard — shows the applied flag and fallback reason from cleanup results, so the raw transcript is always visible"
+      ]
+    },
+    "training-loop": {
+      "summary": "This layer fine-tunes two models from user corrections: Whisper (LoRA) for transcription and a cleanup LLM (QLoRA) for polishing style. Each side has a parallel pipeline (dataset build, train adapter, convert, evaluate, WER/edit-distance-gated promote) run as a spawned subprocess that owns its training_runs row via sync sqlite3. Newcomers must grasp that promotion only happens on a measured improvement over baseline by a margin on enough holdout samples, and that heavy ML imports must stay lazy so the serving venv stays importable.",
+      "map": [
+        {
+          "name": "ASR training run lifecycle",
+          "files": [
+            "server/src/una_server/training/runner.py",
+            "server/src/una_server/training/dataset.py",
+            "server/src/una_server/training/train_lora.py"
+          ]
+        },
+        {
+          "name": "Style training run lifecycle",
+          "files": [
+            "server/src/una_server/training/style_runner.py",
+            "server/src/una_server/training/style_dataset.py",
+            "server/src/una_server/training/train_style_lora.py"
+          ]
+        },
+        {
+          "name": "Correction eligibility filtering",
+          "files": [
+            "server/src/una_server/training/filters.py"
+          ]
+        },
+        {
+          "name": "ASR dataset building",
+          "files": [
+            "server/src/una_server/training/dataset.py",
+            "server/src/una_server/training/filters.py"
+          ]
+        },
+        {
+          "name": "Style dataset building",
+          "files": [
+            "server/src/una_server/training/style_dataset.py",
+            "server/src/una_server/training/filters.py"
+          ]
+        },
+        {
+          "name": "ASR WER evaluation",
+          "files": [
+            "server/src/una_server/training/evaluate.py",
+            "server/src/una_server/training/filters.py"
+          ]
+        },
+        {
+          "name": "Style output evaluation",
+          "files": [
+            "server/src/una_server/training/style_eval.py",
+            "server/src/una_server/training/style_dataset.py"
+          ]
+        },
+        {
+          "name": "Adapter merge and CTranslate2 conversion",
+          "files": [
+            "server/src/una_server/training/convert.py"
+          ]
+        },
+        {
+          "name": "ASR WER-gated promotion and pruning",
+          "files": [
+            "server/src/una_server/training/promote.py"
+          ]
+        },
+        {
+          "name": "Style promotion and Ollama model creation",
+          "files": [
+            "server/src/una_server/training/style_promote.py",
+            "server/src/una_server/training/style_eval.py"
+          ]
+        },
+        {
+          "name": "LoRA hyperparameters (Whisper)",
+          "files": [
+            "server/src/una_server/training/train_lora.py",
+            "server/src/una_server/training/runner.py"
+          ]
+        },
+        {
+          "name": "QLoRA hyperparameters (style LLM)",
+          "files": [
+            "server/src/una_server/training/train_style_lora.py",
+            "server/src/una_server/training/style_runner.py"
+          ]
+        },
+        {
+          "name": "Korean / code-switch eval prep (planned, awaiting approval)",
+          "files": [
+            "docs/korean-codeswitch.md",
+            "server/scripts/koen/koen_data.py",
+            "server/scripts/koen/koen_eval.py",
+            "server/scripts/koen/koen_metrics.py"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "ASR run (runner.py)",
+          "steps": [
+            "JobManager spawns python -m una_server.training.runner --run-id",
+            "building: dataset.build_datasets selects eligible correction pairs",
+            "training: train_lora.train_adapter writes run_dir/adapter",
+            "converting: convert.merge_adapter + CTranslate2 convert + smoke test",
+            "evaluating: evaluate scores baseline vs candidate WER via CTranslate2",
+            "promoted|rejected: promote.should_promote gates registry insert and pruning"
+          ]
+        },
+        {
+          "name": "Style run (style_runner.py)",
+          "steps": [
+            "JobManager spawns style_runner in same single GPU slot",
+            "building: style_dataset.build_style_datasets selects raw->polished pairs",
+            "training: train_style_lora.train_style_adapter writes run_dir/adapter",
+            "converting: style_promote.create_ollama_model via ollama create",
+            "evaluating: style_eval queries baseline and candidate via /api/chat, mean norm edit distance",
+            "promoted|rejected: should_promote_style gates live switch"
+          ]
+        }
+      ],
+      "files": [
+        "server/src/una_server/training/runner.py — ASR run entrypoint, stage order, sqlite row ownership, progress mapping",
+        "server/src/una_server/training/style_runner.py — style run entrypoint mirroring runner.py, reuses RunContext/connect",
+        "server/src/una_server/training/filters.py — pure eligibility: normalize_text, norm_edit_distance, check_pair, duration bounds",
+        "server/src/una_server/training/dataset.py — ASR Sample and build_datasets from corrections",
+        "server/src/una_server/training/style_dataset.py — StyleSample, messages_for, build_style_datasets",
+        "server/src/una_server/training/train_lora.py — Whisper LoRA training on q_proj+v_proj",
+        "server/src/una_server/training/train_style_lora.py — cleanup-LLM QLoRA (4-bit on CUDA) on q/k/v/o_proj",
+        "server/src/una_server/training/convert.py — merge adapter, CTranslate2 convert, copy tokenizer files, smoke test",
+        "server/src/una_server/training/evaluate.py — greedy CTranslate2 baseline-vs-candidate WER via jiwer",
+        "server/src/una_server/training/promote.py — should_promote gate, new_model_id, prune_finetuned",
+        "server/src/una_server/memory.py — release_freed_memory (malloc_trim) after every Whisper/CT2 load; ~760 MB per large-v3-turbo load stays in glibc arenas otherwise",
+        "server/scripts/koen/koen_metrics.py — WER, CER, MER and script-violation scoring for Korean/code-switch tests",
+        "server/scripts/koen/koen_eval.py — scores a CT2 model per manifest under en/ko/auto/route/ko+en settings",
+        "server/scripts/koen/koen_data.py — FLEURS/Zeroth/HiKE manifests and read-only DB catalogue with audio LID",
+        "server/scripts/koen/fetch_public.sh — downloads the open Korean test sets",
+        "docs/korean-codeswitch.md — Korean/code-switch plan, gates, baselines and approval list"
+      ],
+      "rules": [
+        "Keep heavy imports (torch/transformers/peft/soundfile/faster-whisper) inside functions so the serving venv can import these modules.",
+        "Stage order is fixed: building -> training -> converting -> evaluating -> promoted|rejected; eval must score converted models through the serving path (CTranslate2 / Ollama chat).",
+        "Runner sqlite uses plain sync sqlite3 with busy_timeout and foreign_keys OFF; dangling dictation->model references after pruning are accepted, do not enable FK.",
+        "Promotion requires beating baseline by >= margin on >= min_samples; never promote on training loss or vibes.",
+        "Pure-logic tests must pass without torch/transformers/peft/ollama; do not add heavy imports at module top level that break them.",
+        "The training stage runs in a spawned child via runner.in_training_process (progress via its own RunContext, PR_SET_PDEATHSIG ties it to the runner): torch keeps ~3 GB per process that empty_cache can't free, and the eval stages need it (Jetson).",
+        "Korean/code-switch data lives outside the una checkout (~/una-koen on tenet), never inside ~/una.",
+        "Korean/code-switch scripts read the una database read-only (mode=ro) and never write to it.",
+        "Korean eval runs need GPU time on tenet only after the running voice job finishes and dictation is paused, with the user's approval.",
+        "Proposed Korean mixed-script gate (not yet approved): HiKE MER must be 20 or less and under 5% of sentences may keep a wrong-script span.",
+        "Korean CER must not rise on either Korean test set; FLEURS English WER allowance (+0.3 or strict 0) is still the user's call."
+      ],
+      "edges": [
+        "Server services — JobManager spawns runner/style_runner into single GPU slot; model_manager source resolution mirrored in evaluate.resolve_model_source",
+        "Server API — correction endpoints and training-run launch/guard feed eligible pairs and run rows; _guard_unseen_transcript and filters.check_pair share eligibility",
+        "Server config/db — Config hyperparams/thresholds and SQLite WAL + migrations define run rows, dictations, corrections",
+        "Dashboard training — Training page reads run status and WER charts produced here",
+        "Runtime — needs CUDA VRAM, ollama CLI reachable, CTranslate2; CPU path is fp32 dev/test only",
+        "Remote host tenet — holds the ~/una-koen test-set copy and the read-only koen runs; the Mac holds the mirrored baseline outputs under scratch/una-koen"
+      ]
+    },
+    "dashboard-shell-settings": {
+      "summary": "Dashboard shell and settings is the Svelte 5 app frame around all dashboard pages: sidebar nav, hash routing, theming, and global styles with a Vite build. It was fully redesigned to a clean minimal monochrome system on Geist type with hairline borders and no purple accent. A newcomer must grasp that routing is hash-based with no dependency and theming flips via `data-theme` CSS variables resolved before first paint.",
+      "map": [
+        {
+          "name": "App frame and sidebar nav",
+          "files": [
+            "server/dashboard/src/App.svelte",
+            "server/dashboard/src/lib/Icon.svelte"
+          ]
+        },
+        {
+          "name": "Hash routing",
+          "files": [
+            "server/dashboard/src/router.svelte.ts"
+          ]
+        },
+        {
+          "name": "Theme mode (light/dark/system)",
+          "files": [
+            "server/dashboard/src/lib/theme.svelte.ts",
+            "server/dashboard/index.html",
+            "server/dashboard/src/lib/ThemeToggle.svelte"
+          ]
+        },
+        {
+          "name": "Settings form",
+          "files": [
+            "server/dashboard/src/pages/Settings.svelte"
+          ]
+        },
+        {
+          "name": "Server API client",
+          "files": [
+            "server/dashboard/src/api.ts"
+          ]
+        },
+        {
+          "name": "Global theme and styles",
+          "files": [
+            "server/dashboard/src/app.css"
+          ]
+        },
+        {
+          "name": "Vite build and entry",
+          "files": [
+            "server/dashboard/vite.config.ts",
+            "server/dashboard/svelte.config.js",
+            "server/dashboard/index.html"
+          ]
+        },
+        {
+          "name": "App logo mark",
+          "files": [
+            "server/dashboard/src/lib/Logo.svelte"
+          ]
+        },
+        {
+          "name": "App mount",
+          "files": [
+            "server/dashboard/src/main.ts"
+          ]
+        },
+        {
+          "name": "App icon set",
+          "files": [
+            "server/dashboard/src/lib/Icon.svelte"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Page navigation",
+          "steps": [
+            "router.svelte.ts parses location.hash on load, defaulting to #/home and mapping legacy aliases",
+            "App.svelte reads router.path to render the matching page component",
+            "Nav click calls router.go() which sets location.hash",
+            "hashchange event updates router.path and swaps the page"
+          ]
+        },
+        {
+          "name": "Theme resolution",
+          "steps": [
+            "index.html inline script reads una:theme from localStorage before first paint and sets data-theme",
+            "main.ts mounts App.svelte which imports theme.svelte.ts store",
+            "Theme store reconciles stored choice with prefers-color-scheme and OS change events",
+            "ThemeToggle.svelte sets choice; store updates data-theme, localStorage, and resolved value"
+          ]
+        },
+        {
+          "name": "Settings edit",
+          "steps": [
+            "Settings.svelte loads current values via API client on mount",
+            "Form state fills from stored Settings",
+            "User edits fields and saves back through the API client",
+            "Saved indicator shows on success, error state on failure"
+          ]
+        }
+      ],
+      "files": [
+        "server/dashboard/src/App.svelte — sidebar frame, nav list, health chip, page switch",
+        "server/dashboard/src/router.svelte.ts — tiny hash router with defaults and legacy aliases",
+        "server/dashboard/src/lib/theme.svelte.ts — light/dark/system store syncing data-theme and localStorage",
+        "server/dashboard/src/pages/Settings.svelte — settings form loading and saving server settings",
+        "server/dashboard/src/api.ts — typed fetch client for the server API",
+        "server/dashboard/src/app.css — minimal monochrome Geist design system, hairline borders, no accent color",
+        "server/dashboard/src/lib/Icon.svelte — shared app icon set for nav and UI",
+        "server/dashboard/index.html — entry HTML with pre-paint theme script and favicon",
+        "server/dashboard/vite.config.ts — Vite/Tailwind/Svelte build emitting into server web dir with dev proxy",
+        "server/dashboard/src/main.ts — mounts App into #app",
+        "server/dashboard/src/lib/ThemeToggle.svelte — light/dark/auto segmented control"
+      ],
+      "rules": [
+        "Build output is server/src/una_server/web with emptyOutDir; the keep-gitkeep plugin must restore .gitkeep after every build.",
+        "Never change the localStorage key una:theme or the data-theme attribute contract; index.html and theme.svelte.ts must stay in sync or first paint flashes.",
+        "Routing is hash-only (#/home); do not introduce a router dependency or history routing, and preserve /history and /stats aliases.",
+        "Fonts must stay self-hosted for offline LAN use; do not add CDN font or CSS links.",
+        "Colors must go through --c-* custom properties mapped with @theme inline so dark mode flips with data-theme."
+      ],
+      "edges": [
+        "Dashboard API client and UI kit — Settings.svelte and App.svelte fetch Health/Settings through src/api.ts and reuse Skeleton/Toggle primitives",
+        "Dashboard home and insights — Home and Insights pages render inside App.svelte frame via router paths",
+        "Dashboard review queue — Review page renders inside App.svelte frame via router path",
+        "Dashboard dictionary and training — Dictionary and Training pages render inside App.svelte frame via router path",
+        "Server API — Vite dev server proxies /v1 to the FastAPI server; production build is served from una_server/web"
+      ]
+    },
+    "dashboard-home-insights": {
+      "summary": "This layer is the dashboard's read-mostly home and analytics surface: Home.svelte is a paginated dictation feed with search, filters, expandable detail, copy and delete; Insights.svelte is a stats overview built from a single Stats payload. Charts and tiles are small presentational Svelte 5 components fed derived arrays from the pages. A newcomer must grasp that pages own all fetching and derived math while lib components only render the props they receive.",
+      "map": [
+        {
+          "name": "Home dictation feed",
+          "files": [
+            "server/dashboard/src/pages/Home.svelte"
+          ]
+        },
+        {
+          "name": "Feed search and app/reviewed filters",
+          "files": [
+            "server/dashboard/src/pages/Home.svelte"
+          ]
+        },
+        {
+          "name": "Expandable dictation detail with what una pasted, copy and delete",
+          "files": [
+            "server/dashboard/src/pages/Home.svelte"
+          ]
+        },
+        {
+          "name": "Time-saved vs typing estimate",
+          "files": [
+            "server/dashboard/src/pages/Home.svelte",
+            "server/dashboard/src/pages/Insights.svelte"
+          ]
+        },
+        {
+          "name": "Insights stats overview",
+          "files": [
+            "server/dashboard/src/pages/Insights.svelte"
+          ]
+        },
+        {
+          "name": "Month-over-month words delta",
+          "files": [
+            "server/dashboard/src/pages/Insights.svelte"
+          ]
+        },
+        {
+          "name": "26-week activity heatmap",
+          "files": [
+            "server/dashboard/src/lib/Heatmap.svelte"
+          ]
+        },
+        {
+          "name": "Daily words/dictations bar chart",
+          "files": [
+            "server/dashboard/src/lib/DayBars.svelte"
+          ]
+        },
+        {
+          "name": "Per-app usage bars with intensity label",
+          "files": [
+            "server/dashboard/src/lib/AppBars.svelte"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Home feed load and expand",
+          "steps": [
+            "Home.svelte fetches paginated summaries plus Stats on mount",
+            "User searches or filters by app and reviewed state",
+            "User expands a row to fetch its DictationDetail",
+            "The detail always shows what una pasted, with a reason when cleanup did not run",
+            "User copies text or confirms delete, then list and stats refresh"
+          ]
+        },
+        {
+          "name": "Insights load and render",
+          "steps": [
+            "Insights.svelte fetches Stats once on mount",
+            "Page derives month delta and totals from Stats",
+            "StatTile renders headline numbers",
+            "Heatmap, DayBars, and AppBars render day and app breakdowns from the same payload"
+          ]
+        }
+      ],
+      "files": [
+        "server/dashboard/src/pages/Home.svelte — paginated dictation feed with search, filters, detail expansion (including what una pasted), copy, and delete",
+        "server/dashboard/src/pages/Insights.svelte — usage-insights page fetching Stats and composing tiles and charts",
+        "server/dashboard/src/lib/StatTile.svelte — label/value/hint tile with optional accent tone and child slot",
+        "server/dashboard/src/lib/Heatmap.svelte — week-column activity heatmap ending on the current week",
+        "server/dashboard/src/lib/DayBars.svelte — last-N-days bar chart for words or dictation count",
+        "server/dashboard/src/lib/AppBars.svelte — per-app word-share bars with Light/Moderate/Power intensity"
+      ],
+      "rules": [
+        "Typing-saved estimates assume a sustained TYPING_WPM of 40 in both pages; change it in both places.",
+        "DayBars expects server days newest-first and reverses a sliced copy for oldest-first display; do not mutate the prop.",
+        "Heatmap normalizes against max words with a floor of 1 and pads weeks out to the end of the current week; future cells are placeholders.",
+        "AppBars intensity thresholds are fixed shares of total words: >=0.35 Power, >=0.12 Moderate, else Light.",
+        "The 'What una pasted' card must always render; when cleanup did not run it shows a fallback reason, because hiding it made raw-paste dictations look like they had no data."
+      ],
+      "edges": [
+        "Dashboard API client and UI kit — pages fetch Stats, summaries, and details via api in server/dashboard/src/api.ts and render EmptyState, Skeleton, Kbd, and formatting helpers",
+        "Dashboard dictionary and training — Insights.svelte reuses WerChart from that layer for the WER chart",
+        "Dashboard review queue — Home.svelte duplicates lightweight audio playback and detail display instead of reusing AudioPlayer review flow; keep feed edits out of the review queue",
+        "Dashboard shell and settings — pages are mounted by hash routing and assume the app frame and theme; they only set local layout classes"
+      ]
+    },
+    "dashboard-review-queue": {
+      "summary": "This layer is the dictation review queue: listen to audio, edit transcript and polish text, compare raw vs final word diffs, and approve/reject/skip. Review.svelte owns state and API actions; AudioPlayer, DiffText/wordDiff, and autosize are its supporting UI primitives. Newcomers must grasp the session cursor model: everything at or before an id is handled or skipped.",
+      "map": [
+        {
+          "name": "Review queue page",
+          "files": [
+            "server/dashboard/src/pages/Review.svelte"
+          ]
+        },
+        {
+          "name": "Transcript / polish editors",
+          "files": [
+            "server/dashboard/src/pages/Review.svelte",
+            "server/dashboard/src/lib/autosize.ts"
+          ]
+        },
+        {
+          "name": "Audio playback",
+          "files": [
+            "server/dashboard/src/lib/AudioPlayer.svelte",
+            "server/dashboard/src/pages/Review.svelte"
+          ]
+        },
+        {
+          "name": "Word diff view",
+          "files": [
+            "server/dashboard/src/lib/DiffText.svelte",
+            "server/dashboard/src/lib/diff.ts",
+            "server/dashboard/src/pages/Review.svelte"
+          ]
+        },
+        {
+          "name": "Word diff algorithm",
+          "files": [
+            "server/dashboard/src/lib/diff.ts"
+          ]
+        },
+        {
+          "name": "Textarea autosize action",
+          "files": [
+            "server/dashboard/src/lib/autosize.ts"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Review a dictation",
+          "steps": [
+            "Review.svelte loads next item, backlog, and eligibility via API client",
+            "AudioPlayer.svelte plays src with toggle/replay/setRate",
+            "User edits transcript editor and optional polish editor (autosize grows textareas)",
+            "DiffText.svelte renders wordDiff(a,b) one side at a time (del vs ins)",
+            "Review.svelte sends review action (approve/reject/skip) and advances cursor"
+          ]
+        }
+      ],
+      "files": [
+        "server/dashboard/src/pages/Review.svelte — review queue state, editors, actions, cursor",
+        "server/dashboard/src/lib/AudioPlayer.svelte — audio element with toggle/replay/setRate, seek bar",
+        "server/dashboard/src/lib/DiffText.svelte — renders one side of wordDiff with del/ins marks",
+        "server/dashboard/src/lib/diff.ts — LCS wordDiff(a,b) with pathological-input guard",
+        "server/dashboard/src/lib/autosize.ts — Svelte action growing textarea to content with min height"
+      ],
+      "rules": [
+        "Do not reimplement diffing: DiffText.svelte must go through wordDiff from diff.ts.",
+        "Respect the diff.ts O(n*m) guard (250k): pathological inputs fall back to whole-text del/ins.",
+        "autosize takes {value, min}; pass the bound value so outside replacements re-measure.",
+        "AudioPlayer resets position on new src but keeps chosen rate; use untrack in the src effect."
+      ],
+      "edges": [
+        "Dashboard API client and UI kit — Review.svelte fetches DictationDetail/Eligibility and uses EmptyState, Skeleton, Kbd, format helpers",
+        "Dashboard dictionary and training — borrows ProgressBar for review progress display",
+        "Server API — review actions and dictation detail/audio served from /v1 routes"
+      ]
+    },
+    "dashboard-dictionary-training": {
+      "summary": "Dictionary page manages custom phrase entries (add, inline edit, enable toggle, delete) with client-side search and sort. Training page lists training runs and models, starts/cancels runs, activates models, and shows eligibility, logs, and WER progress. Shared WerChart, ProgressBar, and StatusChip render run status and WER history; WER values are already percent and plotted as-is.",
+      "map": [
+        {
+          "name": "Dictionary entry list and search/sort",
+          "files": [
+            "server/dashboard/src/pages/Dictionary.svelte"
+          ]
+        },
+        {
+          "name": "Add dictionary entry form",
+          "files": [
+            "server/dashboard/src/pages/Dictionary.svelte"
+          ]
+        },
+        {
+          "name": "Inline edit dictionary entry",
+          "files": [
+            "server/dashboard/src/pages/Dictionary.svelte"
+          ]
+        },
+        {
+          "name": "Enable/disable and delete entry",
+          "files": [
+            "server/dashboard/src/pages/Dictionary.svelte"
+          ]
+        },
+        {
+          "name": "Training runs list and run detail",
+          "files": [
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "Start / cancel training run",
+          "files": [
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "Activate model and eligibility",
+          "files": [
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "Run log viewer",
+          "files": [
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "WER history chart",
+          "files": [
+            "server/dashboard/src/lib/WerChart.svelte",
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "Run progress bar",
+          "files": [
+            "server/dashboard/src/lib/ProgressBar.svelte",
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        },
+        {
+          "name": "Run status chip",
+          "files": [
+            "server/dashboard/src/lib/StatusChip.svelte",
+            "server/dashboard/src/pages/Training.svelte"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Edit dictionary entry",
+          "steps": [
+            "Load entries via api.listDictionary on mount",
+            "Filter by query and sort (used/newest/alpha) client-side",
+            "Open inline edit, change phrase/sounds-like/notes",
+            "Save via API, reload or update list",
+            "Toggle enabled or confirm-delete when needed"
+          ]
+        },
+        {
+          "name": "Run and monitor training",
+          "steps": [
+            "Load runs, models, and eligibility on mount",
+            "Start run (blocked while an ACTIVE_RUN_STATUS run exists)",
+            "Poll/refresh runs list while active",
+            "Show ProgressBar for active run and StatusChip per run",
+            "Plot completed runs in WerChart (baseline vs candidate)",
+            "Activate promoted model after confirm"
+          ]
+        },
+        {
+          "name": "Inspect a run",
+          "steps": [
+            "Select run from list",
+            "Read StatusChip tone/pulse for state",
+            "Open log viewer for output",
+            "Compare WER baseline vs candidate with fmtWer/fmtWerDelta"
+          ]
+        }
+      ],
+      "files": [
+        "server/dashboard/src/pages/Training.svelte — training runs, models, start/cancel/activate, log, eligibility, WER display",
+        "server/dashboard/src/pages/Dictionary.svelte — dictionary CRUD, search/sort, toggle, inline edit, delete",
+        "server/dashboard/src/lib/WerChart.svelte — baseline-vs-candidate WER chart over runs",
+        "server/dashboard/src/lib/StatusChip.svelte — status tone and pulse dot from ACTIVE_RUN_STATUSES",
+        "server/dashboard/src/lib/ProgressBar.svelte — clamped 0-1 progress bar with ARIA values"
+      ],
+      "rules": [
+        "WER is already percent (jiwer x 100) — never rescale in WerChart.",
+        "WerChart drops points with null wer_candidate before plotting.",
+        "Active run is runs.find ACTIVE_RUN_STATUSES — only one start at a time.",
+        "StatusChip tone/pulse derives from ACTIVE_RUN_STATUSES; queued is muted, other active states pulse.",
+        "ProgressBar clamps value to 0-1 before percent conversion."
+      ],
+      "edges": [
+        "Dashboard API client and UI kit — types, fetch calls, formatting, and EmptyState/Skeleton/Toggle primitives",
+        "Dashboard shell and settings — hash routing to Dictionary and Training pages",
+        "Server API — dictionary entries and training run/model endpoints",
+        "Training loop — runs, WER eval, and promotion state this layer displays"
+      ]
+    },
+    "ios-app": {
+      "summary": "A native iPhone app for Una, written in Swift and SwiftUI for iOS 17+ with no third-party packages, built with DEVELOPER_DIR=/Volumes/T7/Stockpile/Xcode.app/Contents/Developer. It records or loads 16 kHz mono WAV audio, uploads it to a user-chosen una server over HTTP, shows the transcript with copy to clipboard, and lets the user correct a past dictation from History; networking, models, corrections and WAV encoding live in the UnaKit package. A keyboard extension cannot record, so its mic key signals the containing app through an App Group flag and a Darwin notification, and the app records, uploads and returns the transcript; without an App Group (a free Apple Personal Team) the mic key shows a notice and typing still works. The idea to grasp first is that nothing is tied to one user: the server list starts empty, onboarding collects addresses, and the bundle ID and App Group live only in Config/Una.xcconfig.",
+      "map": [
+        {
+          "name": "the UnaKit package",
+          "files": [
+            "client/apps/ios/UnaKit/Sources/UnaKit/",
+            "client/apps/ios/UnaKit/Package.swift"
+          ]
+        },
+        {
+          "name": "endpoint race (choosing which server address answers, health-check timeouts)",
+          "files": [
+            "client/apps/ios/UnaKit/Sources/UnaKit/Endpoints.swift",
+            "client/apps/ios/UnaKit/Sources/UnaKit/Client.swift",
+            "client/apps/ios/UnaKit/Tests/UnaKitTests/UnaKitTests.swift"
+          ]
+        },
+        {
+          "name": "dictation engine (capture to transcript pipeline)",
+          "files": [
+            "client/apps/ios/UnaKit/Sources/UnaKit/DictationEngine.swift",
+            "client/apps/ios/Una/Recorder.swift"
+          ]
+        },
+        {
+          "name": "corrections (edit a dictation's text, word diff, filed status)",
+          "files": [
+            "client/apps/ios/UnaKit/Sources/UnaKit/Corrections.swift",
+            "client/apps/ios/Una/FixView.swift",
+            "client/apps/ios/UnaKit/Sources/UnaKit/Models.swift",
+            "client/apps/ios/UnaKit/Tests/UnaKitTests/CorrectionTests.swift"
+          ]
+        },
+        {
+          "name": "the keyboard mic key and text insertion (step 2b, space before a pasted transcript)",
+          "files": [
+            "client/apps/ios/UnaKeyboard/KeyboardViewController.swift",
+            "client/apps/ios/UnaKit/Sources/UnaKit/KeyboardLogic.swift",
+            "client/apps/ios/UnaKeyboard/KeyboardView.swift",
+            "client/apps/ios/UnaKit/Sources/UnaKit/MicRemote.swift"
+          ]
+        },
+        {
+          "name": "mic handoff between keyboard and app (App Group flag, Darwin notifications, local-base fallback)",
+          "files": [
+            "client/apps/ios/UnaKit/Sources/UnaKit/Handoff.swift",
+            "client/apps/ios/UnaKit/Tests/UnaKitTests/HandoffTests.swift"
+          ]
+        },
+        {
+          "name": "the Record screen (capture, upload, result card, DEBUG WAV feed)",
+          "files": [
+            "client/apps/ios/Una/RecordView.swift",
+            "client/apps/ios/Una/AppModel.swift",
+            "client/apps/ios/Una/DebugFeed.swift"
+          ]
+        },
+        {
+          "name": "first-run onboarding (server address, Test connection, Tailscale and Full Access text)",
+          "files": [
+            "client/apps/ios/Una/OnboardingView.swift",
+            "client/apps/ios/Una/AppModel.swift"
+          ]
+        },
+        {
+          "name": "the Servers tab and Privacy section",
+          "files": [
+            "client/apps/ios/Una/ServersView.swift"
+          ]
+        },
+        {
+          "name": "the History tab (past dictations, opens a dictation to correct it)",
+          "files": [
+            "client/apps/ios/Una/HistoryView.swift",
+            "client/apps/ios/Una/FixView.swift"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "Dictate and send",
+          "steps": [
+            "The Record tab captures mic audio (or the DEBUG WAV feed in debug builds)",
+            "UnaKit's WAV encoder converts it to 16 kHz mono WAV",
+            "The spool holds the upload in the App Group container, or Application Support when no App Group is signed, and retries on failure",
+            "The API client sends it through the endpoint race across the saved server addresses",
+            "The transcript returns; the result card shows it and copies it to the clipboard",
+            "The History tab lists past dictations"
+          ]
+        },
+        {
+          "name": "Correct a dictation",
+          "steps": [
+            "History opens FixView with raw and cleaned text",
+            "the user edits and saves",
+            "Corrections builds the request",
+            "AppModel sends it through the endpoint race; if unreachable the CorrectionOutbox (App Group container, or Application Support without one) keeps it and retries after History reloads (4xx drops it)",
+            "the screen shows the word diff and filed status"
+          ]
+        },
+        {
+          "name": "Mic key dictation (step 2b)",
+          "steps": [
+            "If no App Group is signed, the keyboard's mic key shows a notice and stops",
+            "The keyboard's mic key writes a request flag to the App Group container and posts a Darwin notification",
+            "The app, holding an active background audio session, starts recording 16 kHz mono",
+            "UnaKit encodes the WAV and uploads it through the endpoint race",
+            "The transcript is written to the shared container and a Darwin notification tells the keyboard",
+            "The keyboard reads the transcript and inserts it into the host field, with one leading space when the text before the cursor doesn't end in whitespace"
+          ]
+        },
+        {
+          "name": "First run",
+          "steps": [
+            "UnaApp shows OnboardingView when no server is saved",
+            "The user types a server address and taps Test connection",
+            "The test runs the endpoint race; a working address is saved to the server list in AppModel",
+            "The Servers tab edits the list later"
+          ]
+        }
+      ],
+      "files": [
+        "client/apps/ios/UnaKit/Sources/UnaKit/Endpoints.swift — races the saved server addresses and picks the first that answers",
+        "client/apps/ios/UnaKit/Sources/UnaKit/DictationEngine.swift — drives capture, upload and transcript return",
+        "client/apps/ios/UnaKit/Sources/UnaKit/Client.swift — API client that sends uploads and corrections, with health-check timeouts",
+        "client/apps/ios/UnaKit/Sources/UnaKit/Corrections.swift — builds correction requests and the word diff",
+        "client/apps/ios/UnaKit/Sources/UnaKit/Models.swift — shared request and response models",
+        "client/apps/ios/UnaKit/Sources/UnaKit/Handoff.swift — shared-container flags, notifications, and the local-base fallback when no App Group",
+        "client/apps/ios/UnaKit/Sources/UnaKit/MicRemote.swift — keyboard-side remote that drives the app's mic",
+        "client/apps/ios/UnaKit/Sources/UnaKit/KeyboardLogic.swift — decides when a transcript needs a leading space",
+        "client/apps/ios/UnaKeyboard/KeyboardViewController.swift — keyboard host: mic key, Full Access notice, typing",
+        "client/apps/ios/Una/AppModel.swift — shared app state, server list and first-run flag"
+      ],
+      "rules": [
+        "Build: DEVELOPER_DIR=/Volumes/T7/Stockpile/Xcode.app/Contents/Developer; xcodebuild -scheme Una -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO. DEBUG feed: -UnaDebugWAV <path> -UnaDebugAutorun YES",
+        "Deployment target is iOS 17.0 (app, keyboard, UnaKit); iOS 18+ APIs need `if #available`. Swift 6 mode: build off-main callbacks (the AVAudioEngine tap) in a nonisolated static func, never inline in a @MainActor type, or they trap.",
+        "No personal IDs, hostnames, IPs, paths, names or bundle IDs in code; the bundle ID and App Group belong only in Config/Una.xcconfig.",
+        "DEVELOPMENT_TEAM is passed on the xcodebuild command line and never stored in the project or in Swift.",
+        "A free Personal Team cannot sign com.apple.security.application-groups, so a device build for it must drop the entitlements file and the mic handoff is unavailable.",
+        "Paid-team archives fail with an app-group profile mismatch until the App Group exists in the developer portal and is attached to both the app and keyboard App IDs; the App Store Connect API cannot create it.",
+        "TestFlight export uses manual signing with App Store profiles, because the App Manager API key cannot use Apple cloud signing and automatic export fails (steps in docs/iphone.md).",
+        "Keyboard space insertion adds nothing when the field is empty, after whitespace, or when the transcript already starts with a space."
+      ],
+      "edges": [
+        "Una server (server/) — the app uploads WAV and sends corrections to the server's HTTP API on port 8100, the same correction API the desktop client and dashboard use; the server binds 0.0.0.0 (server/src/una_server/config.py) so Tailscale traffic reaches it",
+        "Tailscale — the phone reaches the home server over the tailnet using the MagicDNS name or 100.x address the user enters in onboarding",
+        "Keyboard extension — the mic key sends a request through the App Group and a Darwin notification; the app returns the transcript the same way",
+        "Wire contract — the mic handoff keys and notification names are defined in UnaKit's Handoff.swift and shared by both targets",
+        "Apple developer account — a paid team signs the App Group the mic handoff needs and TestFlight uploads go through App Store Connect; a free Personal Team builds and runs everything except the mic handoff"
+      ]
+    }
+  },
+  "builtAt": "a0ccf13"
+}
